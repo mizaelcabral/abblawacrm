@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import type { Contact, Deal, ContactNote, Tag } from "@/types";
+import type { Contact, Deal, ContactNote, Tag, Task } from "@/types";
 import {
   Phone,
   Mail,
@@ -15,10 +15,15 @@ import {
   DollarSign,
   StickyNote,
   Plus,
+  CheckSquare,
+  Calendar,
+  Trash2,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
+import { toast } from "sonner";
 
 interface ContactSidebarProps {
   contact: Contact | null;
@@ -33,13 +38,40 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const [newNote, setNewNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
 
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDueAt, setNewTaskDueAt] = useState("");
+  const [newTaskAgentId, setNewTaskAgentId] = useState("");
+  const [addingTask, setAddingTask] = useState(false);
+  const [members, setMembers] = useState<{ user_id: string; full_name: string }[]>([]);
+
+  // AI settings state
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [updatingAi, setUpdatingAi] = useState(false);
+
+  useEffect(() => {
+    if (!accountId) return;
+    const fetchMembers = async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("profiles")
+        .select("user_id, full_name")
+        .eq("account_id", accountId)
+        .order("full_name", { ascending: true });
+      if (data) setMembers(data);
+    };
+    fetchMembers();
+  }, [accountId]);
+
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
 
     const supabase = createClient();
 
-    // Fetch deals, notes, and tags in parallel
-    const [dealsRes, notesRes, tagsRes] = await Promise.all([
+    // Fetch deals, notes, tags, tasks, and conversation in parallel
+    const [dealsRes, notesRes, tagsRes, tasksRes, convRes] = await Promise.all([
       supabase
         .from("deals")
         .select("*, stage:pipeline_stages(*)")
@@ -54,10 +86,31 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
         .from("contact_tags")
         .select("id, tag_id, tags(*)")
         .eq("contact_id", contact.id),
+      supabase
+        .from("tasks")
+        .select("*, assigned_agent:profiles(full_name)")
+        .eq("contact_id", contact.id)
+        .order("due_at", { ascending: true }),
+      supabase
+        .from("conversations")
+        .select("id, ai_enabled, ai_system_prompt")
+        .eq("contact_id", contact.id)
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     if (dealsRes.data) setDeals(dealsRes.data);
     if (notesRes.data) setNotes(notesRes.data);
+    if (tasksRes.data) setTasks(tasksRes.data);
+    if (convRes.data) {
+      setConversationId(convRes.data.id);
+      setAiEnabled(convRes.data.ai_enabled);
+      setAiPrompt(convRes.data.ai_system_prompt || "");
+    } else {
+      setConversationId(null);
+      setAiEnabled(false);
+      setAiPrompt("");
+    }
     if (tagsRes.data) {
       const mapped = tagsRes.data
         .filter((ct: Record<string, unknown>) => ct.tags)
@@ -114,6 +167,101 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     }
     setAddingNote(false);
   }, [contact, newNote, accountId]);
+
+  const handleAddTask = useCallback(async () => {
+    if (!contact || !newTaskTitle.trim()) return;
+    if (!accountId) return;
+    setAddingTask(true);
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("tasks")
+      .insert({
+        contact_id: contact.id,
+        account_id: accountId,
+        title: newTaskTitle.trim(),
+        due_at: newTaskDueAt ? new Date(newTaskDueAt).toISOString() : null,
+        assigned_agent_id: newTaskAgentId || null,
+        status: "pending",
+      })
+      .select("*, assigned_agent:profiles(full_name)")
+      .single();
+
+    if (!error && data) {
+      setTasks((prev) =>
+        [...prev, data].sort((a, b) => {
+          if (!a.due_at) return 1;
+          if (!b.due_at) return -1;
+          return new Date(a.due_at).getTime() - new Date(b.due_at).getTime();
+        })
+      );
+      setNewTaskTitle("");
+      setNewTaskDueAt("");
+      setNewTaskAgentId("");
+    }
+    setAddingTask(false);
+  }, [contact, newTaskTitle, newTaskDueAt, newTaskAgentId, accountId]);
+
+  const handleToggleTask = useCallback(async (taskId: string, currentStatus: string) => {
+    const newStatus = currentStatus === "completed" ? "pending" : "completed";
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("tasks")
+      .update({ status: newStatus })
+      .eq("id", taskId);
+
+    if (!error) {
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
+      );
+    }
+  }, []);
+
+  const handleDeleteTask = useCallback(async (taskId: string) => {
+    const supabase = createClient();
+    const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+
+    if (!error) {
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    }
+  }, []);
+
+  const handleToggleAi = useCallback(async (enabled: boolean) => {
+    if (!conversationId) return;
+    setUpdatingAi(true);
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("conversations")
+      .update({ ai_enabled: enabled })
+      .eq("id", conversationId);
+
+    if (!error) {
+      setAiEnabled(enabled);
+      toast.success(enabled ? "IA Autopiloto ativada!" : "IA Autopiloto desativada.");
+    } else {
+      toast.error("Erro ao atualizar configurações da IA.");
+    }
+    setUpdatingAi(false);
+  }, [conversationId]);
+
+  const handleSaveAiPrompt = useCallback(async () => {
+    if (!conversationId) return;
+    setUpdatingAi(true);
+
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("conversations")
+      .update({ ai_system_prompt: aiPrompt.trim() || null })
+      .eq("id", conversationId);
+
+    if (!error) {
+      toast.success("Instruções da IA salvas com sucesso!");
+    } else {
+      toast.error("Erro ao salvar instruções da IA.");
+    }
+    setUpdatingAi(false);
+  }, [conversationId, aiPrompt]);
 
   if (!contact) {
     return (
@@ -176,6 +324,48 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
           {/* Divider */}
           <div className="my-4 border-t border-border" />
+
+          {/* AI Autopilot Settings */}
+          {conversationId && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" />
+                  IA Autopiloto
+                </span>
+                <input
+                  type="checkbox"
+                  checked={aiEnabled}
+                  disabled={updatingAi}
+                  onChange={(e) => handleToggleAi(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-primary accent-primary cursor-pointer"
+                />
+              </div>
+              
+              {aiEnabled && (
+                <div className="mt-2 space-y-2 px-1">
+                  <textarea
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder="Instruções personalizadas para a IA (ex: tom de voz, regras do negócio)..."
+                    rows={3}
+                    className="w-full resize-none rounded-lg border border-border bg-muted px-3 py-2 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-primary/50"
+                  />
+                  <Button
+                    size="sm"
+                    className="w-full text-[11px] h-7 bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+                    onClick={handleSaveAiPrompt}
+                    disabled={updatingAi}
+                  >
+                    Salvar Instruções
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Divider */}
+          {conversationId && <div className="my-4 border-t border-border" />}
 
           {/* Tags */}
           <div>
@@ -244,6 +434,112 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="my-4 border-t border-border" />
+
+          {/* Tasks */}
+          <div>
+            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <CheckSquare className="h-3.5 w-3.5" />
+              Tarefas
+            </div>
+            <div className="mt-2 space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newTaskTitle}
+                  onChange={(e) => setNewTaskTitle(e.target.value)}
+                  placeholder="Nova tarefa..."
+                  className="flex-1 rounded-lg border border-border bg-muted px-3 py-2 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-primary/50"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleAddTask();
+                    }
+                  }}
+                />
+                <Button
+                  size="sm"
+                  className="h-auto bg-primary px-2 hover:bg-primary/90"
+                  onClick={handleAddTask}
+                  disabled={!newTaskTitle.trim() || addingTask}
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={newTaskDueAt}
+                  onChange={(e) => setNewTaskDueAt(e.target.value)}
+                  className="flex-1 rounded-lg border border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground outline-none focus:border-primary/50"
+                />
+                <select
+                  value={newTaskAgentId}
+                  onChange={(e) => setNewTaskAgentId(e.target.value)}
+                  className="flex-1 rounded-lg border border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground outline-none focus:border-primary/50"
+                >
+                  <option value="">Atendente...</option>
+                  {members.map((m) => (
+                    <option key={m.user_id} value={m.user_id}>
+                      {m.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mt-2 space-y-1">
+                {tasks.length === 0 ? (
+                  <p className="px-1 text-xs text-muted-foreground">Sem tarefas</p>
+                ) : (
+                  tasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className="flex items-start justify-between gap-2 rounded-lg bg-muted px-3 py-2"
+                    >
+                      <div className="flex items-start gap-2 flex-1 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={task.status === "completed"}
+                          onChange={() => handleToggleTask(task.id, task.status)}
+                          className="mt-0.5 h-3.5 w-3.5 cursor-pointer rounded border-border text-primary accent-primary"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className={cn(
+                              "text-xs font-medium text-foreground break-words",
+                              task.status === "completed" && "line-through text-muted-foreground"
+                            )}
+                          >
+                            {task.title}
+                          </p>
+                          <div className="mt-0.5 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
+                            {task.due_at && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-2.5 w-2.5" />
+                                {format(new Date(task.due_at), "dd/MM/yyyy")}
+                              </span>
+                            )}
+                            {task.assigned_agent?.full_name && (
+                              <span>
+                                Responsável: {task.assigned_agent.full_name.split(' ')[0]}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteTask(task.id)}
+                        className="text-muted-foreground hover:text-destructive transition-colors mt-0.5"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
 

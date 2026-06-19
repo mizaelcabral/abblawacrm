@@ -13,9 +13,13 @@ import type {
   WaitStepConfig,
   CreateDealStepConfig,
   AssignConversationStepConfig,
+  CreateTaskStepConfig,
+  AIRespondStepConfig,
 } from '@/types'
 import { supabaseAdmin } from './admin-client'
 import { engineSendText, engineSendTemplate } from './meta-send'
+import { generateAIResponse } from '@/lib/ai/service'
+import { verifyBillingAndUsage, incrementAIConsumption } from '@/lib/billing/guard'
 
 // ------------------------------------------------------------
 // Public API
@@ -545,6 +549,59 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         .eq('account_id', args.automation.account_id)
         .eq('contact_id', args.contactId)
       return 'conversation closed'
+    }
+
+    case 'create_task': {
+      const cfg = step.step_config as CreateTaskStepConfig
+      if (!args.contactId) throw new Error('create_task needs a contact')
+      const conversationId = await resolveConversationId(args)
+      const due = cfg.days_until_due
+        ? new Date(Date.now() + cfg.days_until_due * 24 * 60 * 60 * 1000).toISOString()
+        : null
+      await db.from('tasks').insert({
+        account_id: args.automation.account_id,
+        conversation_id: conversationId || null,
+        contact_id: args.contactId,
+        title: interpolate(cfg.title, args),
+        description: cfg.description ? interpolate(cfg.description, args) : null,
+        status: 'pending',
+        due_at: due,
+        assigned_agent_id: args.automation.user_id,
+      })
+      return 'task created'
+    }
+
+    case 'ai_respond': {
+      const cfg = step.step_config as AIRespondStepConfig
+      if (!args.contactId) throw new Error('ai_respond needs a contact')
+      const conversationId = await resolveConversationId(args)
+      
+      // Verify billing limits
+      const billingGuard = await verifyBillingAndUsage(args.automation.account_id, 'autopilot')
+      if (!billingGuard.allowed) {
+        throw new Error(`AI automation step blocked: ${billingGuard.reason}`)
+      }
+
+      const { text } = await generateAIResponse(
+        args.context.message_text ?? '',
+        conversationId,
+        args.automation.account_id,
+        cfg.prompt,
+        cfg.use_rag ?? true
+      )
+
+      const { whatsapp_message_id } = await engineSendText({
+        accountId: args.automation.account_id,
+        userId: args.automation.user_id,
+        conversationId,
+        contactId: args.contactId,
+        text,
+      })
+
+      // Increment AI consumption
+      await incrementAIConsumption(args.automation.account_id)
+
+      return `AI responded (${whatsapp_message_id})`
     }
 
     default:

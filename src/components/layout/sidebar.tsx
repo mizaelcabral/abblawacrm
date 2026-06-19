@@ -22,6 +22,8 @@ import {
   Workflow,
   X,
   Zap,
+  CheckSquare,
+  CreditCard,
 } from "lucide-react";
 import type { AccountRole } from "@/lib/auth/roles";
 
@@ -94,6 +96,8 @@ const navItems: NavItem[] = [
   { href: "/broadcasts", label: "Transmissões", icon: Radio },
   { href: "/automations", label: "Automações", icon: Zap },
   { href: "/flows", label: "Fluxos", icon: Workflow, beta: true },
+  { href: "/tasks", label: "Tarefas", icon: CheckSquare },
+  { href: "/settings?tab=plans", label: "Planos", icon: CreditCard },
 ];
 
 const bottomNavItems = [

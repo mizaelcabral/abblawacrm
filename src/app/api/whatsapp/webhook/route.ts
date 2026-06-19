@@ -11,6 +11,9 @@ import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
 } from '@/lib/whatsapp/template-webhook'
+import { generateAIResponse } from '@/lib/ai/service'
+import { engineSendText } from '@/lib/automations/meta-send'
+import { verifyBillingAndUsage, incrementAIConsumption } from '@/lib/billing/guard'
 
 // Lazy-initialized to avoid build-time crash when env vars are missing
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -676,6 +679,85 @@ async function processMessage(
     isFirstInboundMessage,
   })
   const flowConsumed = flowResult.consumed
+
+  // ============================================================
+  // AI Agent Autopilot Trigger (Option A)
+  // ============================================================
+  if (conversation.ai_enabled && !flowConsumed && (contentText || message.text?.body)) {
+    // Verify billing status and usage limits
+    const billingGuard = await verifyBillingAndUsage(accountId, 'autopilot')
+    if (!billingGuard.allowed) {
+      console.warn(`[Webhook AI] Autopilot blocked for account ${accountId}: ${billingGuard.reason}`)
+      
+      // Disable autopilot automatically to prevent looping checks
+      await supabaseAdmin()
+        .from('conversations')
+        .update({ ai_enabled: false })
+        .eq('id', conversation.id)
+      
+      // Notify agents with a system message
+      await supabaseAdmin().from('messages').insert({
+        conversation_id: conversation.id,
+        sender_type: 'system',
+        content_type: 'text',
+        content_text: `⚠️ Piloto Automático desativado: ${billingGuard.reason}`,
+        status: 'delivered'
+      })
+    } else {
+      try {
+        const aiResult = await generateAIResponse(
+          contentText ?? message.text?.body ?? '',
+          conversation.id,
+          accountId,
+          conversation.ai_system_prompt || undefined,
+          true // use RAG
+        )
+
+        if (aiResult.action === 'handoff') {
+          // 1. Disable AI for this conversation
+          await supabaseAdmin()
+            .from('conversations')
+            .update({ ai_enabled: false, status: 'open' })
+            .eq('id', conversation.id)
+          
+          // 2. Notify human agents by inserting a system message
+          await supabaseAdmin().from('messages').insert({
+            conversation_id: conversation.id,
+            sender_type: 'system',
+            content_type: 'text',
+            content_text: '⚠️ IA desativada automaticamente. Cliente solicitou atendente humano.',
+            status: 'delivered'
+          })
+
+          // 3. Send final handoff message to client
+          await engineSendText({
+            accountId,
+            userId: configOwnerUserId,
+            conversationId: conversation.id,
+            contactId: contactRecord.id,
+            text: aiResult.text || 'Entendi. Vou transferir você para um atendente humano agora mesmo. Por favor, aguarde.'
+          })
+        } else {
+          // Send the AI-generated reply
+          await engineSendText({
+            accountId,
+            userId: configOwnerUserId,
+            conversationId: conversation.id,
+            contactId: contactRecord.id,
+            text: aiResult.text
+          })
+        }
+
+        // Increment consumption
+        await incrementAIConsumption(accountId)
+
+        // Since AI responded, we suppress further automation triggers
+        return
+      } catch (aiError) {
+        console.error('[Webhook AI] Failed to run autopilot:', aiError)
+      }
+    }
+  }
 
   // Fire any automations that react to this webhook event. All dispatches
   // run here (not earlier) so the contact, conversation, and inbound

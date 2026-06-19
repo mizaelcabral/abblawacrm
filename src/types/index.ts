@@ -388,7 +388,9 @@ export type AutomationStepType =
   | 'wait'
   | 'condition'
   | 'send_webhook'
-  | 'close_conversation';
+  | 'close_conversation'
+  | 'create_task'
+  | 'ai_respond';
 
 export type AutomationLogStatus = 'success' | 'partial' | 'failed';
 
@@ -479,6 +481,17 @@ export interface SendWebhookStepConfig {
   body_template?: string;
 }
 
+export interface CreateTaskStepConfig {
+  title: string;
+  description?: string;
+  days_until_due?: number;
+}
+
+export interface AIRespondStepConfig {
+  prompt: string;
+  use_rag?: boolean;
+}
+
 export type AutomationStepConfig =
   | SendMessageStepConfig
   | SendTemplateStepConfig
@@ -489,6 +502,8 @@ export type AutomationStepConfig =
   | WaitStepConfig
   | ConditionStepConfig
   | SendWebhookStepConfig
+  | CreateTaskStepConfig
+  | AIRespondStepConfig
   | Record<string, never>
   | Record<string, unknown>;
 
@@ -541,4 +556,22 @@ export interface AutomationLog {
   error_message?: string | null;
   created_at: string;
   contact?: Contact;
+}
+
+export interface Task {
+  id: string;
+  account_id: string;
+  conversation_id?: string | null;
+  contact_id?: string | null;
+  title: string;
+  description?: string | null;
+  status: 'pending' | 'in_progress' | 'completed';
+  due_at?: string | null;
+  assigned_agent_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  assigned_agent?: {
+    full_name: string;
+    avatar_url?: string | null;
+  } | null;
 }

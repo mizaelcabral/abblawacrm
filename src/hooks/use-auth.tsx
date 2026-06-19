@@ -42,6 +42,11 @@ interface AccountSummary {
   /** Default deal currency (ISO-4217). NOT NULL DEFAULT 'USD' in the
    *  DB (migration 021); narrowed to DEFAULT_CURRENCY when absent. */
   default_currency: string;
+  subscription_status?: string;
+  subscription_plan?: string;
+  subscription_expires_at?: string | null;
+  ai_message_count?: number;
+  ai_message_limit?: number;
 }
 
 interface AuthContextValue {
@@ -136,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // missing account collapses to null rather than a half-
           // populated row (shouldn't happen post-017 NOT NULL, but
           // belt-and-braces against forks running older schemas).
-          "id, full_name, email, avatar_url, role, beta_features, account_id, account_role, account:accounts!inner(id, name, default_currency)",
+          "id, full_name, email, avatar_url, role, beta_features, account_id, account_role, account:accounts!inner(id, name, default_currency, subscription_status, subscription_plan, subscription_expires_at, ai_message_count, ai_message_limit)",
         )
         .eq("user_id", userId)
         .maybeSingle();
@@ -162,6 +167,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               id: string;
               name: string;
               default_currency: string | null;
+              subscription_status?: string;
+              subscription_plan?: string;
+              subscription_expires_at?: string | null;
+              ai_message_count?: number;
+              ai_message_limit?: number;
             } | null);
         // Narrow default_currency defensively: forks running pre-021
         // schemas won't have the column, so a missing/null value reads
@@ -171,6 +181,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               id: accountRaw.id,
               name: accountRaw.name,
               default_currency: accountRaw.default_currency ?? DEFAULT_CURRENCY,
+              subscription_status: accountRaw.subscription_status || 'trial',
+              subscription_plan: accountRaw.subscription_plan || 'starter',
+              subscription_expires_at: accountRaw.subscription_expires_at || null,
+              ai_message_count: accountRaw.ai_message_count || 0,
+              ai_message_limit: accountRaw.ai_message_limit || 0,
             }
           : null;
 

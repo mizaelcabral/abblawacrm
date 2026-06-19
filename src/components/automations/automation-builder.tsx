@@ -30,6 +30,8 @@ import {
   Loader2,
   ArrowDown,
   ArrowUp,
+  CheckSquare,
+  Sparkles,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -99,6 +101,8 @@ const STEP_META: Record<AutomationStepType, StepMeta> = {
   condition: { label: "Condition (If/Else)", icon: GitBranch, border: "border-l-amber-500" },
   send_webhook: { label: "Send Webhook", icon: Webhook, border: "border-l-primary" },
   close_conversation: { label: "Close Conversation", icon: CircleSlash, border: "border-l-primary" },
+  create_task: { label: "Create Task", icon: CheckSquare, border: "border-l-primary" },
+  ai_respond: { label: "AI Response (Gemini)", icon: Sparkles, border: "border-l-indigo-500" },
 }
 
 const ADDABLE_STEPS: AutomationStepType[] = [
@@ -113,6 +117,8 @@ const ADDABLE_STEPS: AutomationStepType[] = [
   "condition",
   "send_webhook",
   "close_conversation",
+  "create_task",
+  "ai_respond",
 ]
 
 const TRIGGER_OPTIONS: { value: AutomationTriggerType; label: string; hint: string }[] = [
@@ -161,6 +167,10 @@ function blankConfig(type: AutomationStepType): Record<string, unknown> {
       return { url: "", headers: {}, body_template: "" }
     case "close_conversation":
       return {}
+    case "create_task":
+      return { title: "", description: "", days_until_due: 0 }
+    case "ai_respond":
+      return { prompt: "Você é um assistente virtual. Responda a dúvida do cliente de forma clara e amigável.", use_rag: true }
     default:
       return {}
   }
@@ -1236,6 +1246,58 @@ function StepEditor({
           Sets the conversation status to &quot;closed&quot;. No configuration needed.
         </p>
       )
+    case "create_task":
+      return (
+        <>
+          <FieldBlock label="Task Title">
+            <Input
+              value={(cfg.title as string) ?? ""}
+              onChange={(e) => set({ title: e.target.value })}
+              className="bg-muted text-foreground"
+            />
+          </FieldBlock>
+          <FieldBlock label="Description (Optional)">
+            <Textarea
+              value={(cfg.description as string) ?? ""}
+              onChange={(e) => set({ description: e.target.value })}
+              className="min-h-20 bg-muted text-foreground"
+            />
+          </FieldBlock>
+          <FieldBlock label="Days until due (0 for none)">
+            <Input
+              type="number"
+              value={(cfg.days_until_due as number) ?? 0}
+              onChange={(e) => set({ days_until_due: parseInt(e.target.value) || 0 })}
+              className="bg-muted text-foreground"
+            />
+          </FieldBlock>
+        </>
+      )
+    case "ai_respond":
+      return (
+        <>
+          <FieldBlock label="Prompt / Instrução do Sistema">
+            <Textarea
+              value={(cfg.prompt as string) ?? ""}
+              onChange={(e) => set({ prompt: e.target.value })}
+              placeholder="Ex: Você é um assistente. Responda educadamente..."
+              className="min-h-24 bg-muted text-foreground"
+            />
+          </FieldBlock>
+          <div className="flex items-center gap-2 py-2">
+            <input
+              type="checkbox"
+              id="ai-use-rag"
+              checked={(cfg.use_rag as boolean) ?? true}
+              onChange={(e) => set({ use_rag: e.target.checked })}
+              className="h-4 w-4 rounded border-border text-primary accent-primary"
+            />
+            <label htmlFor="ai-use-rag" className="text-xs font-medium text-muted-foreground select-none cursor-pointer">
+              Consultar Base de Conhecimento (RAG)
+            </label>
+          </div>
+        </>
+      )
     default:
       return null
   }
@@ -1268,6 +1330,10 @@ function previewFor(step: BuilderStep): string {
       return `when ${step.step_config.subject ?? "?"}`
     case "send_webhook":
       return (step.step_config.url as string) || "no url"
+    case "create_task":
+      return (step.step_config.title as string) || "new task"
+    case "ai_respond":
+      return (step.step_config.prompt as string) || "ai response"
     default:
       return ""
   }

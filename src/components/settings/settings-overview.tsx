@@ -35,7 +35,7 @@ export function SettingsOverview({
 }: {
   onSelect: (section: SettingsSection) => void;
 }) {
-  const { user, profile, accountId, accountRole, defaultCurrency, canManageMembers } =
+  const { user, profile, accountId, accountRole, defaultCurrency, canManageMembers, account } =
     useAuth();
   const { mode, theme } = useTheme();
 
@@ -214,6 +214,13 @@ export function SettingsOverview({
       section: 'appearance',
       loading: false,
       subtitle: `${cap(mode)} mode · ${themeName} accent`,
+    },
+    {
+      section: 'plans',
+      loading: false,
+      subtitle: account?.subscription_plan
+        ? `${account.subscription_plan.charAt(0).toUpperCase()}${account.subscription_plan.slice(1)}`
+        : 'Starter',
     },
   ];
 

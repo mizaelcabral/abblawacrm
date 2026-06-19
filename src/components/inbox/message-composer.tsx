@@ -18,6 +18,7 @@ import {
   Square,
   X,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GatedButton } from "@/components/ui/gated-button";
@@ -122,6 +123,8 @@ export function MessageComposer({
 }: MessageComposerProps) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [suggestion, setSuggestion] = useState("");
+  const [loadingSuggestion, setLoadingSuggestion] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Media attachment state. `draft` holds an uploaded-but-not-yet-sent
@@ -188,6 +191,33 @@ export function MessageComposer({
     // Max 4 lines (~96px)
     el.style.height = `${Math.min(el.scrollHeight, 96)}px`;
   }, []);
+
+  useEffect(() => {
+    setSuggestion("");
+    setLoadingSuggestion(false);
+  }, [conversationId]);
+
+  const fetchSuggestion = useCallback(async () => {
+    if (!conversationId || loadingSuggestion) return;
+    setLoadingSuggestion(true);
+    setSuggestion("");
+    try {
+      const res = await fetch(`/api/ai/suggest?conversation_id=${conversationId}`);
+      if (!res.ok) {
+        throw new Error("Erro ao obter sugestão da IA.");
+      }
+      const data = await res.json();
+      if (data.suggestion) {
+        setSuggestion(data.suggestion);
+      } else {
+        toast.error("Nenhuma sugestão gerada.");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao obter sugestão.");
+    } finally {
+      setLoadingSuggestion(false);
+    }
+  }, [conversationId, loadingSuggestion]);
 
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
@@ -406,6 +436,60 @@ export function MessageComposer({
         </div>
       )}
 
+      {loadingSuggestion && (
+        <div className="mb-2 flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/10 px-3 py-2 text-xs text-primary animate-pulse">
+          <Loader2 className="h-3 w-3 animate-spin text-primary" />
+          <span>Obtendo sugestão inteligente da IA...</span>
+        </div>
+      )}
+
+      {suggestion && !loadingSuggestion && (
+        <div className="mb-2 flex flex-col gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-foreground animate-in fade-in-50 duration-200">
+          <div className="flex items-center justify-between border-b border-primary/10 pb-1.5">
+            <span className="flex items-center gap-1 font-semibold text-primary">
+              <Sparkles className="h-3 w-3" /> Sugestão da IA
+            </span>
+            <button
+              onClick={() => setSuggestion("")}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+          <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">{suggestion}</p>
+          <div className="flex gap-2 justify-end pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/10 hover:text-primary"
+              onClick={() => {
+                setText(suggestion);
+                setSuggestion("");
+                if (textareaRef.current) {
+                  textareaRef.current.value = suggestion;
+                  const el = textareaRef.current;
+                  el.style.height = "auto";
+                  el.style.height = `${Math.min(el.scrollHeight, 96)}px`;
+                }
+              }}
+            >
+              Copiar para editor
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
+              onClick={() => {
+                onSend(suggestion, replyTo?.id);
+                setSuggestion("");
+              }}
+            >
+              Enviar agora
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Hidden file inputs driven by the attach menu. */}
       <input
         ref={imageInputRef}
@@ -522,6 +606,22 @@ export function MessageComposer({
             onClick={onOpenTemplates}
           >
             <LayoutTemplate className="h-4 w-4" />
+          </GatedButton>
+
+          <GatedButton
+            variant="ghost"
+            size="sm"
+            canAct={!readOnly}
+            gateReason="enviar mensagens"
+            title={readOnly ? undefined : "Obter sugestão da IA"}
+            className={cn(
+              "h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-foreground",
+              loadingSuggestion && "text-primary animate-pulse"
+            )}
+            onClick={fetchSuggestion}
+            disabled={inputsDisabled || loadingSuggestion}
+          >
+            <Sparkles className="h-4 w-4" />
           </GatedButton>
 
           <textarea
