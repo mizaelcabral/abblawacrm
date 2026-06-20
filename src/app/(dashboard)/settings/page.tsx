@@ -16,6 +16,7 @@ import { TemplateManager } from '@/components/settings/template-manager';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { MembersTab } from '@/components/settings/members-tab';
+import { McpKeysCard } from '@/components/settings/mcp-keys-card';
 import {
   resolveSection,
   type SettingsSection,
@@ -69,6 +70,7 @@ function SettingsPageContent() {
     fields: <FieldsAndTagsPanel />,
     deals: <DealsSettings />,
     members: <MembersTab />,
+    mcp: <McpKeysCard />,
   };
 
   return (

@@ -3,7 +3,6 @@
 import { PasswordForm } from './password-form';
 import { SessionsCard } from './sessions-card';
 import { SettingsPanelHead } from './settings-panel-head';
-import { McpKeysCard } from './mcp-keys-card';
 
 /**
  * "Login & security" section — groups the former Profile-tab password
@@ -19,7 +18,6 @@ export function SecurityPanel() {
       <div className="space-y-4">
         <PasswordForm />
         <SessionsCard />
-        <McpKeysCard />
       </div>
     </section>
   );

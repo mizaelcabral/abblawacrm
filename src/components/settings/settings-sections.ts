@@ -9,6 +9,7 @@ import {
   User,
   UsersRound,
   CreditCard,
+  Key,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -31,6 +32,7 @@ export const SETTINGS_SECTIONS = [
   'fields',
   'deals',
   'members',
+  'mcp',
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
@@ -56,6 +58,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   fields: { id: 'fields', label: 'Campos e tags', icon: Tags, group: 'workspace' },
   deals: { id: 'deals', label: 'Negócios e moedas', icon: Coins, group: 'workspace' },
   members: { id: 'members', label: 'Membros da equipe', icon: UsersRound, group: 'workspace' },
+  mcp: { id: 'mcp', label: 'Integração MCP (IA)', icon: Key, group: 'workspace' },
 };
 
 export const RAIL_GROUPS: { label: string | null; group: SectionMeta['group'] }[] = [

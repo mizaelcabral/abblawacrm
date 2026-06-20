@@ -23,6 +23,7 @@ interface OverviewCounts {
   templatesPending: number | null;
   tags: number | null;
   customFields: number | null;
+  mcpKeys: number | null;
 }
 
 interface WhatsAppStatus {
@@ -58,7 +59,7 @@ export function SettingsOverview({
     // Cheap counts — resolve fast, render immediately.
     (async () => {
       setCountsLoading(true);
-      const [membersRes, invitesRes, templatesTotal, templatesPending, tagsRes, fieldsRes] =
+      const [membersRes, invitesRes, templatesTotal, templatesPending, tagsRes, fieldsRes, mcpKeysRes] =
         await Promise.allSettled([
           fetch('/api/account/members', { cache: 'no-store' }).then((r) => r.json()),
           canManageMembers
@@ -80,6 +81,10 @@ export function SettingsOverview({
             .select('id', { count: 'exact', head: true })
             .eq('user_id', userId),
           supabase.from('custom_fields').select('id', { count: 'exact', head: true }),
+          supabase
+            .from('mcp_api_keys')
+            .select('id', { count: 'exact', head: true })
+            .eq('account_id', acctId),
         ]);
 
       if (cancelled) return;
@@ -109,6 +114,8 @@ export function SettingsOverview({
         tags: tagsRes.status === 'fulfilled' ? tagsRes.value.count ?? null : null,
         customFields:
           fieldsRes.status === 'fulfilled' ? fieldsRes.value.count ?? null : null,
+        mcpKeys:
+          mcpKeysRes.status === 'fulfilled' ? mcpKeysRes.value.count ?? null : null,
       });
       setCountsLoading(false);
     })();
@@ -219,6 +226,14 @@ export function SettingsOverview({
       subtitle: account?.subscription_plan
         ? `${account.subscription_plan.charAt(0).toUpperCase()}${account.subscription_plan.slice(1)}`
         : 'Starter',
+    },
+    {
+      section: 'mcp',
+      loading: countsLoading,
+      subtitle:
+        counts?.mcpKeys == null
+          ? 'Chaves de integração de IA'
+          : `${counts.mcpKeys} ${counts.mcpKeys === 1 ? 'chave ativa' : 'chaves ativas'}`,
     },
   ];
 
