@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ModeToggle } from '@/components/layout/mode-toggle';
+import { Logo } from '@/components/layout/logo';
 
 function SuperAdminLayoutInner({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -47,10 +48,7 @@ function SuperAdminLayoutInner({ children }: { children: ReactNode }) {
       {/* Sidebar for Desktop */}
       <aside className="hidden md:flex md:w-64 md:flex-col border-r border-border bg-card/60 backdrop-blur-md sticky top-0 h-screen">
         <div className="flex h-16 items-center justify-between px-6 border-b border-border">
-          <div className="flex items-center gap-2">
-            <Shield className="h-6 w-6 text-primary" />
-            <span className="font-bold text-lg tracking-tight text-foreground uppercase">Abbla Admin</span>
-          </div>
+          <Logo badgeText="admin" />
           <ModeToggle />
         </div>
         <nav className="flex-1 space-y-1 px-4 py-4">
@@ -87,10 +85,7 @@ function SuperAdminLayoutInner({ children }: { children: ReactNode }) {
       {/* Mobile Header */}
       <div className="flex flex-col flex-1 min-w-0">
         <header className="md:hidden flex h-16 items-center justify-between px-6 border-b border-border bg-card/60 backdrop-blur-md sticky top-0 z-40">
-          <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-primary" />
-            <span className="font-bold text-base tracking-tight text-foreground uppercase">Abbla Admin</span>
-          </div>
+          <Logo badgeText="admin" />
           <div className="flex items-center gap-2">
             <ModeToggle />
             <Button variant="ghost" size="icon" onClick={() => setMobileOpen(!mobileOpen)} className="text-muted-foreground hover:text-foreground">
