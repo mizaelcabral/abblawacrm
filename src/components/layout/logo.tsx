@@ -31,11 +31,11 @@ export function Logo({ collapsed = false, badgeText = "hub", className }: LogoPr
           collapsed ? "w-0 opacity-0 pointer-events-none" : "w-auto opacity-100"
         )}
       >
-        <span className="font-bold text-lg tracking-tight text-black dark:text-white">
+        <span className="font-bold text-lg tracking-tight text-foreground">
           Abbla
         </span>
         {badgeText && (
-          <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
+          <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-foreground">
             {badgeText}
           </span>
         )}
