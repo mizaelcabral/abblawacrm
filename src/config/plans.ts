@@ -50,6 +50,7 @@ export const PLANS: Record<string, PlanConfig> = {
     maxAutopilotConversations: 9999,
     features: [
       'Todos os recursos do Pro',
+      'Conexão de IAs via MCP (Cursor, Claude, etc.)',
       '10.000 mensagens automáticas de IA/mês',
       'Piloto Automático em chats ilimitados',
       'R$ 0,05 por mensagem adicional excedente',
