@@ -4,11 +4,11 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Shield, LayoutDashboard, Users, ArrowLeft, Loader2, Menu, X } from 'lucide-react';
-import { useAuth } from '@/hooks/use-auth';
+import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-export default function SuperAdminLayout({ children }: { children: ReactNode }) {
+function SuperAdminLayoutInner({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { profile, profileLoading } = useAuth();
@@ -134,5 +134,13 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
         </main>
       </div>
     </div>
+  );
+}
+
+export default function SuperAdminLayout({ children }: { children: ReactNode }) {
+  return (
+    <AuthProvider>
+      <SuperAdminLayoutInner>{children}</SuperAdminLayoutInner>
+    </AuthProvider>
   );
 }
