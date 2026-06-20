@@ -265,6 +265,22 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <div className="my-4 border-t border-border" />
 
           <ul className="flex flex-col gap-1">
+            {profile?.role === 'super_admin' && (
+              <li>
+                <Link
+                  href="/superadmin"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                    pathname.startsWith("/superadmin")
+                      ? "bg-primary/10 text-primary font-bold"
+                      : "text-amber-500 hover:bg-muted"
+                  )}
+                >
+                  <Shield className="h-4 w-4" />
+                  Painel Super Admin
+                </Link>
+              </li>
+            )}
             {bottomNavItems.map((item) => {
               const [itemPath, itemQuery] = item.href.split("?");
               
