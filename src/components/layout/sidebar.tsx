@@ -203,10 +203,21 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       >
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
-        <div className={cn("flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4 transition-all duration-300", mounted && isCollapsed && "justify-center px-2")}>
-          <Link href="/dashboard" className="flex items-center gap-2">
+        <div className={cn("flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4 transition-all duration-300", mounted && isCollapsed && "px-2 justify-center")}>
+          <Link href="/dashboard" className="flex items-center gap-1.5 shrink-0">
             <Logo collapsed={mounted && isCollapsed} />
           </Link>
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className={cn(
+              "hidden lg:flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-300 cursor-pointer shrink-0",
+              mounted && isCollapsed && "h-6 w-6"
+            )}
+          >
+            <ChevronLeft className={cn("h-4 w-4 transition-transform duration-300", mounted && isCollapsed && "rotate-180")} />
+          </button>
           {!isCollapsed && onClose && (
             <button
               type="button"
@@ -220,8 +231,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         </div>
 
         {/* Main navigation */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <ul className="flex flex-col gap-1">
+        <nav className={cn("flex-1 overflow-y-auto py-4 transition-all duration-300", mounted && isCollapsed ? "px-0" : "px-3")}>
+          <ul className={cn("flex flex-col gap-1 transition-all duration-300", mounted && isCollapsed && "items-center")}>
             {navItems.map((item) => {
               const [itemPath, itemQuery] = item.href.split("?");
               
@@ -303,7 +314,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
           <div className="my-4 border-t border-border" />
 
-          <ul className="flex flex-col gap-1">
+          <ul className={cn("flex flex-col gap-1 transition-all duration-300", mounted && isCollapsed && "items-center")}>
             {profile?.role === 'super_admin' && (
               <li>
                 <Link
@@ -372,28 +383,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 </li>
               );
             })}
-            <li className="hidden lg:block">
-              <button
-                type="button"
-                onClick={toggleCollapse}
-                className={cn(
-                  "flex items-center rounded-lg text-sm font-medium transition-all duration-300 py-2.5 lg:py-2 text-muted-foreground hover:bg-muted hover:text-foreground w-full cursor-pointer",
-                  mounted && isCollapsed
-                    ? "justify-center px-0 w-10 mx-auto"
-                    : "gap-3 px-3"
-                )}
-              >
-                <ChevronLeft className={cn("h-4 w-4 transition-transform duration-300", mounted && isCollapsed && "rotate-180")} />
-                <span
-                  className={cn(
-                    "flex-1 text-left transition-all duration-300 overflow-hidden whitespace-nowrap",
-                    mounted && isCollapsed ? "w-0 opacity-0 pointer-events-none" : "w-auto opacity-100"
-                  )}
-                >
-                  Recolher
-                </span>
-              </button>
-            </li>
           </ul>
         </nav>
 
