@@ -11,11 +11,14 @@ import {
   Loader2,
   Info,
   Shield,
+  ShieldAlert,
+  ArrowUpCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/hooks/use-auth';
 
 interface McpKey {
   id: string;
@@ -25,6 +28,10 @@ interface McpKey {
 }
 
 export function McpKeysCard() {
+  const { account } = useAuth();
+  const plan = account?.subscription_plan || 'starter';
+  const isScale = plan === 'scale';
+
   const [keys, setKeys] = useState<McpKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
@@ -37,6 +44,8 @@ export function McpKeysCard() {
 
   const fetchKeys = async () => {
     try {
+      // Avoid fetching keys if not on scale plan
+      if (!isScale) return;
       const res = await fetch('/api/mcp/keys');
       if (res.ok) {
         const data = await res.json();
@@ -51,7 +60,44 @@ export function McpKeysCard() {
 
   useEffect(() => {
     fetchKeys();
-  }, []);
+  }, [isScale]);
+
+  if (!isScale) {
+    return (
+      <Card className="border-border bg-card overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600" />
+        <CardHeader className="pt-8">
+          <div className="flex items-center gap-2">
+            <Key className="h-5 w-5 text-amber-500" />
+            <CardTitle className="text-foreground">Conexão MCP (IA) — Recurso Scale</CardTitle>
+          </div>
+          <CardDescription className="text-muted-foreground text-sm">
+            Gere chaves de API para conectar IAs externas (como Cursor, Claude Desktop e assistentes autônomos) ao seu CRM da Abbla.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center justify-center text-center py-10 px-6 space-y-5">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 shadow-inner">
+            <ShieldAlert className="h-8 w-8" />
+          </div>
+          <div className="max-w-md space-y-2">
+            <h3 className="text-lg font-bold text-foreground">Acesso Exclusivo</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              O Model Context Protocol (MCP) permite conexões externas bidirecionais super poderosas para automatizar seu funil, listar contatos e enviar mensagens usando IAs. Esse recurso está disponível exclusivamente para assinantes do plano **Scale**.
+            </p>
+          </div>
+          <Button 
+            onClick={() => {
+              window.location.href = '/settings?tab=plans';
+            }}
+            className="bg-amber-500 hover:bg-amber-600 text-black font-semibold flex items-center gap-2 px-6"
+          >
+            <ArrowUpCircle className="h-4 w-4" />
+            Fazer Upgrade para Scale
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

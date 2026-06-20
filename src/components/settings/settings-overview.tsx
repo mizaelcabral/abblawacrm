@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronRight, Loader2, Lock } from 'lucide-react';
 
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
@@ -231,9 +231,15 @@ export function SettingsOverview({
       section: 'mcp',
       loading: countsLoading,
       subtitle:
-        counts?.mcpKeys == null
-          ? 'Chaves de integração de IA'
-          : `${counts.mcpKeys} ${counts.mcpKeys === 1 ? 'chave ativa' : 'chaves ativas'}`,
+        account?.subscription_plan !== 'scale' ? (
+          <span className="flex items-center gap-1 text-amber-500 font-medium">
+            <Lock className="size-3 shrink-0" /> Exclusivo no plano Scale
+          </span>
+        ) : counts?.mcpKeys == null ? (
+          'Chaves de integração de IA'
+        ) : (
+          `${counts.mcpKeys} ${counts.mcpKeys === 1 ? 'chave ativa' : 'chaves ativas'}`
+        ),
     },
   ];
 

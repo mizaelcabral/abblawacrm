@@ -27,11 +27,17 @@ async function authenticateApiKey(request: Request): Promise<{ accountId: string
     const admin = supabaseAdmin();
     const { data, error } = await admin
       .from('mcp_api_keys')
-      .select('id, account_id, user_id')
+      .select('id, account_id, user_id, account:accounts!inner(subscription_plan)')
       .eq('key_hash', keyHash)
       .maybeSingle();
 
     if (error || !data) return null;
+
+    const plan = (data as any)?.account?.subscription_plan || 'starter';
+    if (plan !== 'scale') {
+      console.warn(`[mcp] Key validation failed: Account ${data.account_id} is on plan ${plan}, not scale.`);
+      return null;
+    }
 
     // Update last_used_at in the background (fire and forget)
     void admin
