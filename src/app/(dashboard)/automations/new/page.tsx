@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import { useMemo } from "react"
+import { useMemo, useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 
 import {
@@ -11,7 +11,24 @@ import {
 import { AUTOMATION_TEMPLATES, type TemplateSlug } from "@/lib/automations/templates"
 import type { AutomationStepType, AutomationTriggerType } from "@/types"
 
-export default function NewAutomationPage() {
+function ClientOnly({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
+      <div className="flex h-40 items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  return <>{children}</>
+}
+
+function NewAutomationPageInner() {
   const params = useSearchParams()
   const template = params.get("template") as TemplateSlug | null
 
@@ -47,6 +64,20 @@ export default function NewAutomationPage() {
   }, [template])
 
   return <AutomationBuilder initial={initial} />
+}
+
+export default function NewAutomationPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-40 items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    }>
+      <ClientOnly>
+        <NewAutomationPageInner />
+      </ClientOnly>
+    </Suspense>
+  )
 }
 
 interface SeedRow {

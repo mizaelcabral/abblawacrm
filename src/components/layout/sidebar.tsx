@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -112,6 +112,7 @@ interface SidebarProps {
 
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const totalUnread = useTotalUnread();
   // Only surface the account-name strip when it actually carries
@@ -204,9 +205,22 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
             {navItems.map((item) => {
-              const isActive =
-                pathname === item.href ||
-                (item.href !== "/dashboard" && pathname.startsWith(item.href));
+              const [itemPath, itemQuery] = item.href.split("?");
+              
+              let isActive = false;
+              if (itemQuery) {
+                const searchParamsObj = new URLSearchParams(itemQuery);
+                const tab = searchParamsObj.get("tab");
+                isActive = pathname === itemPath && searchParams.get("tab") === tab;
+              } else {
+                if (item.href === "/settings") {
+                  isActive = pathname === "/settings" && searchParams.get("tab") !== "plans";
+                } else {
+                  isActive =
+                    pathname === item.href ||
+                    (item.href !== "/dashboard" && pathname.startsWith(item.href));
+                }
+              }
 
               const showUnreadDot =
                 item.href === "/inbox" && totalUnread > 0 && !isActive;
@@ -252,7 +266,20 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
           <ul className="flex flex-col gap-1">
             {bottomNavItems.map((item) => {
-              const isActive = pathname.startsWith(item.href);
+              const [itemPath, itemQuery] = item.href.split("?");
+              
+              let isActive = false;
+              if (itemQuery) {
+                const searchParamsObj = new URLSearchParams(itemQuery);
+                const tab = searchParamsObj.get("tab");
+                isActive = pathname === itemPath && searchParams.get("tab") === tab;
+              } else {
+                if (item.href === "/settings") {
+                  isActive = pathname === "/settings" && searchParams.get("tab") !== "plans";
+                } else {
+                  isActive = pathname.startsWith(item.href);
+                }
+              }
               return (
                 <li key={item.href}>
                   <Link
