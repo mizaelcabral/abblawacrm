@@ -14,10 +14,7 @@ export function Logo({ collapsed = false, badgeText = "hub", className }: LogoPr
       {/* SVG Speech Bubble Logo Icon */}
       <svg
         viewBox="0 0 100 100"
-        className={cn(
-          "shrink-0 fill-primary text-primary transition-all duration-300",
-          collapsed ? "h-6 w-6" : "h-8 w-8"
-        )}
+        className="h-8 w-8 shrink-0 fill-primary text-primary"
         xmlns="http://www.w3.org/2000/svg"
       >
         <path

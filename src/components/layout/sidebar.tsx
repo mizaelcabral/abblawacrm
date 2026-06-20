@@ -203,8 +203,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       >
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
-        <div className={cn("flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4 transition-all duration-300", mounted && isCollapsed && "px-2 justify-center")}>
-          <Link href="/dashboard" className="flex items-center gap-1.5 shrink-0">
+        <div className={cn("relative flex h-14 shrink-0 items-center border-b border-border px-4 transition-all duration-300", mounted && isCollapsed ? "justify-center px-0" : "justify-between gap-2")}>
+          <Link href="/dashboard" className={cn("flex items-center gap-1.5 shrink-0 transition-all duration-300", mounted && isCollapsed ? "mx-auto" : "mx-0")}>
             <Logo collapsed={mounted && isCollapsed} />
           </Link>
           <button
@@ -212,8 +212,10 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             onClick={toggleCollapse}
             aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             className={cn(
-              "hidden lg:flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-300 cursor-pointer shrink-0",
-              mounted && isCollapsed && "h-6 w-6"
+              "hidden lg:flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-300 cursor-pointer shrink-0",
+              mounted && isCollapsed 
+                ? "absolute right-0.5 top-4 h-6 w-6" 
+                : "h-8 w-8"
             )}
           >
             <ChevronLeft className={cn("h-4 w-4 transition-transform duration-300", mounted && isCollapsed && "rotate-180")} />
@@ -231,8 +233,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         </div>
 
         {/* Main navigation */}
-        <nav className={cn("flex-1 overflow-y-auto py-4 transition-all duration-300", mounted && isCollapsed ? "px-0" : "px-3")}>
-          <ul className={cn("flex flex-col gap-1 transition-all duration-300", mounted && isCollapsed && "items-center")}>
+        <nav className={cn("flex-1 overflow-y-auto py-4 transition-all duration-300 w-full no-scrollbar", mounted && isCollapsed ? "px-0" : "px-3")}>
+          <ul className={cn("flex flex-col gap-1 transition-all duration-300 w-full", mounted && isCollapsed && "items-center")}>
             {navItems.map((item) => {
               const [itemPath, itemQuery] = item.href.split("?");
               
