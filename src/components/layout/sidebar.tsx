@@ -255,7 +255,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 item.href === "/inbox" && totalUnread > 0 && !isActive;
 
               return (
-                <li key={item.href}>
+                <li key={item.href} className={cn("w-full transition-all duration-300", mounted && isCollapsed && "flex justify-center")}>
                   <Link
                     href={item.href}
                     className={cn(
@@ -312,11 +312,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             })}
           </ul>
 
-          <div className="my-4 border-t border-border" />
+          <div className={cn("my-4 border-t border-border transition-all duration-300", mounted && isCollapsed ? "mx-4 w-8" : "mx-0 w-auto")} />
 
           <ul className={cn("flex flex-col gap-1 transition-all duration-300", mounted && isCollapsed && "items-center")}>
             {profile?.role === 'super_admin' && (
-              <li>
+              <li className={cn("w-full transition-all duration-300", mounted && isCollapsed && "flex justify-center")}>
                 <Link
                   href="/superadmin"
                   className={cn(
@@ -357,7 +357,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 }
               }
               return (
-                <li key={item.href}>
+                <li key={item.href} className={cn("w-full transition-all duration-300", mounted && isCollapsed && "flex justify-center")}>
                   <Link
                     href={item.href}
                     className={cn(
@@ -387,7 +387,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         </nav>
 
         {/* User section */}
-        <div className="shrink-0 border-t border-border p-3">
+        <div className={cn("shrink-0 border-t border-border transition-all duration-300", mounted && isCollapsed ? "p-0 py-3 flex justify-center w-full" : "p-3")}>
           {/* Account name display — surfaced only when the account
               name differs from the user's own name (see
               `showAccountStrip`). For a default solo account the two
