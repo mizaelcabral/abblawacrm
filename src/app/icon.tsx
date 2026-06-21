@@ -22,21 +22,19 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#7c3aed", // primary (Hostinger-aligned purple)
-          borderRadius: 6,
         }}
       >
         <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#ffffff"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          width="32"
+          height="32"
+          viewBox="0 0 100 100"
+          fill="#8b5cf6"
         >
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          <path
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M50,8 C26.8,8 8,26.8 8,50 C8,59.5 11.2,68.2 16.6,75.2 L7,93 L26.3,86.8 C33.1,90.1 40.8,92 50,92 C73.2,92 92,73.2 92,50 C92,26.8 73.2,8 50,8 Z M32,52 L68,52 C68,61.94 59.94,70 50,70 C40.06,70 32,61.94 32,52 Z"
+          />
         </svg>
       </div>
     ),

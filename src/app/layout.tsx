@@ -20,13 +20,29 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: "Abbla WhatsApp",
-    template: "%s — Abbla WhatsApp",
+    default: "Abbla Hub — CRM Multicanal e Automação",
+    template: "%s — Abbla Hub",
   },
-  description: "CRM para WhatsApp.",
+  description: "Abbla Hub é a plataforma de CRM multicanal definitiva que unifica WhatsApp Cloud API, Instagram Direct e Facebook Messenger. Centralize sua equipe em uma caixa de entrada unificada, crie automações inteligentes com flow builder, gerencie pipelines de vendas e impulsione conversões com IA.",
+  keywords: [
+    "Abbla Hub",
+    "Abbla",
+    "CRM WhatsApp",
+    "CRM Multicanal",
+    "Automação de WhatsApp",
+    "Chatbot Instagram Direct",
+    "Facebook Messenger CRM",
+    "Inbox Unificado",
+    "Flow Builder",
+    "Marketing Conversacional",
+    "CRM de Vendas",
+    "SaaS CRM Brasil",
+    "Integração Meta API",
+    "Conversational AI CRM"
+  ],
   robots: {
-    index: false,
-    follow: false,
+    index: true,
+    follow: true,
   },
   icons: {
     icon: [{ url: "/icon" }],
@@ -107,6 +123,24 @@ export default function RootLayout({
           id="theme-boot"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "SoftwareApplication",
+              "name": "Abbla Hub",
+              "operatingSystem": "All",
+              "applicationCategory": "BusinessApplication",
+              "description": "CRM multicanal definitivo com suporte nativo a WhatsApp Cloud API, Instagram Direct e Facebook Messenger. Centralize conversas, crie automações com chatbot visual (flow builder), colabore em equipe e potencialize suas vendas com inteligência artificial.",
+              "offers": {
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "BRL"
+              }
+            })
+          }}
         />
       </head>
       <body className="min-h-full bg-background text-foreground font-sans">

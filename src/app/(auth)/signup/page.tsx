@@ -144,7 +144,7 @@ function SignupPageInner() {
           <CardDescription className="text-muted-foreground">
             {inviteToken
               ? "Verifique seu e-mail, depois aceite o convite para se juntar à equipe."
-              : "Comece com o Abbla WhatsApp"}
+              : "Comece com o Abbla Hub"}
           </CardDescription>
         </CardHeader>
         <CardContent>
