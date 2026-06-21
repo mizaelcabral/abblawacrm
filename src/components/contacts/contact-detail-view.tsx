@@ -96,7 +96,7 @@ export function ContactDetailView({
     if (data) {
       setContact(data);
       setEditName(data.name ?? '');
-      setEditPhone(data.phone);
+      setEditPhone(data.phone ?? '');
       setEditEmail(data.email ?? '');
       setEditCompany(data.company ?? '');
     }
@@ -177,14 +177,17 @@ export function ContactDetailView({
   }, [open, contactId, fetchContact, fetchTags, fetchNotes, fetchCustomFields, fetchDeals]);
 
   async function copyPhone() {
-    if (!contact) return;
+    if (!contact?.phone) return;
     await navigator.clipboard.writeText(contact.phone);
     setCopiedPhone(true);
     setTimeout(() => setCopiedPhone(false), 2000);
   }
 
   async function saveDetails() {
-    if (!contactId || !editPhone.trim()) {
+    if (!contactId) return;
+
+    const hasSocialId = !!(contact?.messenger_psid || contact?.instagram_igsid);
+    if (!editPhone.trim() && !hasSocialId) {
       toast.error('O número de telefone é obrigatório');
       return;
     }
@@ -194,7 +197,7 @@ export function ContactDetailView({
       .from('contacts')
       .update({
         name: editName.trim() || null,
-        phone: editPhone.trim(),
+        phone: editPhone.trim() || null,
         email: editEmail.trim() || null,
         company: editCompany.trim() || null,
         updated_at: new Date().toISOString(),

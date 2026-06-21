@@ -271,7 +271,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     );
   }
 
-  const displayName = contact.name || contact.phone;
+  const displayName = contact.name || contact.phone || "Desconhecido";
   const initials = displayName.charAt(0).toUpperCase();
 
   return (

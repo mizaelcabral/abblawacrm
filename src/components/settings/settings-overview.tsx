@@ -48,6 +48,8 @@ export function SettingsOverview({
   // from blanking the rest of the landing.
   const [whatsapp, setWhatsapp] = useState<WhatsAppStatus | null>(null);
   const [whatsappLoading, setWhatsappLoading] = useState(true);
+  const [metaStatus, setMetaStatus] = useState<{ configured: boolean; connected: boolean } | null>(null);
+  const [metaLoading, setMetaLoading] = useState(true);
 
   useEffect(() => {
     if (!user || !accountId) return;
@@ -139,6 +141,25 @@ export function SettingsOverview({
       setWhatsappLoading(false);
     })();
 
+    // Meta Page / Instagram connection status.
+    (async () => {
+      setMetaLoading(true);
+      const [row, health] = await Promise.allSettled([
+        supabase
+          .from('meta_integration_config')
+          .select('facebook_page_id')
+          .eq('account_id', acctId)
+          .maybeSingle(),
+        fetch('/api/meta/config', { cache: 'no-store' }).then((r) => r.json()),
+      ]);
+      if (cancelled) return;
+      setMetaStatus({
+        configured: row.status === 'fulfilled' && !!row.value.data?.facebook_page_id,
+        connected: health.status === 'fulfilled' && !!health.value?.connected,
+      });
+      setMetaLoading(false);
+    })();
+
     return () => {
       cancelled = true;
     };
@@ -167,6 +188,21 @@ export function SettingsOverview({
       subtitle: !whatsapp?.configured ? (
         'Não configurado'
       ) : whatsapp.connected ? (
+        <>
+          <StatusDot tone="ok" /> Conectado
+        </>
+      ) : (
+        <>
+          <StatusDot tone="muted" /> Necessita reconexão
+        </>
+      ),
+    },
+    {
+      section: 'meta',
+      loading: metaLoading,
+      subtitle: !metaStatus?.configured ? (
+        'Não configurado'
+      ) : metaStatus.connected ? (
         <>
           <StatusDot tone="ok" /> Conectado
         </>

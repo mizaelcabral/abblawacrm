@@ -4,6 +4,7 @@ import {
   sendTextMessage,
   sendTemplateMessage,
   sendMediaMessage,
+  sendMetaPageMessage,
   type MediaKind,
 } from '@/lib/whatsapp/meta-api'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
@@ -149,6 +150,126 @@ export async function POST(request: Request) {
     }
 
     const contact = conversation.contact
+    const channel = conversation.channel || 'whatsapp'
+
+    if (channel === 'messenger' || channel === 'instagram') {
+      const recipientId = channel === 'messenger' ? contact?.messenger_psid : contact?.instagram_igsid
+      if (!recipientId) {
+        return NextResponse.json(
+          { error: `Contact ${channel} ID not found` },
+          { status: 400 }
+        )
+      }
+
+      // Fetch and decrypt Meta integration config
+      const { data: config, error: configError } = await supabase
+        .from('meta_integration_config')
+        .select('*')
+        .eq('account_id', accountId)
+        .single()
+
+      if (configError || !config) {
+        return NextResponse.json(
+          { error: 'Facebook/Instagram integration not configured for this account.' },
+          { status: 400 }
+        )
+      }
+
+      const accessToken = decrypt(config.page_access_token)
+
+      // Self-heal legacy GCM/CBC tokens if needed
+      if (isLegacyFormat(config.page_access_token)) {
+        void supabase
+          .from('meta_integration_config')
+          .update({ page_access_token: encrypt(accessToken) })
+          .eq('id', config.id)
+          .then(({ error }) => {
+            if (error) {
+              console.warn(
+                '[meta/send] page_access_token GCM upgrade failed:',
+                error.message,
+              )
+            }
+          })
+      }
+
+      let metaMessageId = ''
+      try {
+        const result = await sendMetaPageMessage({
+          accessToken,
+          to: recipientId,
+          text: content_text || undefined,
+          mediaUrl: media_url || undefined,
+          mediaType: isMediaKind ? (message_type as MediaKind) : undefined,
+        })
+        metaMessageId = result.messageId
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown Meta API error'
+        console.error('Meta Page API send failed:', message)
+        return NextResponse.json(
+          { error: `Meta API error: ${message}` },
+          { status: 502 }
+        )
+      }
+
+      // Insert message into DB
+      const { data: messageRecord, error: msgError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id,
+          sender_type: 'agent',
+          content_type: message_type,
+          content_text: content_text || null,
+          media_url: media_url || null,
+          message_id: metaMessageId,
+          status: 'sent',
+          reply_to_message_id: reply_to_message_id || null,
+          channel,
+        })
+        .select()
+        .single()
+
+      if (msgError) {
+        console.error('Error inserting sent message:', msgError)
+        return NextResponse.json(
+          { error: `Message sent to Meta but failed to save to DB: ${msgError.message}` },
+          { status: 500 }
+        )
+      }
+
+      // Update conversation
+      await supabase
+        .from('conversations')
+        .update({
+          last_message_text: content_text || `[${message_type}]`,
+          last_message_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', conversation_id)
+
+      // Pause flow run if any
+      try {
+        await supabaseAdmin()
+          .from('flow_runs')
+          .update({
+            status: 'paused_by_agent',
+            ended_at: new Date().toISOString(),
+            end_reason: 'agent_replied',
+          })
+          .eq('account_id', accountId)
+          .eq('contact_id', contact.id)
+          .eq('status', 'active')
+      } catch (err) {
+        console.error('[flows] pause failed:', err)
+      }
+
+      return NextResponse.json({
+        success: true,
+        message_id: messageRecord.id,
+        meta_message_id: metaMessageId,
+      })
+    }
+
     if (!contact?.phone) {
       return NextResponse.json(
         { error: 'Contact phone number not found' },
@@ -376,6 +497,7 @@ export async function POST(request: Request) {
         message_id: waMessageId,
         status: 'sent',
         reply_to_message_id: reply_to_message_id || null,
+        channel: 'whatsapp',
       })
       .select()
       .single()

@@ -1034,3 +1034,61 @@ export async function downloadMedia(
   const buffer = Buffer.from(await response.arrayBuffer())
   return { buffer, contentType }
 }
+
+export interface SendMetaPageMessageArgs {
+  accessToken: string
+  to: string
+  text?: string
+  mediaUrl?: string
+  mediaType?: 'image' | 'video' | 'document' | 'audio'
+}
+
+/**
+ * Send a message via Meta Page / Instagram Direct Messages Send API.
+ * Uses Graph API version specified by META_API_VERSION.
+ */
+export async function sendMetaPageMessage(
+  args: SendMetaPageMessageArgs
+): Promise<MetaSendResult> {
+  const { accessToken, to, text, mediaUrl, mediaType } = args
+  const url = `${META_API_BASE}/me/messages?access_token=${accessToken}`
+
+  let messagePayload: any = {}
+  if (mediaUrl && mediaType) {
+    const type = mediaType === 'document' ? 'file' : mediaType
+    messagePayload = {
+      attachment: {
+        type,
+        payload: {
+          url: mediaUrl,
+          is_reusable: true,
+        },
+      },
+    }
+  } else {
+    messagePayload = {
+      text: text || '',
+    }
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      recipient: { id: to },
+      message: messagePayload,
+    }),
+  })
+
+  if (!response.ok) {
+    await throwMetaError(response, `Meta Page Send API error: ${response.status}`)
+  }
+
+  const data = await response.json()
+  if (!data.message_id) {
+    throw new Error('Meta Page Send API did not return a message_id.')
+  }
+  return { messageId: data.message_id }
+}

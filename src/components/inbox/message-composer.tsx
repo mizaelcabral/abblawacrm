@@ -99,6 +99,7 @@ interface MessageComposerProps {
   onOpenTemplates: () => void;
   replyTo?: ReplyDraft | null;
   onClearReply?: () => void;
+  channel?: "whatsapp" | "messenger" | "instagram";
 }
 
 function formatDuration(seconds: number): string {
@@ -120,6 +121,7 @@ export function MessageComposer({
   onOpenTemplates,
   replyTo,
   onClearReply,
+  channel = "whatsapp",
 }: MessageComposerProps) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -422,17 +424,21 @@ export function MessageComposer({
       {sessionExpired && (
         <div className="mb-2 flex items-center justify-between rounded-lg bg-amber-500/10 px-3 py-2">
           <p className="text-xs text-amber-400">
-            Sessão de 24 horas expirada. Use um modelo para reatar.
+            {channel === 'whatsapp'
+              ? "Sessão de 24 horas expirada. Use um modelo para reatar."
+              : "Sessão de 24 horas expirada. Aguarde o cliente enviar uma mensagem para responder."}
           </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs text-amber-400 hover:text-amber-300"
-            onClick={onOpenTemplates}
-          >
-            <LayoutTemplate className="mr-1 h-3 w-3" />
-            Modelos
-          </Button>
+          {channel === 'whatsapp' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-amber-400 hover:text-amber-300"
+              onClick={onOpenTemplates}
+            >
+              <LayoutTemplate className="mr-1 h-3 w-3" />
+              Modelos
+            </Button>
+          )}
         </div>
       )}
 
@@ -596,17 +602,19 @@ export function MessageComposer({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <GatedButton
-            variant="ghost"
-            size="sm"
-            canAct={!readOnly}
-            gateReason="enviar mensagens"
-            title={readOnly ? undefined : "Enviar modelo"}
-            className="h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-foreground"
-            onClick={onOpenTemplates}
-          >
-            <LayoutTemplate className="h-4 w-4" />
-          </GatedButton>
+          {channel === 'whatsapp' && (
+            <GatedButton
+              variant="ghost"
+              size="sm"
+              canAct={!readOnly}
+              gateReason="enviar mensagens"
+              title={readOnly ? undefined : "Enviar modelo"}
+              className="h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+              onClick={onOpenTemplates}
+            >
+              <LayoutTemplate className="h-4 w-4" />
+            </GatedButton>
+          )}
 
           <GatedButton
             variant="ghost"
@@ -633,8 +641,14 @@ export function MessageComposer({
               readOnly
                 ? "Apenas visualização — visualizadores podem navegar, mas não responder"
                 : sessionExpired
-                  ? "Sessão expirada - use um modelo"
-                  : "Digite uma mensagem... (Shift+Enter para nova linha)"
+                  ? channel === 'whatsapp'
+                    ? "Sessão expirada - use um modelo"
+                    : "Sessão expirada - aguarde o cliente entrar em contato"
+                  : channel === 'messenger'
+                    ? "Respondendo via Messenger... (Shift+Enter para nova linha)"
+                    : channel === 'instagram'
+                      ? "Respondendo via Instagram... (Shift+Enter para nova linha)"
+                      : "Digite uma mensagem... (Shift+Enter para nova linha)"
             }
             disabled={sessionExpired || readOnly}
             rows={1}

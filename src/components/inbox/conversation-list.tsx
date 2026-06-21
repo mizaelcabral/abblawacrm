@@ -231,6 +231,31 @@ interface ConversationItemProps {
   onSelect: (conversation: Conversation) => void;
 }
 
+function ChannelIcon({ channel }: { channel: 'whatsapp' | 'messenger' | 'instagram' }) {
+  if (channel === 'messenger') {
+    return (
+      <svg className="h-2.5 w-2.5 fill-current" viewBox="0 0 24 24">
+        <path d="M12 2C6.477 2 2 6.145 2 11.243c0 2.909 1.455 5.503 3.738 7.189v3.743c0 .248.272.392.474.248l4.135-2.951c.54.076 1.093.12 1.653.12 5.523 0 10-4.146 10-9.243S17.523 2 12 2zm1.293 11.293L10.5 10.5 5.5 15.5l5.293-5.293 2.793 2.793 5-5-5.293 5.293z"/>
+      </svg>
+    );
+  }
+  if (channel === 'instagram') {
+    return (
+      <svg className="h-2.5 w-2.5 stroke-current" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+        <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+      </svg>
+    );
+  }
+  // whatsapp
+  return (
+    <svg className="h-2.5 w-2.5 fill-current" viewBox="0 0 24 24">
+      <path d="M12.031 2C6.48 2 2 6.48 2 12.03c0 1.954.557 3.784 1.533 5.344L2.007 22l4.805-1.46c1.51.922 3.284 1.456 5.219 1.456 5.552 0 10.03-4.48 10.03-10.03S17.583 2 12.031 2zM17.84 15.65c-.24.68-1.2 1.25-1.92 1.34-.48.06-1.1.09-3.21-.79-2.7-1.12-4.44-3.87-4.57-4.05-.14-.18-1.09-1.46-1.09-2.78 0-1.32.69-1.97.94-2.23.25-.26.54-.32.72-.32.18 0 .36 0 .52.01.17 0 .4-.07.62.46.23.54.79 1.92.86 2.06.07.14.12.31.02.5-.09.19-.2.31-.39.53-.19.22-.4.49-.57.66-.19.19-.39.4-.17.78.22.38.98 1.62 2.1 2.62 1.44 1.28 2.64 1.68 3.02 1.87.38.19.6.16.82-.1.22-.26.96-1.12 1.22-1.5.26-.38.52-.32.88-.19.36.13 2.27 1.07 2.66 1.27.39.2.65.3.74.46.09.16.09.93-.15 1.61z"/>
+    </svg>
+  );
+}
+
 function ConversationItem({
   conversation,
   isActive,
@@ -259,17 +284,30 @@ function ConversationItem({
         isActive && "border-l-2 border-primary bg-muted/70"
       )}
     >
-      {/* Avatar */}
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
-        {contact?.avatar_url ? (
-          <img
-            src={contact.avatar_url}
-            alt={displayName}
-            className="h-10 w-10 rounded-full object-cover"
-          />
-        ) : (
-          initials
-        )}
+      {/* Avatar with Channel Badge */}
+      <div className="relative shrink-0">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+          {contact?.avatar_url ? (
+            <img
+              src={contact.avatar_url}
+              alt={displayName}
+              className="h-10 w-10 rounded-full object-cover"
+            />
+          ) : (
+            initials
+          )}
+        </div>
+        <div
+          className={cn(
+            "absolute -bottom-1 -right-1 flex h-[18px] w-[18px] items-center justify-center rounded-full border-2 border-card p-[2px] shadow-sm text-white",
+            conversation.channel === "messenger" && "bg-[#0084FF]",
+            conversation.channel === "instagram" && "bg-[linear-gradient(45deg,#f09433_0%,#e6683c_25%,#dc2743_50%,#cc2366_75%,#bc1888_100%)]",
+            (conversation.channel === "whatsapp" || !conversation.channel) && "bg-[#25D366]"
+          )}
+          title={conversation.channel || "whatsapp"}
+        >
+          <ChannelIcon channel={conversation.channel || "whatsapp"} />
+        </div>
       </div>
 
       {/* Content */}

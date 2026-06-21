@@ -10,6 +10,7 @@ import {
   UsersRound,
   CreditCard,
   Key,
+  Share2,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -28,6 +29,7 @@ export const SETTINGS_SECTIONS = [
   'appearance',
   'plans',
   'whatsapp',
+  'meta',
   'templates',
   'fields',
   'deals',
@@ -54,6 +56,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   appearance: { id: 'appearance', label: 'Aparência', icon: Palette, group: 'account' },
   plans: { id: 'plans', label: 'Planos & Faturamento', icon: CreditCard, group: 'account' },
   whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace' },
+  meta: { id: 'meta', label: 'Facebook & Instagram', icon: Share2, group: 'workspace' },
   templates: { id: 'templates', label: 'Modelos', icon: FileText, group: 'workspace' },
   fields: { id: 'fields', label: 'Campos e tags', icon: Tags, group: 'workspace' },
   deals: { id: 'deals', label: 'Negócios e moedas', icon: Coins, group: 'workspace' },
