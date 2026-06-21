@@ -69,26 +69,26 @@ function LoginPageInner() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md border-border bg-card">
-        <CardHeader className="items-center text-center">
-          <div className="mb-4 flex justify-center w-full">
-            {inviteToken ? (
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-                <UsersRound className="h-6 w-6 text-primary" />
-              </div>
-            ) : (
-              <Logo badgeText="hub" className="justify-center" />
-            )}
+      <div className="flex flex-col items-center gap-6 w-full max-w-md">
+        {inviteToken ? (
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+            <UsersRound className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-xl text-foreground">
-            {inviteToken ? "Entrar para aceitar" : "Bem-vindo de volta"}
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            {inviteToken
-              ? "Entre na sua conta e te levaremos para o convite."
-              : "Entre na sua conta"}
-          </CardDescription>
-        </CardHeader>
+        ) : (
+          <Logo badgeText="hub" className="justify-center scale-110" />
+        )}
+
+        <Card className="w-full border-border bg-card">
+          <CardHeader className="text-center">
+            <CardTitle className="text-xl text-foreground">
+              {inviteToken ? "Entrar para aceitar" : "Bem-vindo de volta"}
+            </CardTitle>
+            <CardDescription className="text-muted-foreground">
+              {inviteToken
+                ? "Entre na sua conta e te levaremos para o convite."
+                : "Entre na sua conta"}
+            </CardDescription>
+          </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             {error && (
@@ -160,5 +160,6 @@ function LoginPageInner() {
         </CardContent>
       </Card>
     </div>
+  </div>
   );
 }
