@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, Suspense } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
@@ -11,21 +11,47 @@ import { Header } from "@/components/layout/header";
 // client components can't export Next's metadata object.
 
 function DashboardShellInner({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, account, profileLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   // Sidebar drawer state — only used on mobile. On lg+ the sidebar is
   // always visible and this stays at `false` (ignored by the component).
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push("/login");
-    }
-  }, [user, loading, router]);
+  const isTrialExpired =
+    account &&
+    account.subscription_status === "trial" &&
+    account.subscription_expires_at &&
+    new Date(account.subscription_expires_at) < new Date();
 
-  if (loading) {
+  const isDelinquent =
+    account &&
+    (account.subscription_status === "past_due" ||
+      account.subscription_status === "unpaid" ||
+      account.subscription_status === "canceled");
+
+  const isBlocked = isTrialExpired || isDelinquent;
+
+  useEffect(() => {
+    if (!loading && !profileLoading) {
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      if (isBlocked) {
+        const currentTab = searchParams.get("tab");
+        if (pathname !== "/settings" || currentTab !== "plans") {
+          router.push("/settings?tab=plans");
+        }
+      }
+    }
+  }, [user, loading, profileLoading, isBlocked, pathname, searchParams, router]);
+
+  if (loading || profileLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
@@ -59,3 +85,4 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     </AuthProvider>
   );
 }
+
