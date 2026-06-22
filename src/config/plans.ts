@@ -1,6 +1,7 @@
 export interface PlanConfig {
   name: string;
   price: number;
+  stripePriceId?: string;
   aiMessageLimit: number;
   allowAutopilot: boolean;
   allowSuggestions: boolean;
@@ -12,6 +13,7 @@ export const PLANS: Record<string, PlanConfig> = {
   starter: {
     name: 'Starter',
     price: 97,
+    stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER,
     aiMessageLimit: 0,
     allowAutopilot: false,
     allowSuggestions: false,
@@ -28,6 +30,7 @@ export const PLANS: Record<string, PlanConfig> = {
   pro: {
     name: 'Pro',
     price: 249,
+    stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO,
     aiMessageLimit: 3000,
     allowAutopilot: true,
     allowSuggestions: true,
@@ -44,6 +47,7 @@ export const PLANS: Record<string, PlanConfig> = {
   scale: {
     name: 'Scale',
     price: 497,
+    stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_SCALE,
     aiMessageLimit: 10000,
     allowAutopilot: true,
     allowSuggestions: true,
@@ -59,3 +63,4 @@ export const PLANS: Record<string, PlanConfig> = {
     ],
   },
 };
+

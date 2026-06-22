@@ -23,6 +23,7 @@ interface AccountBillingDetails {
   subscription_expires_at: string | null;
   ai_message_count: number;
   ai_message_limit: number;
+  stripe_customer_id: string | null;
 }
 
 export function PlansPanel() {
@@ -32,6 +33,7 @@ export function PlansPanel() {
   const [loading, setLoading] = useState(true);
   const [billing, setBilling] = useState<AccountBillingDetails | null>(null);
   const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null);
+  const [managingBilling, setManagingBilling] = useState(false);
 
   // Fetch the latest account billing details dynamically
   const fetchBillingDetails = async () => {
@@ -39,7 +41,7 @@ export function PlansPanel() {
     try {
       const { data, error } = await supabase
         .from("accounts")
-        .select("subscription_status, subscription_plan, subscription_expires_at, ai_message_count, ai_message_limit")
+        .select("subscription_status, subscription_plan, subscription_expires_at, ai_message_count, ai_message_limit, stripe_customer_id")
         .eq("id", accountId)
         .single();
 
@@ -66,36 +68,66 @@ export function PlansPanel() {
       return;
     }
 
+    if (planKey === "starter" && billing?.stripe_customer_id) {
+      toast.info(
+        "Para cancelar ou retornar ao plano Starter, gerencie sua assinatura pelo portal de faturamento."
+      );
+      return;
+    }
+
     setUpgradingPlan(planKey);
     
-    // Simulate Stripe Checkout redirection and account update
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const response = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planKey }),
+      });
 
-      const limit = PLANS[planKey].aiMessageLimit;
-      const status = planKey === "starter" ? "trial" : "active"; // Starter can be trial/default
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days from now
+      const data = await response.json();
 
-      const { error } = await supabase
-        .from("accounts")
-        .update({
-          subscription_plan: planKey,
-          subscription_status: status,
-          subscription_expires_at: expiresAt,
-          ai_message_limit: limit,
-        })
-        .eq("id", accountId);
+      if (!response.ok || data.error) {
+        throw new Error(data.error || "Ocorreu um erro ao processar a assinatura.");
+      }
 
-      if (error) throw error;
-
-      toast.success(`Plano atualizado para ${PLANS[planKey].name} com sucesso!`);
-      await refreshProfile();
-      await fetchBillingDetails();
-    } catch (err) {
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err: any) {
       console.error("Error subscribing:", err);
-      toast.error("Ocorreu um erro ao processar a assinatura.");
+      toast.error(err.message || "Ocorreu um erro ao processar a assinatura.");
     } finally {
       setUpgradingPlan(null);
+    }
+  };
+
+  const handleManageBilling = async () => {
+    if (!canEditSettings) {
+      toast.error("Apenas proprietários e administradores podem gerenciar o faturamento.");
+      return;
+    }
+
+    setManagingBilling(true);
+    try {
+      const response = await fetch("/api/billing/portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        throw new Error(data.error || "Não foi possível carregar o portal do cliente.");
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err: any) {
+      console.error("Error redirecting to portal:", err);
+      toast.error(err.message || "Ocorreu um erro ao abrir o portal de faturamento.");
+    } finally {
+      setManagingBilling(false);
     }
   };
 
@@ -254,7 +286,25 @@ export function PlansPanel() {
             Sua assinatura é processada de forma segura pelo Stripe. Você pode gerenciar seu histórico de pagamentos, baixar faturas ou cancelar a assinatura a qualquer momento.
           </p>
         </div>
+        {billing?.stripe_customer_id && (
+          <Button
+            variant="outline"
+            onClick={handleManageBilling}
+            disabled={managingBilling}
+            className="text-xs border-border text-foreground hover:bg-muted font-semibold"
+          >
+            {managingBilling ? (
+              <>
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                Carregando portal...
+              </>
+            ) : (
+              "Gerenciar Assinatura"
+            )}
+          </Button>
+        )}
       </div>
     </section>
   );
 }
+
