@@ -81,8 +81,18 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
-      <DashboardShellInner>{children}</DashboardShellInner>
+      <Suspense fallback={
+        <div className="flex h-screen items-center justify-center bg-background">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <p className="text-sm text-muted-foreground">Carregando...</p>
+          </div>
+        </div>
+      }>
+        <DashboardShellInner>{children}</DashboardShellInner>
+      </Suspense>
     </AuthProvider>
   );
 }
+
 
