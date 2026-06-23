@@ -391,7 +391,7 @@ export function DealForm({
                     ) : (
                       <>
                         <Check className="mr-1 h-4 w-4" />
-                        Marcar como Ganho
+                        Ganho
                       </>
                     )}
                   </Button>
@@ -406,7 +406,7 @@ export function DealForm({
                     ) : (
                       <>
                         <X className="mr-1 h-4 w-4" />
-                        Marcar como Perdido
+                        Perdido
                       </>
                     )}
                   </Button>
