@@ -1,10 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { PLANS } from '@/config/plans'
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 /**
  * Asserts if an account is authorized to perform AI actions
@@ -14,7 +9,7 @@ export async function verifyBillingAndUsage(
   actionType: 'autopilot' | 'suggestion'
 ): Promise<{ allowed: boolean; reason?: string }> {
   try {
-    const { data: account, error } = await supabaseAdmin
+    const { data: account, error } = await supabaseAdmin()
       .from('accounts')
       .select('subscription_status, subscription_plan, ai_message_count, ai_message_limit')
       .eq('id', accountId)
@@ -68,7 +63,7 @@ export async function verifyBillingAndUsage(
  */
 export async function incrementAIConsumption(accountId: string) {
   try {
-    const { error } = await supabaseAdmin.rpc('increment_account_ai_counter', { 
+    const { error } = await supabaseAdmin().rpc('increment_account_ai_counter', { 
       p_account_id: accountId 
     })
     if (error) {

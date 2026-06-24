@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { format } from "date-fns";
@@ -14,13 +14,13 @@ import {
   Plus,
   MessageSquare,
   Clock,
-  Filter,
   CheckCircle,
   FileText,
   UserCheck,
   Search,
   ChevronRight,
   ClipboardList,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,21 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
+// Dnd Kit Imports
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  useDraggable,
+  closestCorners,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+
 interface TaskWithRelations {
   id: string;
   account_id: string;
@@ -41,9 +56,11 @@ interface TaskWithRelations {
   contact_id: string | null;
   title: string;
   description: string | null;
-  status: "pending" | "in_progress" | "completed";
+  status: "pending" | "in_progress" | "review_required" | "completed";
   due_at: string | null;
   assigned_agent_id: string | null;
+  is_ai_task?: boolean;
+  ai_draft?: string | null;
   created_at: string;
   updated_at: string;
   assigned_agent?: {
@@ -61,10 +78,10 @@ export default function TasksPage() {
   const [members, setMembers] = useState<{ user_id: string; full_name: string }[]>([]);
   const [contacts, setContacts] = useState<{ id: string; name: string | null; phone: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
   // Filters state
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
   const [dueDateFilter, setDueDateFilter] = useState<string>("all");
 
@@ -78,7 +95,13 @@ export default function TasksPage() {
   const [formContactId, setFormContactId] = useState("");
   const [formAgentId, setFormAgentId] = useState("");
   const [formDueAt, setFormDueAt] = useState("");
-  const [formStatus, setFormStatus] = useState<"pending" | "in_progress" | "completed">("pending");
+  const [formStatus, setFormStatus] = useState<"pending" | "in_progress" | "review_required" | "completed">("pending");
+
+  // DnD Sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor),
+  );
 
   const loadData = useCallback(async () => {
     if (!accountId) return;
@@ -217,7 +240,7 @@ export default function TasksPage() {
   };
 
   // Quick update status
-  const handleUpdateStatus = async (taskId: string, newStatus: "pending" | "in_progress" | "completed") => {
+  const handleUpdateStatus = async (taskId: string, newStatus: "pending" | "in_progress" | "review_required" | "completed") => {
     const supabase = createClient();
     const { error } = await supabase
       .from("tasks")
@@ -243,50 +266,70 @@ export default function TasksPage() {
   };
 
   // Filter Logic
-  const filteredTasks = tasks.filter((task) => {
-    // 1. Search Query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      const matchTitle = task.title.toLowerCase().includes(query);
-      const matchDesc = task.description?.toLowerCase().includes(query);
-      const matchContact = task.contact?.name?.toLowerCase().includes(query) || task.contact?.phone.includes(query);
-      if (!matchTitle && !matchDesc && !matchContact) return false;
-    }
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      // 1. Search Query
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchTitle = task.title.toLowerCase().includes(query);
+        const matchDesc = task.description?.toLowerCase().includes(query);
+        const matchContact = task.contact?.name?.toLowerCase().includes(query) || task.contact?.phone?.includes(query);
+        if (!matchTitle && !matchDesc && !matchContact) return false;
+      }
 
-    // 2. Status Filter
-    if (statusFilter !== "all" && task.status !== statusFilter) return false;
+      // 2. Assignee Filter
+      if (assigneeFilter === "mine") {
+        if (task.assigned_agent_id !== user?.id) return false;
+      } else if (assigneeFilter === "unassigned") {
+        if (task.assigned_agent_id !== null) return false;
+      } else if (assigneeFilter !== "all" && task.assigned_agent_id !== assigneeFilter) {
+        return false;
+      }
 
-    // 3. Assignee Filter
-    if (assigneeFilter === "mine") {
-      if (task.assigned_agent_id !== user?.id) return false;
-    } else if (assigneeFilter === "unassigned") {
-      if (task.assigned_agent_id !== null) return false;
-    } else if (assigneeFilter !== "all" && task.assigned_agent_id !== assigneeFilter) {
-      return false;
-    }
+      // 3. Due Date Filter
+      if (dueDateFilter === "overdue") {
+        if (task.status === "completed" || !task.due_at || new Date(task.due_at) >= new Date()) return false;
+      } else if (dueDateFilter === "today") {
+        if (!task.due_at) return false;
+        const today = new Date().toDateString();
+        const taskDate = new Date(task.due_at).toDateString();
+        if (taskDate !== today) return false;
+      } else if (dueDateFilter === "week") {
+        if (!task.due_at) return false;
+        const diffTime = new Date(task.due_at).getTime() - new Date().getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays < 0 || diffDays > 7) return false;
+      }
 
-    // 4. Due Date Filter
-    if (dueDateFilter === "overdue") {
-      if (task.status === "completed" || !task.due_at || new Date(task.due_at) >= new Date()) return false;
-    } else if (dueDateFilter === "today") {
-      if (!task.due_at) return false;
-      const today = new Date().toDateString();
-      const taskDate = new Date(task.due_at).toDateString();
-      if (taskDate !== today) return false;
-    } else if (dueDateFilter === "week") {
-      if (!task.due_at) return false;
-      const diffTime = new Date(task.due_at).getTime() - new Date().getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      if (diffDays < 0 || diffDays > 7) return false;
-    }
+      return true;
+    });
+  }, [tasks, searchQuery, assigneeFilter, dueDateFilter, user]);
 
-    return true;
-  });
+  const activeTask = activeTaskId
+    ? tasks.find((t) => t.id === activeTaskId) ?? null
+    : null;
 
-  // Group tasks by status for columns
-  const getTasksByStatus = (status: "pending" | "in_progress" | "completed") => {
-    return filteredTasks.filter((t) => t.status === status);
+  function handleDragStart(event: DragStartEvent) {
+    setActiveTaskId(String(event.active.id));
+  }
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveTaskId(null);
+    const { active, over } = event;
+    if (!over) return;
+    
+    const taskId = String(active.id);
+    const targetStatus = String(over.id) as "pending" | "in_progress" | "review_required" | "completed";
+
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || task.status === targetStatus) return;
+
+    await handleUpdateStatus(taskId, targetStatus);
   };
+
+  function handleDragCancel() {
+    setActiveTaskId(null);
+  }
 
   return (
     <div className="space-y-6 p-1">
@@ -351,6 +394,7 @@ export default function TasksPage() {
                   >
                     <option value="pending">Pendente</option>
                     <option value="in_progress">Em Andamento</option>
+                    <option value="review_required">Aguardando Revisão</option>
                     <option value="completed">Concluída</option>
                   </select>
                 </div>
@@ -450,8 +494,8 @@ export default function TasksPage() {
 
       {/* Kanban Board View */}
       {loading ? (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex flex-col rounded-xl border border-border bg-card p-4 space-y-4">
               <div className="h-6 w-32 bg-muted rounded animate-pulse" />
               <div className="h-32 bg-muted rounded-lg animate-pulse" />
@@ -460,91 +504,112 @@ export default function TasksPage() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 items-stretch">
-          {/* 1. Pending Column */}
-          <div className="flex flex-col rounded-xl border border-border bg-card/60 p-4 min-h-[500px]">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <span className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                Pendentes
-              </span>
-              <span className="rounded-full bg-amber-500/10 text-amber-500 px-2.5 py-0.5 text-xs font-semibold">
-                {getTasksByStatus("pending").length}
-              </span>
-            </div>
-            <div className="mt-4 flex-1 space-y-3 overflow-y-auto max-h-[600px]">
-              {getTasksByStatus("pending").length === 0 ? (
-                <p className="text-xs text-center text-muted-foreground py-8">Nenhuma tarefa pendente</p>
-              ) : (
-                getTasksByStatus("pending").map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onOpenEdit={handleOpenEdit}
-                    onUpdateStatus={handleUpdateStatus}
-                    onDelete={handleDeleteTask}
-                  />
-                ))
-              )}
-            </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
+          <div className="tasks-scroll flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 md:snap-none md:grid md:grid-cols-4 md:items-start">
+            <TaskColumn
+              status="pending"
+              title="Pendentes"
+              colorClass="bg-amber-500"
+              badgeColorClass="bg-amber-500/10 text-amber-500"
+              tasks={filteredTasks.filter((t) => t.status === "pending")}
+              onOpenEdit={handleOpenEdit}
+              onUpdateStatus={handleUpdateStatus}
+              onDelete={handleDeleteTask}
+            />
+
+            <TaskColumn
+              status="in_progress"
+              title="Em Andamento"
+              colorClass="bg-primary"
+              badgeColorClass="bg-primary/10 text-primary"
+              tasks={filteredTasks.filter((t) => t.status === "in_progress")}
+              onOpenEdit={handleOpenEdit}
+              onUpdateStatus={handleUpdateStatus}
+              onDelete={handleDeleteTask}
+            />
+
+            <TaskColumn
+              status="review_required"
+              title="Aguardando Revisão"
+              colorClass="bg-violet-500"
+              badgeColorClass="bg-violet-500/10 text-violet-500"
+              tasks={filteredTasks.filter((t) => t.status === "review_required")}
+              onOpenEdit={handleOpenEdit}
+              onUpdateStatus={handleUpdateStatus}
+              onDelete={handleDeleteTask}
+            />
+
+            <TaskColumn
+              status="completed"
+              title="Concluídas"
+              colorClass="bg-emerald-500"
+              badgeColorClass="bg-emerald-500/10 text-emerald-500"
+              tasks={filteredTasks.filter((t) => t.status === "completed")}
+              onOpenEdit={handleOpenEdit}
+              onUpdateStatus={handleUpdateStatus}
+              onDelete={handleDeleteTask}
+            />
           </div>
 
-          {/* 2. In Progress Column */}
-          <div className="flex flex-col rounded-xl border border-border bg-card/60 p-4 min-h-[500px]">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <span className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-primary" />
-                Em Andamento
-              </span>
-              <span className="rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-semibold">
-                {getTasksByStatus("in_progress").length}
-              </span>
-            </div>
-            <div className="mt-4 flex-1 space-y-3 overflow-y-auto max-h-[600px]">
-              {getTasksByStatus("in_progress").length === 0 ? (
-                <p className="text-xs text-center text-muted-foreground py-8">Nenhuma tarefa em andamento</p>
-              ) : (
-                getTasksByStatus("in_progress").map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onOpenEdit={handleOpenEdit}
-                    onUpdateStatus={handleUpdateStatus}
-                    onDelete={handleDeleteTask}
-                  />
-                ))
-              )}
-            </div>
-          </div>
+          <DragOverlay
+            dropAnimation={{
+              duration: 200,
+              easing: "cubic-bezier(0.2, 0, 0, 1)",
+            }}
+          >
+            {activeTask ? (
+              <div className="opacity-90 shadow-2xl rotate-2">
+                <TaskCard
+                  task={activeTask}
+                  onOpenEdit={() => {}}
+                  onUpdateStatus={() => {}}
+                  onDelete={() => {}}
+                  isOverlay
+                />
+              </div>
+            ) : null}
+          </DragOverlay>
 
-          {/* 3. Completed Column */}
-          <div className="flex flex-col rounded-xl border border-border bg-card/60 p-4 min-h-[500px]">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <span className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                Concluídas
-              </span>
-              <span className="rounded-full bg-emerald-500/10 text-emerald-500 px-2.5 py-0.5 text-xs font-semibold">
-                {getTasksByStatus("completed").length}
-              </span>
-            </div>
-            <div className="mt-4 flex-1 space-y-3 overflow-y-auto max-h-[600px]">
-              {getTasksByStatus("completed").length === 0 ? (
-                <p className="text-xs text-center text-muted-foreground py-8">Nenhuma tarefa concluída</p>
-              ) : (
-                getTasksByStatus("completed").map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onOpenEdit={handleOpenEdit}
-                    onUpdateStatus={handleUpdateStatus}
-                    onDelete={handleDeleteTask}
-                  />
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+          <style jsx>{`
+            .tasks-scroll {
+              scroll-behavior: smooth;
+            }
+            @media (hover: none), (pointer: coarse) {
+              .tasks-scroll::-webkit-scrollbar {
+                height: 0;
+                display: none;
+              }
+              .tasks-scroll {
+                scrollbar-width: none;
+              }
+            }
+            @media (hover: hover) and (pointer: fine) {
+              .tasks-scroll {
+                scrollbar-width: thin;
+                scrollbar-color: var(--border) transparent;
+              }
+              .tasks-scroll::-webkit-scrollbar {
+                height: 8px;
+              }
+              .tasks-scroll::-webkit-scrollbar-track {
+                background: transparent;
+              }
+              .tasks-scroll::-webkit-scrollbar-thumb {
+                background-color: var(--border);
+                border-radius: 9999px;
+              }
+              .tasks-scroll::-webkit-scrollbar-thumb:hover {
+                background-color: var(--muted-foreground);
+              }
+            }
+          `}</style>
+        </DndContext>
       )}
 
       {/* Edit Task Dialog */}
@@ -589,6 +654,7 @@ export default function TasksPage() {
                   >
                     <option value="pending">Pendente</option>
                     <option value="in_progress">Em Andamento</option>
+                    <option value="review_required">Aguardando Revisão</option>
                     <option value="completed">Concluída</option>
                   </select>
                 </div>
@@ -640,9 +706,72 @@ export default function TasksPage() {
 }
 
 // ------------------------------------------------------------
-// Inner Card Component
+// Kanban Column Component
 // ------------------------------------------------------------
-function TaskCard({
+function TaskColumn({
+  status,
+  title,
+  colorClass,
+  badgeColorClass,
+  tasks,
+  onOpenEdit,
+  onUpdateStatus,
+  onDelete,
+}: {
+  status: "pending" | "in_progress" | "review_required" | "completed";
+  title: string;
+  colorClass: string;
+  badgeColorClass: string;
+  tasks: TaskWithRelations[];
+  onOpenEdit: (task: TaskWithRelations) => void;
+  onUpdateStatus: (taskId: string, newStatus: any) => void;
+  onDelete: (taskId: string) => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: status });
+
+  return (
+    <div className="flex w-[80vw] min-w-[280px] max-w-[320px] shrink-0 snap-start flex-col rounded-xl border border-border bg-card/60 p-4 md:w-auto md:max-w-none md:flex-1 md:basis-[250px] md:shrink md:snap-none">
+      <div className="flex items-center justify-between pb-3 border-b border-border">
+        <span className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <span className={cn("h-2 w-2 rounded-full", colorClass)} />
+          {title}
+        </span>
+        <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", badgeColorClass)}>
+          {tasks.length}
+        </span>
+      </div>
+
+      <div
+        ref={setNodeRef}
+        className={cn(
+          "mt-4 flex-1 space-y-3 overflow-y-auto max-h-[600px] rounded-lg transition-all min-h-[400px] pb-10",
+          isOver ? "bg-primary/5 outline outline-2 outline-dashed outline-primary outline-offset-2" : ""
+        )}
+      >
+        {tasks.length === 0 ? (
+          <div className="flex flex-1 items-center justify-center rounded-lg border-2 border-dashed border-border py-12 text-xs text-muted-foreground select-none">
+            Solte uma tarefa aqui
+          </div>
+        ) : (
+          tasks.map((task) => (
+            <DraggableTaskCard
+              key={task.id}
+              task={task}
+              onOpenEdit={onOpenEdit}
+              onUpdateStatus={onUpdateStatus}
+              onDelete={onDelete}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------
+// Draggable Card Wrapper
+// ------------------------------------------------------------
+function DraggableTaskCard({
   task,
   onOpenEdit,
   onUpdateStatus,
@@ -650,8 +779,45 @@ function TaskCard({
 }: {
   task: TaskWithRelations;
   onOpenEdit: (task: TaskWithRelations) => void;
-  onUpdateStatus: (taskId: string, newStatus: "pending" | "in_progress" | "completed") => void;
+  onUpdateStatus: (taskId: string, newStatus: any) => void;
   onDelete: (taskId: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: task.id,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{ opacity: isDragging ? 0.3 : 1, touchAction: "none" }}
+    >
+      <TaskCard
+        task={task}
+        onOpenEdit={onOpenEdit}
+        onUpdateStatus={onUpdateStatus}
+        onDelete={onDelete}
+      />
+    </div>
+  );
+}
+
+// ------------------------------------------------------------
+// Inner Card Component
+// ------------------------------------------------------------
+function TaskCard({
+  task,
+  onOpenEdit,
+  onUpdateStatus,
+  onDelete,
+  isOverlay = false,
+}: {
+  task: TaskWithRelations;
+  onOpenEdit: (task: TaskWithRelations) => void;
+  onUpdateStatus: (taskId: string, newStatus: any) => void;
+  onDelete: (taskId: string) => void;
+  isOverlay?: boolean;
 }) {
   const isOverdue =
     task.due_at &&
@@ -660,22 +826,27 @@ function TaskCard({
 
   return (
     <div
-      onClick={() => onOpenEdit(task)}
-      className="group relative flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm hover:shadow-md hover:border-primary/30 transition-all cursor-pointer"
+      onClick={() => !isOverlay && onOpenEdit(task)}
+      className={cn(
+        "group relative flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm hover:shadow-md hover:border-primary/30 transition-all cursor-pointer select-none",
+        isOverlay ? "border-primary/40 shadow-xl" : ""
+      )}
     >
       <div className="flex items-start justify-between gap-2">
         <h4 className="font-semibold text-sm text-foreground leading-tight group-hover:text-primary transition-colors pr-6">
           {task.title}
         </h4>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(task.id);
-          }}
-          className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {!isOverlay && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(task.id);
+            }}
+            className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all cursor-pointer"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {task.description && (
@@ -695,6 +866,13 @@ function TaskCard({
             <MessageSquare className="h-2.5 w-2.5" />
             <span className="truncate max-w-[120px]">{task.contact.name || task.contact.phone}</span>
           </Link>
+        )}
+
+        {task.is_ai_task && (
+          <span className="flex items-center gap-1.5 rounded bg-violet-500/10 border border-violet-500/20 text-[9px] font-medium text-violet-600 px-2 py-0.5 dark:text-violet-400">
+            <Sparkles className="h-2.5 w-2.5 text-violet-500" />
+            Agente IA
+          </span>
         )}
       </div>
 
@@ -720,39 +898,50 @@ function TaskCard({
         )}
       </div>
 
-      {/* Quick Move actions */}
-      <div className="flex justify-end gap-1.5 mt-1 border-t border-border/30 pt-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-        {task.status !== "pending" && (
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => onUpdateStatus(task.id, "pending")}
-            className="text-[10px] h-6 px-2 text-muted-foreground hover:text-foreground"
-          >
-            Pendente
-          </Button>
-        )}
-        {task.status !== "in_progress" && (
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => onUpdateStatus(task.id, "in_progress")}
-            className="text-[10px] h-6 px-2 text-muted-foreground hover:text-foreground"
-          >
-            Em Andamento
-          </Button>
-        )}
-        {task.status !== "completed" && (
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => onUpdateStatus(task.id, "completed")}
-            className="text-[10px] h-6 px-2 text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
-          >
-            Concluir
-          </Button>
-        )}
-      </div>
+      {/* Quick Move/Approve actions (Not displayed during drag overlay) */}
+      {!isOverlay && (
+        <div className="flex justify-end gap-1.5 mt-1 border-t border-border/30 pt-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+          {task.status === "review_required" && (
+            <Button
+              size="xs"
+              onClick={() => onUpdateStatus(task.id, "completed")}
+              className="text-[10px] h-6 px-2 text-violet-700 hover:text-violet-800 bg-violet-50 hover:bg-violet-100 border border-violet-200"
+            >
+              Aprovar e Concluir
+            </Button>
+          )}
+          {task.status !== "pending" && task.status !== "review_required" && (
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => onUpdateStatus(task.id, "pending")}
+              className="text-[10px] h-6 px-2 text-muted-foreground hover:text-foreground"
+            >
+              Pendente
+            </Button>
+          )}
+          {task.status !== "in_progress" && task.status !== "review_required" && (
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => onUpdateStatus(task.id, "in_progress")}
+              className="text-[10px] h-6 px-2 text-muted-foreground hover:text-foreground"
+            >
+              Em Andamento
+            </Button>
+          )}
+          {task.status !== "completed" && task.status !== "review_required" && (
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() => onUpdateStatus(task.id, "completed")}
+              className="text-[10px] h-6 px-2 text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
+            >
+              Concluir
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

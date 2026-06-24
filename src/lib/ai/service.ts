@@ -1,11 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/automations/admin-client'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 /**
  * Generate embedding vector for a given text using Gemini Embeddings API
@@ -46,7 +41,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 export async function getRelevantContext(text: string, accountId: string): Promise<string> {
   try {
     const embedding = await generateEmbedding(text)
-    const { data: matches, error } = await supabaseAdmin.rpc('match_knowledge_base', {
+    const { data: matches, error } = await supabaseAdmin().rpc('match_knowledge_base', {
       query_embedding: embedding,
       match_threshold: 0.5,
       match_count: 5,
@@ -83,7 +78,7 @@ export async function generateAIResponse(
   }
 
   // 1. Fetch conversation history
-  const { data: messages } = await supabaseAdmin
+  const { data: messages } = await supabaseAdmin()
     .from('messages')
     .select('sender_type, content_text')
     .eq('conversation_id', conversationId)
@@ -106,8 +101,9 @@ ${context ? `Use as seguintes informações da Base de Conhecimento para respond
 
 Instruções críticas:
 - Responda de forma clara, natural e concisa.
-- Se a resposta não puder ser derivada das informações fornecidas e for uma dúvida que necessite de suporte especializado, peça desculpas de forma amigável e diga que vai transferir para um atendente humano.
-- Se o usuário pedir explicitamente para falar com um humano, com um atendente, ou expressar irritação extrema, inclua obrigatoriamente a palavra-chave "[HANDOFF]" no final da resposta.
+- Se a resposta não puder ser derivada das informações fornecidas e for uma dúvida que necessite de suporte especializado, defina o campo "handoff" como true.
+- Se o usuário pedir explicitamente para falar com um humano, com um atendente, ou expressar irritação extrema, defina o campo "handoff" como true.
+- Identifique se o cliente solicitou alguma ação/demanda que precise de acompanhamento interno ou execução futura (ex: envio de documentos, agendamento de reunião, ligar de volta, analisar um caso). Se sim, preencha o campo "detected_task" com um título curto e claro, uma descrição detalhada e o prazo estimado em dias. Caso contrário, defina "detected_task" como null.
 `
 
   // 4. Generate content via Gemini API
@@ -135,6 +131,42 @@ Instruções críticas:
               text: systemInstruction
             }
           ]
+        },
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              reply: {
+                type: 'STRING',
+                description: 'A resposta amigável e concisa para o cliente no WhatsApp.'
+              },
+              handoff: {
+                type: 'BOOLEAN',
+                description: 'Defina como true se o cliente pedir para falar com humano, atendente, ou expressar irritação.'
+              },
+              detected_task: {
+                type: 'OBJECT',
+                description: 'Ações que o cliente pediu que necessitam de execução interna futura. Caso contrário, retorne null.',
+                properties: {
+                  title: {
+                    type: 'STRING',
+                    description: 'Título curto e direto da tarefa, ex: "Enviar modelo de contrato".'
+                  },
+                  description: {
+                    type: 'STRING',
+                    description: 'Informações detalhadas sobre a tarefa e o que o cliente solicitou.'
+                  },
+                  due_days: {
+                    type: 'INTEGER',
+                    description: 'Quantidade de dias úteis sugerida para a entrega.'
+                  }
+                },
+                required: ['title']
+              }
+            },
+            required: ['reply', 'handoff']
+          }
         }
       }),
     }
@@ -148,11 +180,66 @@ Instruções críticas:
   const data = await response.json()
   const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
   
-  const isHandoff = responseText.includes('[HANDOFF]')
-  const cleanedText = responseText.replace('[HANDOFF]', '').trim()
+  let parsed: {
+    reply: string
+    handoff: boolean
+    detected_task?: {
+      title: string
+      description?: string
+      due_days?: number
+    } | null
+  }
+
+  try {
+    parsed = JSON.parse(responseText)
+  } catch (err) {
+    console.error('[AI Service] Failed to parse Gemini response as JSON:', responseText, err)
+    parsed = {
+      reply: responseText,
+      handoff: responseText.includes('[HANDOFF]'),
+    }
+  }
+
+  const isHandoff = parsed.handoff
+  const replyText = parsed.reply
+
+  // If a task is detected, create it in Supabase
+  if (parsed.detected_task && parsed.detected_task.title) {
+    try {
+      const { data: conv } = await supabaseAdmin()
+        .from('conversations')
+        .select('contact_id')
+        .eq('id', conversationId)
+        .maybeSingle()
+
+      const contactId = conv?.contact_id || null
+      const dueDays = parsed.detected_task.due_days ?? 2
+      const dueAt = new Date(Date.now() + dueDays * 24 * 60 * 60 * 1000).toISOString()
+
+      const { error: taskError } = await supabaseAdmin().from('tasks').insert({
+        account_id: accountId,
+        conversation_id: conversationId,
+        contact_id: contactId,
+        title: parsed.detected_task.title,
+        description: parsed.detected_task.description || null,
+        status: 'pending',
+        due_at: dueAt,
+        is_ai_task: true,
+        assigned_agent_id: null,
+      })
+
+      if (taskError) {
+        console.error('[AI Service] Failed to insert auto-created task:', taskError)
+      } else {
+        console.log(`[AI Service] Auto-created task: "${parsed.detected_task.title}" for conversation: ${conversationId}`)
+      }
+    } catch (dbErr) {
+      console.error('[AI Service] Database exception during task creation:', dbErr)
+    }
+  }
 
   return {
-    text: cleanedText,
+    text: replyText,
     action: isHandoff ? 'handoff' : 'reply'
   }
 }

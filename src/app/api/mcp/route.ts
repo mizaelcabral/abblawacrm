@@ -245,7 +245,7 @@ export async function POST(request: Request) {
   }
 }
 
-async function handleToolCall(name: string, args: any, accountId: string) {
+export async function handleToolCall(name: string, args: any, accountId: string) {
   const admin = supabaseAdmin();
 
   switch (name) {
