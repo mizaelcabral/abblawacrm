@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { decrypt } from '@/lib/whatsapp/encryption';
+import { isUniqueViolation } from '@/lib/contacts/dedupe';
 
 // Admin client helper
 let _adminClient: any = null;
@@ -26,10 +27,13 @@ export async function POST(request: Request) {
 
     const payload = await request.json();
 
-    // Process update asynchronously to ack Telegram within their timeout
-    processTelegramUpdate(accountId, payload).catch((error) => {
+    // Process update synchronously to ensure database persistence before returning
+    // (prevents serverless environments from freezing background tasks)
+    try {
+      await processTelegramUpdate(accountId, payload);
+    } catch (error) {
       console.error('[telegram-webhook] Error processing update:', error);
-    });
+    }
 
     return NextResponse.json({ status: 'received' }, { status: 200 });
   } catch (error) {
@@ -191,6 +195,15 @@ async function findOrCreateTelegramContact(
     .single();
 
   if (createError) {
+    if (isUniqueViolation(createError)) {
+      const raced = await supabaseAdmin()
+        .from('contacts')
+        .select('*')
+        .eq('account_id', accountId)
+        .eq('telegram_chat_id', chatId)
+        .maybeSingle();
+      if (raced.data) return raced.data;
+    }
     console.error('[telegram-webhook] Error creating Telegram contact:', createError);
     return null;
   }

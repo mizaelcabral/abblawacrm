@@ -204,6 +204,10 @@ export function MessageThread({
 
   // 24-hour session timer
   const sessionInfo = useMemo(() => {
+    if (conversation?.channel === "telegram") {
+      return { expired: false, remaining: "" };
+    }
+
     if (!messages.length) return { expired: false, remaining: "" };
 
     // Find last customer message
@@ -874,17 +878,19 @@ export function MessageThread({
             </p>
           </div>
           {/* Session timer badge — hidden on the narrowest phones so
-              the name + back arrow keep their room. */}
-          <Badge
-            variant="outline"
-            className={cn(
-              "ml-1 hidden gap-1 border-border text-[10px] sm:inline-flex sm:ml-2",
-              sessionInfo.expired ? "text-red-400" : "text-primary"
-            )}
-          >
-            <Clock className="h-3 w-3" />
-            {sessionInfo.remaining}
-          </Badge>
+              the name + back arrow keep their room. Hidden entirely for Telegram. */}
+          {conversation.channel !== "telegram" && (
+            <Badge
+              variant="outline"
+              className={cn(
+                "ml-1 hidden gap-1 border-border text-[10px] sm:inline-flex sm:ml-2",
+                sessionInfo.expired ? "text-red-400" : "text-primary"
+              )}
+            >
+              <Clock className="h-3 w-3" />
+              {sessionInfo.remaining}
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
