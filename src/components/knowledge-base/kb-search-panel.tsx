@@ -16,9 +16,10 @@ interface KBSearchPanelProps {
   onInsert?: (content: string) => void;
   open: boolean;
   onClose: () => void;
+  inline?: boolean;
 }
 
-export function KBSearchPanel({ onInsert, open, onClose }: KBSearchPanelProps) {
+export function KBSearchPanel({ onInsert, open, onClose, inline = false }: KBSearchPanelProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<KBSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,6 +60,104 @@ export function KBSearchPanel({ onInsert, open, onClose }: KBSearchPanelProps) {
   }, [open]);
 
   if (!open) return null;
+
+  if (inline) {
+    return (
+      <div className="w-full rounded-lg border border-border bg-muted/20 p-2 mt-2 space-y-2">
+        {/* Search Bar */}
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted px-2.5 py-1.5 w-full">
+          <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Pesquisar artigos..."
+            className="flex-1 bg-transparent text-xs text-foreground placeholder-muted-foreground outline-none"
+          />
+          {loading && (
+            <span className="h-3 w-3 animate-spin rounded-full border border-primary border-t-transparent shrink-0" />
+          )}
+        </div>
+
+        {/* Results */}
+        <div className="max-h-60 overflow-y-auto space-y-1">
+          {results.length === 0 && query.trim() && !loading && (
+            <p className="py-3 text-center text-[10px] text-muted-foreground">
+              Nenhum artigo encontrado.
+            </p>
+          )}
+          {results.length === 0 && !query.trim() && (
+            <p className="py-3 text-center text-[10px] text-muted-foreground">
+              Digite para pesquisar
+            </p>
+          )}
+          {results.map((result) => (
+            <div
+              key={result.id}
+              className="rounded-lg border border-border bg-muted/40 p-2 transition-colors hover:bg-muted"
+            >
+              <div className="flex items-start justify-between gap-1.5">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="rounded-full border border-primary/20 bg-primary/10 px-1 py-0.2 text-[8px] font-medium uppercase tracking-wider text-primary">
+                      {result.category}
+                    </span>
+                    <span className="text-[8px] text-muted-foreground">
+                      {Math.round(result.similarity * 100)}%
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[11px] font-semibold text-foreground truncate">
+                    {result.title}
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-0.5 text-[10px] text-muted-foreground leading-normal",
+                      expandedId === result.id ? "" : "line-clamp-2"
+                    )}
+                  >
+                    {result.content}
+                  </p>
+                  {result.content.length > 80 && (
+                    <button
+                      onClick={() =>
+                        setExpandedId(expandedId === result.id ? null : result.id)
+                      }
+                      className="mt-0.5 text-[9px] text-primary hover:underline block"
+                    >
+                      {expandedId === result.id ? "Ver menos" : "Ver mais"}
+                    </button>
+                  )}
+                </div>
+                {onInsert && (
+                  <button
+                    onClick={() => {
+                      onInsert(result.content);
+                    }}
+                    className="shrink-0 rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[9px] font-medium text-primary hover:bg-primary/20 transition-colors"
+                  >
+                    Inserir
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer Link */}
+        <div className="border-t border-border pt-1.5">
+          <a
+            href="/knowledge-base"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center justify-center gap-1 text-[9px] text-muted-foreground hover:text-primary transition-colors"
+          >
+            <ExternalLink className="h-2.5 w-2.5" />
+            Gerenciar Base
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="absolute bottom-full left-0 right-0 z-50 mb-2 rounded-xl border border-border bg-card shadow-2xl">

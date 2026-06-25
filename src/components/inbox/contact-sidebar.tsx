@@ -348,6 +348,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                 <KBSearchPanel
                   open={kbOpen}
                   onClose={() => setKbOpen(false)}
+                  inline
                 />
               </div>
             )}
