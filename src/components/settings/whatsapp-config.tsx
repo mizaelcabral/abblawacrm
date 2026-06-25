@@ -173,9 +173,9 @@ export function WhatsAppConfig() {
             setWebStatus(webPayload.status || 'disconnected');
             setWebTokenEdited(false);
           } else {
-            setWebApiUrl(webPayload.is_global_configured ? 'GLOBAL' : '');
+            setWebApiUrl('');
             setWebInstanceName(webPayload.instance_name || '');
-            setWebApiToken(webPayload.is_global_configured ? MASKED_TOKEN : '');
+            setWebApiToken('');
             setWebIsActive(false);
             setWebStatus('disconnected');
             setWebTokenEdited(false);
