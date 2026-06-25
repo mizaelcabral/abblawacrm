@@ -430,7 +430,134 @@ export async function POST(request: Request) {
       )
     }
 
-    // Fetch and decrypt WhatsApp config
+    // Check if WhatsApp Web (unofficial) is configured and active
+    const { data: webConfig } = await supabase
+      .from('whatsapp_web_config')
+      .select('*')
+      .eq('account_id', accountId)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (webConfig) {
+      const token = decrypt(webConfig.api_token)
+      let responseData;
+      let evolutionMessageId = '';
+
+      try {
+        if (message_type === 'text') {
+          const res = await fetch(`${webConfig.api_url}/message/sendText/${webConfig.instance_name}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: token,
+            },
+            body: JSON.stringify({
+              number: sanitizedPhone,
+              text: content_text,
+            }),
+          });
+
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Evolution API sendText failed: ${res.status} - ${errText}`);
+          }
+          responseData = await res.json();
+          evolutionMessageId = responseData.key?.id || responseData.message?.key?.id || '';
+        } else if (isMediaKind) {
+          const res = await fetch(`${webConfig.api_url}/message/sendMedia/${webConfig.instance_name}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: token,
+            },
+            body: JSON.stringify({
+              number: sanitizedPhone,
+              media: media_url,
+              mediatype: message_type,
+              caption: content_text || '',
+              fileName: filename || 'file',
+            }),
+          });
+
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Evolution API sendMedia failed: ${res.status} - ${errText}`);
+          }
+          responseData = await res.json();
+          evolutionMessageId = responseData.key?.id || responseData.message?.key?.id || '';
+        } else {
+          return NextResponse.json(
+            { error: 'Mensagens de template não são suportadas em conexões de WhatsApp Web.' },
+            { status: 400 }
+          );
+        }
+      } catch (err: any) {
+        console.error('WhatsApp Web send failed:', err);
+        return NextResponse.json(
+          { error: `WhatsApp Web API error: ${err.message || err}` },
+          { status: 502 }
+        );
+      }
+
+      // Insert message into DB
+      const { data: messageRecord, error: msgError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id,
+          sender_type: 'agent',
+          content_type: message_type,
+          content_text: content_text || null,
+          media_url: media_url || null,
+          message_id: evolutionMessageId || null,
+          status: 'sent',
+          reply_to_message_id: reply_to_message_id || null,
+          channel: 'whatsapp',
+        })
+        .select()
+        .single();
+
+      if (msgError) {
+        console.error('Error inserting sent WhatsApp Web message:', msgError);
+        return NextResponse.json(
+          { error: `Message sent to WhatsApp Web but failed to save to DB: ${msgError.message}` },
+          { status: 500 }
+        );
+      }
+
+      // Update conversation
+      await supabase
+        .from('conversations')
+        .update({
+          last_message_text: content_text || `[${message_type}]`,
+          last_message_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', conversation_id);
+
+      // Pause flow runs if any
+      try {
+        await supabaseAdmin()
+          .from('flow_runs')
+          .update({
+            status: 'paused_by_agent',
+            ended_at: new Date().toISOString(),
+            end_reason: 'agent_replied',
+          })
+          .eq('account_id', accountId)
+          .eq('contact_id', contact.id)
+          .eq('status', 'active');
+      } catch (err) {
+        console.error('[flows] pause failed:', err);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message_id: messageRecord.id,
+        evolution_message_id: evolutionMessageId,
+      });
+    }
+
+    // Fetch and decrypt WhatsApp config (official Meta API)
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
       .select('*')
