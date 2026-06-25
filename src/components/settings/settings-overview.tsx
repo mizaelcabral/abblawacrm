@@ -50,6 +50,8 @@ export function SettingsOverview({
   const [whatsappLoading, setWhatsappLoading] = useState(true);
   const [metaStatus, setMetaStatus] = useState<{ configured: boolean; connected: boolean } | null>(null);
   const [metaLoading, setMetaLoading] = useState(true);
+  const [telegramStatus, setTelegramStatus] = useState<{ configured: boolean; connected: boolean } | null>(null);
+  const [telegramLoading, setTelegramLoading] = useState(true);
 
   useEffect(() => {
     if (!user || !accountId) return;
@@ -160,6 +162,25 @@ export function SettingsOverview({
       setMetaLoading(false);
     })();
 
+    // Telegram connection status.
+    (async () => {
+      setTelegramLoading(true);
+      const [row, health] = await Promise.allSettled([
+        supabase
+          .from('telegram_integration_config')
+          .select('bot_token')
+          .eq('account_id', acctId)
+          .maybeSingle(),
+        fetch('/api/telegram/config', { cache: 'no-store' }).then((r) => r.json()),
+      ]);
+      if (cancelled) return;
+      setTelegramStatus({
+        configured: row.status === 'fulfilled' && !!row.value.data?.bot_token,
+        connected: health.status === 'fulfilled' && !!health.value?.connected,
+      });
+      setTelegramLoading(false);
+    })();
+
     return () => {
       cancelled = true;
     };
@@ -203,6 +224,21 @@ export function SettingsOverview({
       subtitle: !metaStatus?.configured ? (
         'Não configurado'
       ) : metaStatus.connected ? (
+        <>
+          <StatusDot tone="ok" /> Conectado
+        </>
+      ) : (
+        <>
+          <StatusDot tone="muted" /> Necessita reconexão
+        </>
+      ),
+    },
+    {
+      section: 'telegram',
+      loading: telegramLoading,
+      subtitle: !telegramStatus?.configured ? (
+        'Não configurado'
+      ) : telegramStatus.connected ? (
         <>
           <StatusDot tone="ok" /> Conectado
         </>

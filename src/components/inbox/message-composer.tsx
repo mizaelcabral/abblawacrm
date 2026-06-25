@@ -99,7 +99,7 @@ interface MessageComposerProps {
   onOpenTemplates: () => void;
   replyTo?: ReplyDraft | null;
   onClearReply?: () => void;
-  channel?: "whatsapp" | "messenger" | "instagram";
+  channel?: "whatsapp" | "messenger" | "instagram" | "telegram";
 }
 
 function formatDuration(seconds: number): string {
@@ -648,7 +648,9 @@ export function MessageComposer({
                     ? "Respondendo via Messenger... (Shift+Enter para nova linha)"
                     : channel === 'instagram'
                       ? "Respondendo via Instagram... (Shift+Enter para nova linha)"
-                      : "Digite uma mensagem... (Shift+Enter para nova linha)"
+                      : channel === 'telegram'
+                        ? "Respondendo via Telegram... (Shift+Enter para nova linha)"
+                        : "Digite uma mensagem... (Shift+Enter para nova linha)"
             }
             disabled={sessionExpired || readOnly}
             rows={1}

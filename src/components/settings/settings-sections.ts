@@ -11,6 +11,7 @@ import {
   CreditCard,
   Key,
   Share2,
+  Send,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -30,6 +31,7 @@ export const SETTINGS_SECTIONS = [
   'plans',
   'whatsapp',
   'meta',
+  'telegram',
   'templates',
   'fields',
   'deals',
@@ -57,6 +59,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   plans: { id: 'plans', label: 'Planos & Faturamento', icon: CreditCard, group: 'account' },
   whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace' },
   meta: { id: 'meta', label: 'Facebook & Instagram', icon: Share2, group: 'workspace' },
+  telegram: { id: 'telegram', label: 'Telegram', icon: Send, group: 'workspace' },
   templates: { id: 'templates', label: 'Modelos', icon: FileText, group: 'workspace' },
   fields: { id: 'fields', label: 'Campos e tags', icon: Tags, group: 'workspace' },
   deals: { id: 'deals', label: 'Negócios e moedas', icon: Coins, group: 'workspace' },

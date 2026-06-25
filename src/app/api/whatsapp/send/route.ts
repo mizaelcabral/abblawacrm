@@ -152,6 +152,150 @@ export async function POST(request: Request) {
     const contact = conversation.contact
     const channel = conversation.channel || 'whatsapp'
 
+    if (channel === 'telegram') {
+      const recipientChatId = contact?.telegram_chat_id;
+      if (!recipientChatId) {
+        return NextResponse.json(
+          { error: 'Contact Telegram Chat ID not found' },
+          { status: 400 }
+        );
+      }
+
+      // Fetch and decrypt Telegram integration config
+      const { data: config, error: configError } = await supabase
+        .from('telegram_integration_config')
+        .select('*')
+        .eq('account_id', accountId)
+        .single();
+
+      if (configError || !config) {
+        return NextResponse.json(
+          { error: 'Telegram integration not configured for this account.' },
+          { status: 400 }
+        );
+      }
+
+      const token = decrypt(config.bot_token);
+
+      let telegramMessageId = '';
+      try {
+        let res: Response;
+        if (message_type === 'text') {
+          res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: recipientChatId,
+              text: content_text,
+            }),
+          });
+        } else {
+          let method = 'sendDocument';
+          const bodyPayload: any = {
+            chat_id: recipientChatId,
+          };
+
+          if (message_type === 'image') {
+            method = 'sendPhoto';
+            bodyPayload.photo = media_url;
+            if (content_text) bodyPayload.caption = content_text;
+          } else if (message_type === 'video') {
+            method = 'sendVideo';
+            bodyPayload.video = media_url;
+            if (content_text) bodyPayload.caption = content_text;
+          } else if (message_type === 'audio') {
+            method = 'sendAudio';
+            bodyPayload.audio = media_url;
+          } else {
+            bodyPayload.document = media_url;
+            if (content_text) bodyPayload.caption = content_text;
+          }
+
+          res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bodyPayload),
+          });
+        }
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Telegram API responded with ${res.status}: ${errText}`);
+        }
+
+        const data = await res.json();
+        if (!data.ok) {
+          throw new Error(data.description || 'Unknown Telegram API error');
+        }
+        telegramMessageId = data.result.message_id.toString();
+
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unknown Telegram API error';
+        console.error('Telegram API send failed:', message);
+        return NextResponse.json(
+          { error: `Telegram API error: ${message}` },
+          { status: 502 }
+        );
+      }
+
+      // Insert message into DB
+      const { data: messageRecord, error: msgError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id,
+          sender_type: 'agent',
+          content_type: message_type,
+          content_text: content_text || null,
+          media_url: media_url || null,
+          message_id: telegramMessageId,
+          status: 'sent',
+          reply_to_message_id: reply_to_message_id || null,
+          channel,
+        })
+        .select()
+        .single();
+
+      if (msgError) {
+        console.error('Error inserting sent Telegram message:', msgError);
+        return NextResponse.json(
+          { error: `Message sent to Telegram but failed to save to DB: ${msgError.message}` },
+          { status: 500 }
+        );
+      }
+
+      // Update conversation
+      await supabase
+        .from('conversations')
+        .update({
+          last_message_text: content_text || `[${message_type}]`,
+          last_message_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', conversation_id);
+
+      // Pause flow run if any
+      try {
+        await supabaseAdmin()
+          .from('flow_runs')
+          .update({
+            status: 'paused_by_agent',
+            ended_at: new Date().toISOString(),
+            end_reason: 'agent_replied',
+          })
+          .eq('account_id', accountId)
+          .eq('contact_id', contact.id)
+          .eq('status', 'active');
+      } catch (err) {
+        console.error('[flows] pause failed:', err);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message_id: messageRecord.id,
+        telegram_message_id: telegramMessageId,
+      });
+    }
+
     if (channel === 'messenger' || channel === 'instagram') {
       const recipientId = channel === 'messenger' ? contact?.messenger_psid : contact?.instagram_igsid
       if (!recipientId) {

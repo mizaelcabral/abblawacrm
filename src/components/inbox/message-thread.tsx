@@ -835,6 +835,7 @@ export function MessageThread({
                 "absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-card p-[1px] shadow-sm text-white",
                 conversation.channel === "messenger" && "bg-[#0084FF]",
                 conversation.channel === "instagram" && "bg-[linear-gradient(45deg,#f09433_0%,#e6683c_25%,#dc2743_50%,#cc2366_75%,#bc1888_100%)]",
+                conversation.channel === "telegram" && "bg-[#0088cc]",
                 (conversation.channel === "whatsapp" || !conversation.channel) && "bg-[#25D366]"
               )}
               title={conversation.channel || "whatsapp"}
@@ -848,6 +849,10 @@ export function MessageThread({
                   <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
                   <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
                   <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                </svg>
+              ) : conversation.channel === 'telegram' ? (
+                <svg className="h-2.5 w-2.5 fill-current" viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15.75-.85 4.11-1.2 5.75-.15.7-.4 1.15-.75 1.18-.75.07-1.32-.49-2.04-.96-.72-.47-1.12-.76-1.82-1.22-.81-.53-.29-.82.18-1.3.12-.13 2.22-2.03 2.26-2.2.01-.02.01-.11-.04-.15-.05-.04-.13-.03-.19-.01-.08.02-1.38.88-3.9 2.58-.37.25-.7.37-1 .36-.33-.01-.97-.19-1.44-.35-.58-.19-1.04-.29-1-.62.02-.17.25-.35.7-.53 2.76-1.2 4.6-2 5.53-2.39 2.64-1.1 3.19-1.29 3.55-1.29.08 0 .25.02.36.11.1.08.13.19.14.28 0 .04.01.12 0 .19z"/>
                 </svg>
               ) : (
                 <svg className="h-2.5 w-2.5 fill-current" viewBox="0 0 24 24">
@@ -863,7 +868,9 @@ export function MessageThread({
                 ? "Facebook Messenger"
                 : conversation.channel === 'instagram'
                   ? "Instagram Direct"
-                  : contact.phone}
+                  : conversation.channel === 'telegram'
+                    ? "Telegram"
+                    : contact.phone}
             </p>
           </div>
           {/* Session timer badge — hidden on the narrowest phones so
