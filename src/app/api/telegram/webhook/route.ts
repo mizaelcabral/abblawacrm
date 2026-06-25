@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { isUniqueViolation } from '@/lib/contacts/dedupe';
+import { generateAIResponse } from '@/lib/ai/service';
+import { verifyBillingAndUsage, incrementAIConsumption } from '@/lib/billing/guard';
 
 // Admin client helper
 let _adminClient: any = null;
@@ -164,6 +166,80 @@ async function processTelegramUpdate(accountId: string, payload: any) {
       updated_at: new Date().toISOString(),
     })
     .eq('id', conversation.id);
+
+  // ============================================================
+  // AI Agent Autopilot Trigger
+  // ============================================================
+  if (conversation.ai_enabled && contentText) {
+    const billingGuard = await verifyBillingAndUsage(accountId, 'autopilot');
+    if (!billingGuard.allowed) {
+      console.warn(`[Webhook AI] Autopilot blocked for account ${accountId}: ${billingGuard.reason}`);
+      
+      // Disable autopilot automatically to prevent looping checks
+      await supabaseAdmin()
+        .from('conversations')
+        .update({ ai_enabled: false })
+        .eq('id', conversation.id);
+      
+      // Notify agents with a system message
+      await supabaseAdmin().from('messages').insert({
+        conversation_id: conversation.id,
+        sender_type: 'system',
+        content_type: 'text',
+        content_text: `⚠️ Piloto Automático desativado: ${billingGuard.reason}`,
+        status: 'delivered'
+      });
+    } else {
+      try {
+        const aiResult = await generateAIResponse(
+          contentText,
+          conversation.id,
+          accountId,
+          conversation.ai_system_prompt || undefined,
+          true // use RAG
+        );
+
+        let replyText = aiResult.text || '';
+        const isHandoff = aiResult.action === 'handoff';
+
+        if (isHandoff) {
+          // Disable AI for this conversation
+          await supabaseAdmin()
+            .from('conversations')
+            .update({ ai_enabled: false, status: 'open' })
+            .eq('id', conversation.id);
+          
+          // Notify human agents
+          await supabaseAdmin().from('messages').insert({
+            conversation_id: conversation.id,
+            sender_type: 'system',
+            content_type: 'text',
+            content_text: '⚠️ IA desativada automaticamente. Cliente solicitou atendente humano.',
+            status: 'delivered'
+          });
+
+          replyText = aiResult.text || 'Entendi. Vou transferir você para um atendente humano agora mesmo. Por favor, aguarde.';
+        }
+
+        // Send the AI-generated reply or handoff message
+        await telegramSendText(
+          accountId,
+          configOwnerUserId,
+          botToken,
+          chatId,
+          conversation.id,
+          replyText,
+          'bot'
+        );
+
+        // Increment consumption
+        await incrementAIConsumption(accountId);
+
+      } catch (aiError) {
+        console.error('[Webhook AI] Failed to run autopilot for Telegram:', aiError);
+      }
+    }
+  }
 }
 
 async function findOrCreateTelegramContact(
@@ -313,4 +389,69 @@ function getMimeTypeFromExt(ext: string): string {
     txt: 'text/plain',
   };
   return map[ext.toLowerCase()] || 'application/octet-stream';
+}
+
+async function telegramSendText(
+  accountId: string,
+  configOwnerUserId: string,
+  botToken: string,
+  chatId: string,
+  conversationId: string,
+  text: string,
+  senderType: 'bot' | 'agent' = 'bot'
+) {
+  let telegramMessageId = '';
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.ok) {
+        telegramMessageId = data.result.message_id.toString();
+      }
+    } else {
+      const errText = await res.text();
+      console.error(`[telegram-webhook] Telegram send API error: ${res.status} - ${errText}`);
+    }
+  } catch (err) {
+    console.error('[telegram-webhook] Failed to send Telegram API call:', err);
+  }
+
+  // Insert message into DB
+  const { data: messageRecord, error: msgError } = await supabaseAdmin()
+    .from('messages')
+    .insert({
+      conversation_id: conversationId,
+      sender_type: senderType,
+      content_type: 'text',
+      content_text: text,
+      message_id: telegramMessageId || null,
+      status: 'sent',
+      channel: 'telegram',
+    })
+    .select()
+    .single();
+
+  if (msgError) {
+    console.error('[telegram-webhook] Error inserting sent Telegram message:', msgError);
+  }
+
+  // Update conversation
+  await supabaseAdmin()
+    .from('conversations')
+    .update({
+      last_message_text: text,
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', conversationId);
+
+  return messageRecord;
 }
