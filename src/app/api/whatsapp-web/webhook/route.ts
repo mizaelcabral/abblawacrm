@@ -23,6 +23,13 @@ export async function POST(request: Request) {
     const payload = await request.json();
     console.log('[WhatsApp Web Webhook] Received payload event:', payload.event, 'Instance:', payload.instance);
 
+    // LOG WEBHOOK PAYLOAD FOR DEBUGGING
+    try {
+      await supabaseAdmin().from('webhook_logs').insert({ payload });
+    } catch (err) {
+      console.error('[Webhook Logger] Failed to write log:', err);
+    }
+
     // Only process message events (e.g. messages.upsert for incoming/outgoing)
     if (payload.event !== 'messages.upsert') {
       return NextResponse.json({ status: 'ignored_event' }, { status: 200 });
