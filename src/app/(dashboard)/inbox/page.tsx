@@ -574,7 +574,7 @@ function InboxPageContent() {
         </div>
 
         {/* Right panel: Contact sidebar — desktop only. */}
-        <div className="hidden lg:block">
+        <div className="hidden lg:flex h-full">
           <ContactSidebar contact={activeContact} />
         </div>
       </div>
