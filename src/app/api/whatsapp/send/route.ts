@@ -453,7 +453,9 @@ export async function POST(request: Request) {
             },
             body: JSON.stringify({
               number: sanitizedPhone,
-              text: content_text,
+              textMessage: {
+                text: content_text,
+              },
             }),
           });
 
