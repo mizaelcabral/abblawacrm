@@ -19,6 +19,7 @@ import {
   X,
   Loader2,
   Sparkles,
+  BookMarked,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GatedButton } from "@/components/ui/gated-button";
@@ -37,6 +38,7 @@ import {
   MEDIA_MAX_BYTES_BY_KIND,
 } from "@/lib/storage/upload-media";
 import { ReplyQuote } from "./reply-quote";
+import { KBSearchPanel } from "@/components/knowledge-base/kb-search-panel";
 
 /** Media content types an agent can send from the composer. */
 export type ComposerMediaKind = "image" | "video" | "document" | "audio";
@@ -127,6 +129,7 @@ export function MessageComposer({
   const [sending, setSending] = useState(false);
   const [suggestion, setSuggestion] = useState("");
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
+  const [kbOpen, setKbOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Media attachment state. `draft` holds an uploaded-but-not-yet-sent
@@ -562,7 +565,23 @@ export function MessageComposer({
           </Button>
         </div>
       ) : (
-        <div className="flex items-end gap-2">
+        <div className="relative flex items-end gap-2">
+          {/* KB search panel — floats above the composer row */}
+          <KBSearchPanel
+            open={kbOpen}
+            onClose={() => setKbOpen(false)}
+            onInsert={(content) => {
+              setText((prev) => (prev ? prev + "\n" + content : content));
+              setTimeout(() => {
+                const el = textareaRef.current;
+                if (el) {
+                  el.style.height = "auto";
+                  el.style.height = `${Math.min(el.scrollHeight, 96)}px`;
+                  el.focus();
+                }
+              }, 50);
+            }}
+          />
           {/* Attach menu — photo / video / document / voice. */}
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -615,6 +634,22 @@ export function MessageComposer({
               <LayoutTemplate className="h-4 w-4" />
             </GatedButton>
           )}
+
+          <GatedButton
+            variant="ghost"
+            size="sm"
+            canAct={!readOnly}
+            gateReason="enviar mensagens"
+            title={readOnly ? undefined : "Base de Conhecimento"}
+            className={cn(
+              "h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-foreground",
+              kbOpen && "text-primary bg-primary/10"
+            )}
+            onClick={() => setKbOpen((v) => !v)}
+            disabled={inputsDisabled}
+          >
+            <BookMarked className="h-4 w-4" />
+          </GatedButton>
 
           <GatedButton
             variant="ghost"

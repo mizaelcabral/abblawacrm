@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import type { Contact, Deal, ContactNote, Tag, Task } from "@/types";
+import { KBSearchPanel } from "@/components/knowledge-base/kb-search-panel";
 import {
   Phone,
   Mail,
@@ -19,6 +20,7 @@ import {
   Calendar,
   Trash2,
   Sparkles,
+  BookMarked,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -50,6 +52,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const [aiPrompt, setAiPrompt] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [updatingAi, setUpdatingAi] = useState(false);
+  const [kbOpen, setKbOpen] = useState(false);
 
   useEffect(() => {
     if (!accountId) return;
@@ -325,8 +328,37 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
           {/* Divider */}
           <div className="my-4 border-t border-border" />
 
+          {/* Knowledge Base Quick Search */}
+          <div className="relative">
+            <button
+              onClick={() => setKbOpen((v) => !v)}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors",
+                kbOpen
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <BookMarked className="h-3.5 w-3.5 shrink-0" />
+              <span className="flex-1 text-left">Base de Conhecimento</span>
+              <span className="text-[9px] opacity-60">{kbOpen ? "Fechar" : "Pesquisar"}</span>
+            </button>
+            {kbOpen && (
+              <div className="mt-1">
+                <KBSearchPanel
+                  open={kbOpen}
+                  onClose={() => setKbOpen(false)}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div className="my-4 border-t border-border" />
+
           {/* AI Autopilot Settings */}
           {conversationId && (
+
             <div className="space-y-3">
               <div className="flex items-center justify-between px-1">
                 <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
