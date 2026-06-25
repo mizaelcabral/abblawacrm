@@ -43,17 +43,19 @@ export async function GET() {
       return NextResponse.json({ error: 'Configuração do WhatsApp Web não encontrada.' }, { status: 404 });
     }
 
-    const token = decrypt(config.api_token);
+    const isGlobal = !!(process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_TOKEN);
+    const finalApiUrl = isGlobal ? process.env.EVOLUTION_API_URL : config.api_url;
+    const token = (isGlobal ? process.env.EVOLUTION_API_TOKEN : decrypt(config.api_token)) || '';
 
     // 1. Check connection state first
     let isConnected = false;
     try {
-      const stateRes = await fetch(`${config.api_url}/instance/connectionState/${config.instance_name}`, {
+      const stateRes = await fetch(`${finalApiUrl}/instance/connectionState/${config.instance_name}`, {
         headers: { apikey: token },
       });
 
       if (stateRes.ok) {
-        const stateData = await stateRes.ok ? await stateRes.json() : null;
+        const stateData = await stateRes.json();
         if (stateData?.instance?.state === 'open') {
           isConnected = true;
         }
@@ -76,7 +78,7 @@ export async function GET() {
     // 2. Fetch QR Code from the gateway
     try {
       console.log(`[WhatsApp Web QR] Requesting QR Code for instance ${config.instance_name} from gateway...`);
-      const qrRes = await fetch(`${config.api_url}/instance/connect/${config.instance_name}`, {
+      const qrRes = await fetch(`${finalApiUrl}/instance/connect/${config.instance_name}`, {
         headers: { apikey: token },
       });
 

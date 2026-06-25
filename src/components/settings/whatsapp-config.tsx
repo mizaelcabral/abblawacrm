@@ -90,6 +90,7 @@ export function WhatsAppConfig() {
   const [webDisconnecting, setWebDisconnecting] = useState(false);
   const [showWebToken, setShowWebToken] = useState(false);
   const [webTokenEdited, setWebTokenEdited] = useState(false);
+  const [isGlobalConfigured, setIsGlobalConfigured] = useState(false);
 
   const webWebhookUrl =
     typeof window !== 'undefined'
@@ -157,31 +158,31 @@ export function WhatsAppConfig() {
         setStatusMessage('');
       }
 
-      // 2. Fetch WhatsApp Web (Unofficial) Configuration
-      const { data: webData, error: webError } = await supabase
-        .from('whatsapp_web_config')
-        .select('*')
-        .eq('account_id', acctId)
-        .maybeSingle();
+      // 2. Fetch WhatsApp Web (Unofficial) Configuration via API
+      try {
+        const webRes = await fetch('/api/whatsapp-web/config');
+        if (webRes.ok) {
+          const webPayload = await webRes.json();
+          setIsGlobalConfigured(webPayload.is_global_configured || false);
 
-      if (webError) {
-        console.error('Failed to load Web config row:', webError);
-      }
-
-      if (webData) {
-        setWebApiUrl(webData.api_url || '');
-        setWebInstanceName(webData.instance_name || '');
-        setWebApiToken(MASKED_TOKEN);
-        setWebIsActive(webData.is_active || false);
-        setWebStatus(webData.status || 'disconnected');
-        setWebTokenEdited(false);
-      } else {
-        setWebApiUrl('');
-        setWebInstanceName('');
-        setWebApiToken('');
-        setWebIsActive(false);
-        setWebStatus('disconnected');
-        setWebTokenEdited(false);
+          if (webPayload.configured) {
+            setWebApiUrl(webPayload.api_url || '');
+            setWebInstanceName(webPayload.instance_name || '');
+            setWebApiToken(MASKED_TOKEN);
+            setWebIsActive(webPayload.is_active || false);
+            setWebStatus(webPayload.status || 'disconnected');
+            setWebTokenEdited(false);
+          } else {
+            setWebApiUrl(webPayload.is_global_configured ? 'GLOBAL' : '');
+            setWebInstanceName(webPayload.instance_name || '');
+            setWebApiToken(webPayload.is_global_configured ? MASKED_TOKEN : '');
+            setWebIsActive(false);
+            setWebStatus('disconnected');
+            setWebTokenEdited(false);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load Web config:', err);
       }
 
     } catch (err) {
@@ -383,11 +384,11 @@ export function WhatsAppConfig() {
   }, [activeTab, webStatus, webApiUrl, fetchWebStatusAndQr]);
 
   async function handleSaveWeb() {
-    if (!webApiUrl.trim() || !webInstanceName.trim()) {
+    if (!isGlobalConfigured && (!webApiUrl.trim() || !webInstanceName.trim())) {
       toast.error('URL da API e Nome da Instância são obrigatórios');
       return;
     }
-    if (!webApiToken.trim()) {
+    if (!isGlobalConfigured && !webApiToken.trim()) {
       toast.error('API Token é obrigatório');
       return;
     }
@@ -398,9 +399,9 @@ export function WhatsAppConfig() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          api_url: webApiUrl.trim(),
-          instance_name: webInstanceName.trim(),
-          api_token: webApiToken,
+          api_url: isGlobalConfigured ? undefined : webApiUrl.trim(),
+          instance_name: isGlobalConfigured ? undefined : webInstanceName.trim(),
+          api_token: isGlobalConfigured ? undefined : webApiToken,
           is_active: webIsActive,
         }),
       });
@@ -964,105 +965,109 @@ export function WhatsAppConfig() {
               )}
 
               {/* Unofficial API Credentials */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-foreground">Configuração do Servidor (Evolution API)</CardTitle>
-                  <CardDescription className="text-muted-foreground">
-                    Insira a URL de hospedagem e chaves do gateway externo de WhatsApp Web.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">URL da API do Gateway</Label>
-                    <Input
-                      placeholder="Ex: https://api.meu-gateway.com"
-                      value={webApiUrl}
-                      onChange={(e) => setWebApiUrl(e.target.value)}
-                      className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                    />
-                    <p className="text-[11px] text-muted-foreground">
-                      O endereço do seu servidor de Evolution API (deve incluir http/https).
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Nome da Instância</Label>
-                    <Input
-                      placeholder="Ex: abbla-whatsapp-web"
-                      value={webInstanceName}
-                      onChange={(e) => setWebInstanceName(e.target.value)}
-                      className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                    />
-                    <p className="text-[11px] text-muted-foreground">
-                      Identificador curto e único para esta conexão de celular no seu servidor.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">API Token Global</Label>
-                    <div className="relative">
+              {!isGlobalConfigured && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-foreground">Configuração do Servidor (Evolution API)</CardTitle>
+                    <CardDescription className="text-muted-foreground">
+                      Insira a URL de hospedagem e chaves do gateway externo de WhatsApp Web.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground">URL da API do Gateway</Label>
                       <Input
-                        type={showWebToken ? 'text' : 'password'}
-                        placeholder="Token global da API do gateway"
-                        value={webApiToken}
-                        onChange={(e) => {
-                          setWebApiToken(e.target.value);
-                          setWebTokenEdited(true);
-                        }}
-                        onFocus={() => {
-                          if (webApiToken === MASKED_TOKEN) {
-                            setWebApiToken('');
-                            setWebTokenEdited(true);
-                          }
-                        }}
-                        className="bg-muted border-border text-foreground placeholder:text-muted-foreground pr-10"
+                        placeholder="Ex: https://api.meu-gateway.com"
+                        value={webApiUrl}
+                        onChange={(e) => setWebApiUrl(e.target.value)}
+                        className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowWebToken(!showWebToken)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {showWebToken ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                      </button>
-                    </div>
-                    {webApiToken === MASKED_TOKEN && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Token gravado e ocultado para sua segurança.
+                      <p className="text-[11px] text-muted-foreground">
+                        O endereço do seu servidor de Evolution API (deve incluir http/https).
                       </p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground">Nome da Instância</Label>
+                      <Input
+                        placeholder="Ex: abbla-whatsapp-web"
+                        value={webInstanceName}
+                        onChange={(e) => setWebInstanceName(e.target.value)}
+                        className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Identificador curto e único para esta conexão de celular no seu servidor.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground">API Token Global</Label>
+                      <div className="relative">
+                        <Input
+                          type={showWebToken ? 'text' : 'password'}
+                          placeholder="Token global da API do gateway"
+                          value={webApiToken}
+                          onChange={(e) => {
+                            setWebApiToken(e.target.value);
+                            setWebTokenEdited(true);
+                          }}
+                          onFocus={() => {
+                            if (webApiToken === MASKED_TOKEN) {
+                              setWebApiToken('');
+                              setWebTokenEdited(true);
+                            }
+                          }}
+                          className="bg-muted border-border text-foreground placeholder:text-muted-foreground pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowWebToken(!showWebToken)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {showWebToken ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                        </button>
+                      </div>
+                      {webApiToken === MASKED_TOKEN && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Token gravado e ocultado para sua segurança.
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Webhook Configuration for Unofficial API */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-foreground">Webhook da Conexão Direta</CardTitle>
-                  <CardDescription className="text-muted-foreground">
-                    URL de recebimento que o gateway externo utiliza. Esta URL é configurada automaticamente no salvamento.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Webhook URL</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        readOnly
-                        value={webWebhookUrl}
-                        className="bg-muted border-border text-muted-foreground font-mono text-sm"
-                      />
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={handleCopyWebWebhookUrl}
-                        className="shrink-0 border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-                      >
-                        <Copy className="size-4" />
-                      </Button>
+              {!isGlobalConfigured && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-foreground">Webhook da Conexão Direta</CardTitle>
+                    <CardDescription className="text-muted-foreground">
+                      URL de recebimento que o gateway externo utiliza. Esta URL é configurada automaticamente no salvamento.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground">Webhook URL</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          readOnly
+                          value={webWebhookUrl}
+                          className="bg-muted border-border text-muted-foreground font-mono text-sm"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={handleCopyWebWebhookUrl}
+                          className="shrink-0 border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                        >
+                          <Copy className="size-4" />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Action Buttons */}
               <div className="flex flex-wrap gap-3">

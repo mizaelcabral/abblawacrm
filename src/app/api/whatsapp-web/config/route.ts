@@ -39,6 +39,9 @@ export async function GET() {
       );
     }
 
+    const isGlobal = !!(process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_TOKEN);
+    const autoInstanceName = `abbla-${accountId.replace(/-/g, '').slice(0, 12)}`;
+
     const { data: config, error: configError } = await supabase
       .from('whatsapp_web_config')
       .select('*')
@@ -55,18 +58,24 @@ export async function GET() {
 
     if (!config) {
       return NextResponse.json(
-        { configured: false, message: 'Configuração do WhatsApp Web não encontrada.' },
+        {
+          configured: false,
+          is_global_configured: isGlobal,
+          instance_name: autoInstanceName,
+          message: 'Configuração do WhatsApp Web não encontrada.',
+        },
         { status: 200 }
       );
     }
 
     // Check status with Evolution API
-    const token = decrypt(config.api_token);
+    const finalApiUrl = isGlobal ? process.env.EVOLUTION_API_URL : config.api_url;
+    const finalToken = (isGlobal ? process.env.EVOLUTION_API_TOKEN : decrypt(config.api_token)) || '';
     let state = 'disconnected';
     
     try {
-      const stateRes = await fetch(`${config.api_url}/instance/connectionState/${config.instance_name}`, {
-        headers: { apikey: token },
+      const stateRes = await fetch(`${finalApiUrl}/instance/connectionState/${config.instance_name}`, {
+        headers: { apikey: finalToken },
       });
       
       if (stateRes.ok) {
@@ -92,7 +101,8 @@ export async function GET() {
 
     return NextResponse.json({
       configured: true,
-      api_url: config.api_url,
+      is_global_configured: isGlobal,
+      api_url: finalApiUrl,
       instance_name: config.instance_name,
       status: state,
       is_active: config.is_active,
@@ -123,12 +133,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Seu perfil não está vinculado a uma conta.' }, { status: 403 });
     }
 
+    const isGlobal = !!(process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_TOKEN);
+    const autoInstanceName = `abbla-${accountId.replace(/-/g, '').slice(0, 12)}`;
+
     const body = await request.json();
     const { api_url, api_token, instance_name, is_active } = body;
-
-    if (!api_url || !instance_name) {
-      return NextResponse.json({ error: 'URL da API e Nome da Instância são obrigatórios' }, { status: 400 });
-    }
 
     // Retrieve existing config
     const { data: existing } = await supabase
@@ -137,12 +146,21 @@ export async function POST(request: Request) {
       .eq('account_id', accountId)
       .maybeSingle();
 
-    let finalToken = api_token;
-    if (api_token === MASKED_TOKEN) {
-      if (!existing) {
-        return NextResponse.json({ error: 'API Token é obrigatório para configuração inicial.' }, { status: 400 });
+    const finalApiUrl = isGlobal ? process.env.EVOLUTION_API_URL : (api_url || null);
+    const finalInstanceName = existing?.instance_name || instance_name || autoInstanceName;
+    let finalToken = (isGlobal ? process.env.EVOLUTION_API_TOKEN : api_token) || '';
+
+    if (!isGlobal) {
+      if (finalToken === MASKED_TOKEN) {
+        if (!existing) {
+          return NextResponse.json({ error: 'API Token é obrigatório para configuração inicial.' }, { status: 400 });
+        }
+        finalToken = decrypt(existing.api_token);
       }
-      finalToken = decrypt(existing.api_token);
+    }
+
+    if (!finalApiUrl || !finalInstanceName) {
+      return NextResponse.json({ error: 'URL da API e Nome da Instância são obrigatórios' }, { status: 400 });
     }
 
     if (!finalToken) {
@@ -155,15 +173,15 @@ export async function POST(request: Request) {
 
     // 1. Create/Retrieve instance in Evolution API
     try {
-      console.log(`[WhatsApp Web Config] Creating instance ${instance_name} in ${api_url}...`);
-      const createRes = await fetch(`${api_url}/instance/create`, {
+      console.log(`[WhatsApp Web Config] Creating instance ${finalInstanceName} in ${finalApiUrl}...`);
+      const createRes = await fetch(`${finalApiUrl}/instance/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           apikey: finalToken,
         },
         body: JSON.stringify({
-          instanceName: instance_name,
+          instanceName: finalInstanceName,
           qrcode: true,
           integration: 'WHATSAPP-BAILEYS',
         }),
@@ -179,8 +197,8 @@ export async function POST(request: Request) {
 
     // 2. Configure Webhook in Evolution API
     try {
-      console.log(`[WhatsApp Web Config] Setting webhook for ${instance_name} to ${webhookUrl}...`);
-      const webhookRes = await fetch(`${api_url}/webhook/set/${instance_name}`, {
+      console.log(`[WhatsApp Web Config] Setting webhook for ${finalInstanceName} to ${webhookUrl}...`);
+      const webhookRes = await fetch(`${finalApiUrl}/webhook/set/${finalInstanceName}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -205,9 +223,9 @@ export async function POST(request: Request) {
     const payload = {
       account_id: accountId,
       user_id: user.id,
-      api_url,
+      api_url: finalApiUrl,
       api_token: encryptedToken,
-      instance_name,
+      instance_name: finalInstanceName,
       is_active: !!is_active,
       updated_at: new Date().toISOString(),
     };

@@ -43,12 +43,14 @@ export async function POST() {
       return NextResponse.json({ error: 'Configuração do WhatsApp Web não encontrada.' }, { status: 404 });
     }
 
-    const token = decrypt(config.api_token);
+    const isGlobal = !!(process.env.EVOLUTION_API_URL && process.env.EVOLUTION_API_TOKEN);
+    const finalApiUrl = isGlobal ? process.env.EVOLUTION_API_URL : config.api_url;
+    const token = (isGlobal ? process.env.EVOLUTION_API_TOKEN : decrypt(config.api_token)) || '';
 
     // Call logout endpoint in Evolution API
     try {
       console.log(`[WhatsApp Web Disconnect] Logging out instance ${config.instance_name}...`);
-      const logoutRes = await fetch(`${config.api_url}/instance/logout/${config.instance_name}`, {
+      const logoutRes = await fetch(`${finalApiUrl}/instance/logout/${config.instance_name}`, {
         method: 'POST',
         headers: { apikey: token },
       });
