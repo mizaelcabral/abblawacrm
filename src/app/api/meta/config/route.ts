@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { encrypt, decrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
+import { encrypt, decrypt } from '@/lib/whatsapp/encryption';
 
 const MASKED_TOKEN = '••••••••••••••••';
 
@@ -15,6 +15,29 @@ async function resolveAccountId(
     .maybeSingle();
   if (error || !data?.account_id) return null;
   return data.account_id as string;
+}
+
+type MetaGraphError = {
+  error?: {
+    message?: string;
+    code?: number;
+    type?: string;
+  };
+};
+
+async function readMetaError(response: Response): Promise<string> {
+  try {
+    const payload = (await response.json()) as MetaGraphError;
+    const error = payload.error;
+    if (error?.message) {
+      const code = error.code ? ` (codigo ${error.code})` : '';
+      return `${error.message}${code}`;
+    }
+  } catch {
+    // Fall back to the HTTP status text below when Meta returns a non-JSON body.
+  }
+
+  return response.statusText || `HTTP ${response.status}`;
 }
 
 // GET - Test connectivity and fetch config
@@ -66,16 +89,20 @@ export async function GET() {
 
     const token = decrypt(config.page_access_token);
 
-    // Test token validity by querying Page name on Graph API
-    const testUrl = `https://graph.facebook.com/v21.0/me?fields=name,id&access_token=${token}`;
+    // Test token validity by querying the configured Page instead of the token owner.
+    const graphTarget = config.facebook_page_id || 'me';
+    const testUrl = new URL(`https://graph.facebook.com/v21.0/${encodeURIComponent(graphTarget)}`);
+    testUrl.searchParams.set('fields', 'name,id');
+    testUrl.searchParams.set('access_token', token);
     const metaResponse = await fetch(testUrl);
     
     if (!metaResponse.ok) {
+      const metaError = await readMetaError(metaResponse);
       return NextResponse.json(
         {
           connected: false,
           reason: 'meta_api_error',
-          message: `Erro da API da Meta: ${metaResponse.statusText}`,
+          message: `Erro da API da Meta: ${metaError}`,
           config: {
             facebook_page_id: config.facebook_page_id || '',
             instagram_business_id: config.instagram_business_id || '',

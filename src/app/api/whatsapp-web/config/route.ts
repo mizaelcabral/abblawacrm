@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption';
+import crypto from 'crypto';
 
 const MASKED_TOKEN = '••••••••••••••••';
 
@@ -70,7 +71,7 @@ export async function GET() {
 
     // Check status with Evolution API
     const finalApiUrl = isGlobal ? process.env.EVOLUTION_API_URL : config.api_url;
-    const finalToken = (isGlobal ? process.env.EVOLUTION_API_TOKEN : decrypt(config.api_token)) || '';
+    const finalToken = decrypt(config.api_token);
     let state = 'disconnected';
     
     try {

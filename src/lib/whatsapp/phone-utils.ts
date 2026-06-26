@@ -1,11 +1,41 @@
 /**
+ * Helper to normalize Brazilian phone numbers specifically for WhatsApp JID/routing rules.
+ * DDDs 11-28 must have the 9th digit (55 + DDD + 9 + 8 digits).
+ * DDDs 31-99 must NOT have the 9th digit (55 + DDD + 8 digits).
+ */
+export function normalizeBrazilianPhoneForWhatsApp(phone: string): string {
+  if (!phone) return '';
+  let clean = phone.replace(/\D/g, '');
+  
+  if (clean.startsWith('55') && clean.length >= 10) {
+    const ddd = parseInt(clean.substring(2, 4), 10);
+    const rest = clean.substring(4);
+    
+    // DDDs 11 to 28: must have the 9th digit (9)
+    if (ddd >= 11 && ddd <= 28) {
+      if (rest.length === 8) {
+        return `55${ddd}9${rest}`;
+      }
+    } 
+    // DDDs 31 to 99: must NOT have the 9th digit
+    else if (ddd >= 31 && ddd <= 99) {
+      if (rest.length === 9 && rest.startsWith('9')) {
+        return `55${ddd}${rest.substring(1)}`;
+      }
+    }
+  }
+  
+  return clean;
+}
+
+/**
  * Sanitize phone number for Meta WhatsApp API.
  * Meta requires digits only — no + prefix, no spaces, no dashes.
  * e.g. "+370 63949836" → "37063949836"
  */
 export function sanitizePhoneForMeta(phone: string): string {
   if (!phone) return ''
-  return phone.replace(/\D/g, '')
+  return normalizeBrazilianPhoneForWhatsApp(phone)
 }
 
 /**
@@ -14,7 +44,7 @@ export function sanitizePhoneForMeta(phone: string): string {
  */
 export function normalizePhone(phone: string): string {
   if (!phone) return ''
-  return phone.replace(/\D/g, '')
+  return normalizeBrazilianPhoneForWhatsApp(phone)
 }
 
 /**

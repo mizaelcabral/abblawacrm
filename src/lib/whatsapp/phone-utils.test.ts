@@ -6,6 +6,7 @@ import {
   phoneVariants,
   phonesMatch,
   sanitizePhoneForMeta,
+  normalizeBrazilianPhoneForWhatsApp,
 } from "./phone-utils";
 
 describe("sanitizePhoneForMeta", () => {
@@ -27,9 +28,31 @@ describe("sanitizePhoneForMeta", () => {
   });
 });
 
+describe("normalizeBrazilianPhoneForWhatsApp", () => {
+  it("keeps DDDs 11-28 with 9th digit", () => {
+    expect(normalizeBrazilianPhoneForWhatsApp("5511988888888")).toBe("5511988888888");
+  });
+
+  it("adds 9th digit to DDDs 11-28 if missing", () => {
+    expect(normalizeBrazilianPhoneForWhatsApp("551188888888")).toBe("5511988888888");
+  });
+
+  it("removes 9th digit from DDDs 31-99 if present", () => {
+    expect(normalizeBrazilianPhoneForWhatsApp("5531988888888")).toBe("553188888888");
+  });
+
+  it("keeps DDDs 31-99 without 9th digit", () => {
+    expect(normalizeBrazilianPhoneForWhatsApp("553188888888")).toBe("553188888888");
+  });
+
+  it("ignores non-Brazilian numbers", () => {
+    expect(normalizeBrazilianPhoneForWhatsApp("+1 415 555-1212")).toBe("14155551212");
+  });
+});
+
 describe("normalizePhone", () => {
   it("matches sanitizePhoneForMeta byte-for-byte (shared canonical form)", () => {
-    const samples = ["+370 12345", "abc-555-DEF", "", "0044 7000 0000 0000"];
+    const samples = ["+370 12345", "abc-555-DEF", "", "0044 7000 0000 0000", "5531988888888"];
     for (const s of samples) {
       expect(normalizePhone(s)).toBe(sanitizePhoneForMeta(s));
     }
