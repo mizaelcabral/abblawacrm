@@ -88,7 +88,32 @@ async function processIncomingMessage(config: any, messageData: any) {
     return;
   }
 
-  const phone = remoteJid.split('@')[0];
+  let phone = remoteJid.split('@')[0];
+  
+  if (remoteJid.endsWith('@lid')) {
+    try {
+      const token = decrypt(config.api_token);
+      const res = await fetch(`${config.api_url}/chat/fetchProfile/${config.instance_name}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: token,
+        },
+        body: JSON.stringify({ number: remoteJid })
+      });
+      if (res.ok) {
+        const profileData = await res.json();
+        const resolvedJid = profileData.jid || profileData.id;
+        if (resolvedJid && !resolvedJid.includes('@lid')) {
+          phone = resolvedJid.split('@')[0];
+          console.log('[WhatsApp Web Webhook] Resolved LID JID to phone:', remoteJid, '->', phone);
+        }
+      }
+    } catch (err) {
+      console.error('[WhatsApp Web Webhook] Failed to resolve LID JID:', err);
+    }
+  }
+
   const fromMe = messageData.key.fromMe;
   const senderType = fromMe ? 'agent' : 'customer';
 
