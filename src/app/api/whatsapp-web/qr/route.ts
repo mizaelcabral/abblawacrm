@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { decrypt } from '@/lib/whatsapp/encryption';
+import crypto from 'crypto';
 
 async function resolveAccountId(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -15,7 +16,7 @@ async function resolveAccountId(
   return data.account_id as string;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = await createClient();
 
@@ -84,6 +85,90 @@ export async function GET() {
 
       if (!qrRes.ok) {
         const errText = await qrRes.text();
+        let errJson: any = {};
+        try {
+          errJson = JSON.parse(errText);
+        } catch {}
+
+        const isNotFoundError = qrRes.status === 404 || 
+          errText.includes('does not exist') || 
+          errJson?.response?.message?.some?.((m: string) => m.includes('does not exist'));
+
+        if (isNotFoundError) {
+          console.log(`[WhatsApp Web QR] Instance ${config.instance_name} not found. Attempting auto-creation...`);
+          
+          const origin = request.headers.get('origin') || `${request.headers.get('x-forwarded-proto') || 'https'}://${request.headers.get('host')}`;
+          const webhookUrl = `${origin}/api/whatsapp-web/webhook`;
+
+          // A. Create instance
+          const createRes = await fetch(`${finalApiUrl}/instance/create`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: token,
+            },
+            body: JSON.stringify({
+              instanceName: config.instance_name,
+              token: crypto.randomBytes(16).toString('hex'),
+              qrcode: true,
+              integration: 'WHATSAPP-BAILEYS',
+            }),
+          });
+
+          if (!createRes.ok) {
+            const createErr = await createRes.text();
+            console.error(`[WhatsApp Web QR] Auto-creation failed:`, createErr);
+          } else {
+            console.log(`[WhatsApp Web QR] Instance created successfully. Setting webhook...`);
+            
+            // B. Set webhook
+            const webhookRes = await fetch(`${finalApiUrl}/webhook/set/${config.instance_name}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                apikey: token,
+              },
+              body: JSON.stringify({
+                webhook: {
+                  enabled: true,
+                  url: webhookUrl,
+                  events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'SEND_MESSAGE'],
+                }
+              }),
+            });
+
+            if (!webhookRes.ok) {
+              const webhookErr = await webhookRes.text();
+              console.warn(`[WhatsApp Web QR] Setting webhook failed:`, webhookErr);
+            }
+
+            // C. Retry connecting (fetching QR)
+            console.log(`[WhatsApp Web QR] Retrying QR fetch after auto-creation...`);
+            const retryRes = await fetch(`${finalApiUrl}/instance/connect/${config.instance_name}`, {
+              headers: { apikey: token },
+            });
+
+            if (retryRes.ok) {
+              const retryData = await retryRes.json();
+              if (retryData.instance?.state === 'open' || retryData.message === 'Instance already connected') {
+                await supabase
+                  .from('whatsapp_web_config')
+                  .update({ status: 'connected', connected_at: new Date().toISOString() })
+                  .eq('id', config.id);
+                return NextResponse.json({ status: 'connected' });
+              }
+              return NextResponse.json({
+                status: 'disconnected',
+                qrcode: retryData.base64 || retryData.qrcode?.base64 || null,
+                code: retryData.code || null
+              });
+            } else {
+              const retryErr = await retryRes.text();
+              console.error(`[WhatsApp Web QR] Retry failed:`, retryErr);
+            }
+          }
+        }
+
         return NextResponse.json({
           status: 'disconnected',
           error: `Gateway returned status ${qrRes.status}: ${errText}`

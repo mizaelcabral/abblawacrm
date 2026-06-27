@@ -183,6 +183,7 @@ export async function POST(request: Request) {
         },
         body: JSON.stringify({
           instanceName: finalInstanceName,
+          token: crypto.randomBytes(16).toString('hex'),
           qrcode: true,
           integration: 'WHATSAPP-BAILEYS',
         }),
@@ -206,9 +207,11 @@ export async function POST(request: Request) {
           apikey: finalToken,
         },
         body: JSON.stringify({
-          enabled: true,
-          url: webhookUrl,
-          events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'SEND_MESSAGE'],
+          webhook: {
+            enabled: true,
+            url: webhookUrl,
+            events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'SEND_MESSAGE'],
+          }
         }),
       });
 
