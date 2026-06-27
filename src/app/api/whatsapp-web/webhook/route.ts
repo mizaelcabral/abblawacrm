@@ -103,7 +103,7 @@ async function processIncomingMessage(config: any, messageData: any) {
       });
       if (res.ok) {
         const profileData = await res.json();
-        const resolvedJid = profileData.jid || profileData.id;
+        const resolvedJid = profileData.wuid || profileData.jid || profileData.id;
         if (resolvedJid && !resolvedJid.includes('@lid')) {
           phone = resolvedJid.split('@')[0];
           console.log('[WhatsApp Web Webhook] Resolved LID JID to phone:', remoteJid, '->', phone);
