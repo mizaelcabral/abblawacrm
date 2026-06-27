@@ -102,6 +102,7 @@ interface MessageComposerProps {
   replyTo?: ReplyDraft | null;
   onClearReply?: () => void;
   channel?: "whatsapp" | "messenger" | "instagram" | "telegram";
+  isWhatsAppWeb?: boolean;
 }
 
 function formatDuration(seconds: number): string {
@@ -124,6 +125,7 @@ export function MessageComposer({
   replyTo,
   onClearReply,
   channel = "whatsapp",
+  isWhatsAppWeb = false,
 }: MessageComposerProps) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -166,8 +168,8 @@ export function MessageComposer({
   // every capability — so the disabled branch is a no-op there.
   const canSend = useCan("send-messages");
   const readOnly = !canSend;
-  // Media (like free-form text) is only allowed inside the 24h window.
-  const inputsDisabled = readOnly || sessionExpired;
+  // Media (like free-form text) is only allowed inside the 24h window (except for WhatsApp Web, which has no 24h window).
+  const inputsDisabled = readOnly || (sessionExpired && !isWhatsAppWeb);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {
@@ -424,7 +426,7 @@ export function MessageComposer({
           />
         </div>
       )}
-      {sessionExpired && (
+      {sessionExpired && !isWhatsAppWeb && (
         <div className="mb-2 flex items-center justify-between rounded-lg bg-amber-500/10 px-3 py-2">
           <p className="text-xs text-amber-400">
             {channel === 'whatsapp'
@@ -675,7 +677,7 @@ export function MessageComposer({
             placeholder={
               readOnly
                 ? "Apenas visualização — visualizadores podem navegar, mas não responder"
-                : sessionExpired
+                : sessionExpired && !isWhatsAppWeb
                   ? channel === 'whatsapp'
                     ? "Sessão expirada - use um modelo"
                     : "Sessão expirada - aguarde o cliente entrar em contato"
@@ -687,7 +689,7 @@ export function MessageComposer({
                         ? "Respondendo via Telegram... (Shift+Enter para nova linha)"
                         : "Digite uma mensagem... (Shift+Enter para nova linha)"
             }
-            disabled={sessionExpired || readOnly}
+            disabled={(sessionExpired && !isWhatsAppWeb) || readOnly}
             rows={1}
             // Textarea keeps its own inline title — the GatedButton
             // wrapping pattern doesn't apply to non-button inputs.
@@ -695,7 +697,7 @@ export function MessageComposer({
             title={readOnly ? "Apenas visualização — seu papel não pode enviar mensagens" : undefined}
             className={cn(
               "flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50",
-              (sessionExpired || readOnly) && "cursor-not-allowed opacity-50"
+              ((sessionExpired && !isWhatsAppWeb) || readOnly) && "cursor-not-allowed opacity-50"
             )}
           />
 
@@ -703,7 +705,7 @@ export function MessageComposer({
             size="sm"
             canAct={!readOnly}
             gateReason="enviar mensagens"
-            disabled={!text.trim() || sessionExpired || sending}
+            disabled={!text.trim() || (sessionExpired && !isWhatsAppWeb) || sending}
             onClick={handleSend}
             className="h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40"
           >

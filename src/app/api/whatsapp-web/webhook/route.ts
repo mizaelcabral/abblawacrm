@@ -82,6 +82,7 @@ export async function POST(request: Request) {
 }
 
 async function processIncomingMessage(config: any, messageData: any) {
+  const messageId = messageData.key.id;
   const remoteJid = messageData.key.remoteJid;
   if (!remoteJid || remoteJid.includes('@g.us')) {
     // Ignore group chats
@@ -155,11 +156,61 @@ async function processIncomingMessage(config: any, messageData: any) {
   }
 
   // 4) Handle Media Download if payload contains base64
-  // In Evolution API, if base64 is in the messageData, we upload it
-  const base64Data = messageData.base64 || messageData.message?.base64;
+  // In Evolution API, if base64 is in the messageData, we upload it.
+  // Otherwise, we fetch it asynchronously from the Evolution API's getBase64FromMediaMessage endpoint.
+  let base64Data = messageData.base64 || messageData.message?.base64;
+  if (!base64Data && (contentType === 'image' || contentType === 'video' || contentType === 'audio' || contentType === 'document')) {
+    try {
+      console.log('[WhatsApp Web Webhook] Base64 missing from payload. Fetching from getBase64FromMediaMessage...');
+      const token = decrypt(config.api_token);
+      const res = await fetch(`${config.api_url}/chat/getBase64FromMediaMessage/${config.instance_name}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: token,
+        },
+        body: JSON.stringify({
+          message: {
+            key: {
+              id: messageId,
+            },
+          },
+          convertToMp4: false,
+        }),
+      });
+
+      if (res.ok) {
+        const responseData = await res.json();
+        if (responseData.base64) {
+          base64Data = responseData.base64;
+          console.log('[WhatsApp Web Webhook] Successfully fetched media base64 for message:', messageId);
+        } else {
+          console.warn('[WhatsApp Web Webhook] getBase64FromMediaMessage response missing base64 field:', responseData);
+        }
+      } else {
+        const errText = await res.text();
+        console.error(`[WhatsApp Web Webhook] Failed to fetch base64 from Evolution API: ${res.status} - ${errText}`);
+      }
+    } catch (err) {
+      console.error('[WhatsApp Web Webhook] Error fetching base64 from Evolution API:', err);
+    }
+  }
+
   if (base64Data) {
     try {
-      mediaUrl = await uploadMediaFromBase64(config.account_id, base64Data, filename || 'media_file');
+      // Ensure the base64 has standard data URI prefix so uploadMediaFromBase64 parses it correctly
+      let cleanBase64 = base64Data;
+      if (!cleanBase64.includes(';base64,')) {
+        let detectedMime = 'application/octet-stream';
+        if (contentType === 'image') detectedMime = 'image/jpeg';
+        else if (contentType === 'video') detectedMime = 'video/mp4';
+        else if (contentType === 'audio') detectedMime = 'audio/ogg';
+        else if (contentType === 'document') detectedMime = 'application/pdf';
+        
+        cleanBase64 = `data:${detectedMime};base64,${cleanBase64}`;
+      }
+
+      mediaUrl = await uploadMediaFromBase64(config.account_id, cleanBase64, filename || 'media_file');
     } catch (err) {
       console.error('[WhatsApp Web Webhook] Failed to upload media:', err);
     }

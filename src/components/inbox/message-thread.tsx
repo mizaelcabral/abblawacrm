@@ -248,6 +248,43 @@ export function MessageThread({
   const conversationId = conversation?.id;
   const hasUnread = (conversation?.unread_count ?? 0) > 0;
 
+  const [isWhatsAppWeb, setIsWhatsAppWeb] = useState(false);
+
+  useEffect(() => {
+    if (!conversationId) {
+      setIsWhatsAppWeb(false);
+      return;
+    }
+    const supabase = createClient();
+    let cancelled = false;
+
+    (async () => {
+      const { data: conv } = await supabase
+        .from("conversations")
+        .select("account_id")
+        .eq("id", conversationId)
+        .maybeSingle();
+
+      const accountId = conv?.account_id;
+      if (!accountId || cancelled) return;
+
+      const { data: webConfig } = await supabase
+        .from("whatsapp_web_config")
+        .select("is_active")
+        .eq("account_id", accountId)
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (!cancelled) {
+        setIsWhatsAppWeb(!!webConfig?.is_active);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId]);
+
   // Fetch messages whenever the selected conversation changes. Kept
   // separate from the unread-reset effect so that incoming messages
   // arriving while the thread is open don't trigger a full refetch —
@@ -1081,6 +1118,7 @@ export function MessageThread({
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
         channel={conversation.channel || "whatsapp"}
+        isWhatsAppWeb={isWhatsAppWeb}
       />
 
       <TemplatePicker
