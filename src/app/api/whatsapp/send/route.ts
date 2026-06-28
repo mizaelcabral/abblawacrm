@@ -453,9 +453,7 @@ export async function POST(request: Request) {
             },
             body: JSON.stringify({
               number: sanitizedPhone,
-              textMessage: {
-                text: content_text,
-              },
+              text: content_text,
             }),
           });
 
@@ -474,12 +472,10 @@ export async function POST(request: Request) {
             },
             body: JSON.stringify({
               number: sanitizedPhone,
-              mediaMessage: {
-                media: media_url,
-                mediatype: message_type,
-                caption: content_text || '',
-                fileName: filename || 'file',
-              }
+              media: media_url,
+              mediatype: message_type,
+              caption: content_text || '',
+              fileName: filename || 'file',
             }),
           });
 

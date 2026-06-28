@@ -306,9 +306,7 @@ async function processIncomingMessage(config: any, messageData: any) {
           },
           body: JSON.stringify({
             number: phone,
-            textMessage: {
-              text: replyText
-            }
+            text: replyText
           })
         });
 
