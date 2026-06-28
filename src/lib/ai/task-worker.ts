@@ -18,6 +18,19 @@ interface GeminiMessage {
   parts: GeminiMessagePart[]
 }
 
+interface AITask {
+  id: string
+  title: string
+  description?: string | null
+  conversation_id?: string | null
+  status: string
+  account_id: string
+  contact?: {
+    full_name: string
+    phone: string
+  } | null
+}
+
 const GEMINI_TOOLS = [
   {
     functionDeclarations: [
@@ -126,7 +139,7 @@ export async function executePendingAITasks(): Promise<{ processed: number; erro
   return { processed: processedCount, errors: errorCount }
 }
 
-function getTaskPrompt(task: any): string {
+function getTaskPrompt(task: AITask): string {
   const contactName = task.contact?.full_name || 'Desconhecido'
   const contactPhone = task.contact?.phone || 'Não informado'
   
@@ -141,7 +154,7 @@ Por favor, execute as ações necessárias para completar ou preparar esta taref
 `
 }
 
-async function runTaskAgent(task: any): Promise<string> {
+async function runTaskAgent(task: AITask): Promise<string> {
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY
   if (!GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is not defined')
@@ -214,15 +227,16 @@ Instruções importantes:
     if (functionCall) {
       // Execute function
       console.log(`[AI Task Agent] Executing tool: ${functionCall.name} with args:`, functionCall.args)
-      let toolResult: any
+      let toolResult: Record<string, unknown>
       try {
         const result = await handleToolCall(functionCall.name, functionCall.args, task.account_id)
         // Extract the text content from tool response
         const textResult = result?.content?.[0]?.text || JSON.stringify(result)
         toolResult = { status: 'success', data: textResult }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(`[AI Task Agent] Tool execution error for ${functionCall.name}:`, err)
-        toolResult = { status: 'error', message: err.message || String(err) }
+        const message = err instanceof Error ? err.message : String(err)
+        toolResult = { status: 'error', message }
       }
 
       // Append function response to history
