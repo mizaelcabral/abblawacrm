@@ -432,7 +432,7 @@ export async function handleToolCall(name: string, args: any, accountId: string)
 
       const accessToken = decrypt(config.access_token);
 
-      let { data: contact } = await admin
+      const { data: contact } = await admin
         .from('contacts')
         .select('id')
         .eq('account_id', accountId)

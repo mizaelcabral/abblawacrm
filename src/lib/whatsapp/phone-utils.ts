@@ -5,7 +5,7 @@
  */
 export function normalizeBrazilianPhoneForWhatsApp(phone: string): string {
   if (!phone) return '';
-  let clean = phone.replace(/\D/g, '');
+  const clean = phone.replace(/\D/g, '');
   
   if (clean.startsWith('55') && clean.length >= 10) {
     const ddd = parseInt(clean.substring(2, 4), 10);

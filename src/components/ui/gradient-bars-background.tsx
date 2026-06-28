@@ -65,7 +65,7 @@ const GradientBars: React.FC<GradientBarsProps> = ({
                   animationDelay: `${index * 0.1}s`,
                   outline: '1px solid rgba(0, 0, 0, 0)',
                   boxSizing: 'border-box',
-                  // @ts-ignore
+                  // @ts-expect-error -- custom CSS variable in style object
                   '--initial-scale': height / 100,
                 }}
               />
