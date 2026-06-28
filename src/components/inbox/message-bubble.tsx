@@ -107,12 +107,21 @@ function MediaImage({ url, alt }: { url: string; alt: string }) {
   }
 
   return (
-    <img
-      src={src ?? ""}
-      alt={alt}
-      className="max-h-64 max-w-60 rounded-lg object-cover"
-      onError={() => setError(true)}
-    />
+    <a
+      href={src ?? ""}
+      target="_blank"
+      rel="noopener noreferrer"
+      download="whatsapp-image"
+      className="cursor-pointer block hover:opacity-90 transition-opacity"
+      title="Clique para abrir em tamanho real ou baixar"
+    >
+      <img
+        src={src ?? ""}
+        alt={alt}
+        className="max-h-64 max-w-60 rounded-lg object-cover"
+        onError={() => setError(true)}
+      />
+    </a>
   );
 }
 
