@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/automations/admin-client'
+import { decrypt } from '@/lib/whatsapp/encryption'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
@@ -62,7 +63,153 @@ export async function getRelevantContext(text: string, accountId: string): Promi
 }
 
 /**
- * Generate response incorporating context and conversation history using Gemini API
+ * Helper function to load AI configuration for a given account
+ */
+export async function getAccountAIConfig(accountId: string) {
+  const { data, error } = await supabaseAdmin()
+    .from('accounts')
+    .select('ai_provider, ai_model, ai_api_key, ai_api_url')
+    .eq('id', accountId)
+    .maybeSingle()
+
+  if (error || !data) {
+    return {
+      provider: 'gemini',
+      model: 'gemini-1.5-flash',
+      apiKey: process.env.GEMINI_API_KEY,
+      apiUrl: null
+    }
+  }
+    
+  return {
+    provider: data.ai_provider || 'gemini',
+    model: data.ai_model || 'gemini-1.5-flash',
+    apiKey: data.ai_api_key ? decrypt(data.ai_api_key) : process.env.GEMINI_API_KEY,
+    apiUrl: data.ai_api_url || null
+  }
+}
+
+/**
+ * Dynamically dispatch LLM completions to Gemini, OpenAI, OpenRouter, or Anthropic
+ */
+export async function dispatchLLMCompletion(
+  messages: Array<{ role: string; content: string }>,
+  systemInstruction: string,
+  accountId: string,
+  responseFormat?: 'json' | 'text',
+  responseSchema?: any
+): Promise<string> {
+  const { provider, model, apiKey, apiUrl } = await getAccountAIConfig(accountId)
+
+  if (!apiKey) {
+    throw new Error(`API key is missing for AI provider: ${provider}`)
+  }
+
+  const modelName = model.startsWith('models/') ? model.replace('models/', '') : model
+
+  if (provider === 'gemini') {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: messages.map(m => ({
+            role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
+            parts: [{ text: m.content }]
+          })),
+          systemInstruction: {
+            parts: [
+              {
+                text: systemInstruction
+              }
+            ]
+          },
+          generationConfig: {
+            responseMimeType: responseFormat === 'json' ? 'application/json' : 'text/plain',
+            ...(responseFormat === 'json' && responseSchema ? { responseSchema } : {})
+          }
+        }),
+      }
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Gemini generateContent failed: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  }
+
+  if (provider === 'openai' || provider === 'openrouter') {
+    const url = provider === 'openai' 
+      ? 'https://api.openai.com/v1/chat/completions' 
+      : (apiUrl || 'https://openrouter.ai/api/v1/chat/completions')
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemInstruction },
+          ...messages.map(m => ({
+            role: m.role === 'model' ? 'assistant' : m.role,
+            content: m.content
+          }))
+        ],
+        response_format: responseFormat === 'json' ? { type: 'json_object' } : undefined
+      })
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`${provider} chat completions failed: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    return data.choices?.[0]?.message?.content || ''
+  }
+
+  if (provider === 'anthropic') {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model,
+        system: systemInstruction,
+        messages: messages.map(m => ({
+          role: m.role === 'model' ? 'assistant' : m.role,
+          content: m.content
+        })),
+        max_tokens: 4096
+      })
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Anthropic messages failed: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    return data.content?.[0]?.text || ''
+  }
+
+  throw new Error(`Unsupported AI provider: ${provider}`)
+}
+
+/**
+ * Generate response incorporating context and conversation history using the configured AI provider
  */
 export async function generateAIResponse(
   messageText: string,
@@ -71,13 +218,6 @@ export async function generateAIResponse(
   systemPromptOverride?: string,
   useRag: boolean = true
 ): Promise<{ text: string; action: 'reply' | 'handoff' }> {
-  if (!GEMINI_API_KEY) {
-    return {
-      text: 'Desculpe, o serviço de atendimento inteligente não está configurado no momento.',
-      action: 'handoff'
-    }
-  }
-
   // 1. Fetch conversation history
   const { data: messages } = await supabaseAdmin()
     .from('messages')
@@ -107,80 +247,50 @@ Instruções críticas:
 - Identifique se o cliente solicitou alguma ação/demanda que precise de acompanhamento interno ou execução futura (ex: envio de documentos, agendamento de reunião, ligar de volta, analisar um caso). Se sim, preencha o campo "detected_task" com um título curto e claro, uma descrição detalhada e o prazo estimado em dias. Caso contrário, defina "detected_task" como null.
 `
 
-  // 4. Generate content via Gemini API
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+  const responseSchema = {
+    type: 'OBJECT',
+    properties: {
+      reply: {
+        type: 'STRING',
+        description: 'A resposta amigável e concisa para o cliente no WhatsApp.'
       },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                text: `Histórico da conversa recente:\n${history}\n\nNova mensagem do usuário:\n${messageText}`
-              }
-            ]
+      handoff: {
+        type: 'BOOLEAN',
+        description: 'Defina como true se o cliente pedir para falar com humano, atendente, ou expressar irritação.'
+      },
+      detected_task: {
+        type: 'OBJECT',
+        description: 'Ações que o cliente pediu que necessitam de execução interna futura. Caso contrário, retorne null.',
+        properties: {
+          title: {
+            type: 'STRING',
+            description: 'Título curto e direto da tarefa, ex: "Enviar modelo de contrato".'
+          },
+          description: {
+            type: 'STRING',
+            description: 'Informações detalhadas sobre a tarefa e o que o cliente solicitou.'
+          },
+          due_days: {
+            type: 'INTEGER',
+            description: 'Quantidade de dias úteis sugerida para a entrega.'
           }
-        ],
-        systemInstruction: {
-          parts: [
-            {
-              text: systemInstruction
-            }
-          ]
         },
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: 'OBJECT',
-            properties: {
-              reply: {
-                type: 'STRING',
-                description: 'A resposta amigável e concisa para o cliente no WhatsApp.'
-              },
-              handoff: {
-                type: 'BOOLEAN',
-                description: 'Defina como true se o cliente pedir para falar com humano, atendente, ou expressar irritação.'
-              },
-              detected_task: {
-                type: 'OBJECT',
-                description: 'Ações que o cliente pediu que necessitam de execução interna futura. Caso contrário, retorne null.',
-                properties: {
-                  title: {
-                    type: 'STRING',
-                    description: 'Título curto e direto da tarefa, ex: "Enviar modelo de contrato".'
-                  },
-                  description: {
-                    type: 'STRING',
-                    description: 'Informações detalhadas sobre a tarefa e o que o cliente solicitou.'
-                  },
-                  due_days: {
-                    type: 'INTEGER',
-                    description: 'Quantidade de dias úteis sugerida para a entrega.'
-                  }
-                },
-                required: ['title']
-              }
-            },
-            required: ['reply', 'handoff']
-          }
-        }
-      }),
-    }
-  )
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Gemini generateContent failed: ${response.status} - ${errorText}`)
+        required: ['title']
+      }
+    },
+    required: ['reply', 'handoff']
   }
 
-  const data = await response.json()
-  const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-  
+  // 4. Generate content via dynamic dispatching
+  const promptText = `Histórico da conversa recente:\n${history}\n\nNova mensagem do usuário:\n${messageText}`
+  const responseText = await dispatchLLMCompletion(
+    [{ role: 'user', content: promptText }],
+    systemInstruction,
+    accountId,
+    'json',
+    responseSchema
+  )
+
   let parsed: {
     reply: string
     handoff: boolean
@@ -194,7 +304,7 @@ Instruções críticas:
   try {
     parsed = JSON.parse(responseText)
   } catch (err) {
-    console.error('[AI Service] Failed to parse Gemini response as JSON:', responseText, err)
+    console.error('[AI Service] Failed to parse response as JSON:', responseText, err)
     parsed = {
       reply: responseText,
       handoff: responseText.includes('[HANDOFF]'),
