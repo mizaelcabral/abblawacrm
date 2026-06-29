@@ -93,7 +93,7 @@ async function processIncomingMessage(config: any, messageData: any) {
   let phone = remoteJid.split('@')[0].split(':')[0];
 
   const existingContact = await findExistingContact(supabaseAdmin(), config.account_id, phone);
-  let avatarUrl: string | null = existingContact?.avatar_url || null;
+  let avatarUrl: string | null = (existingContact?.avatar_url as string | null) || null;
   let profileName: string | null = null;
 
   // ponytail: only fetch profile if contact is new, has no avatar, has no real name, or is a LID JID
