@@ -152,7 +152,7 @@ export function TelegramConfig() {
   return (
     <div className="space-y-6">
       <SettingsPanelHead
-        title="Telegram Bot Integration"
+        title="Integração do Bot do Telegram"
         description="Conecte seu Bot do Telegram para receber e responder conversas diretamente no Inbox."
       />
 

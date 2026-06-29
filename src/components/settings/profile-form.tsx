@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
 import { SettingsPanelHead } from './settings-panel-head';
+import { ROLE_META } from './role-meta';
+import type { AccountRole } from '@/lib/auth/roles';
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const ALLOWED_MIME = new Set([
@@ -308,8 +310,8 @@ export function ProfileForm() {
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-muted-foreground">Função</dt>
-                <dd className="mt-0.5 font-mono text-foreground">
-                  {profile?.role ?? 'user'}
+                <dd className="mt-0.5 text-foreground">
+                  {profile?.role ? ROLE_META[profile.role as AccountRole]?.label : '—'}
                 </dd>
               </div>
               <div>
