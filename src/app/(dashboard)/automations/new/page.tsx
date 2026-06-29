@@ -1,4 +1,5 @@
 "use client";
+// Página de criação de nova automação
 
 import { useMemo, useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"

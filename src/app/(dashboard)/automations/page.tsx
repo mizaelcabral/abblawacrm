@@ -1,4 +1,5 @@
 "use client"
+// Página de listagem de automações
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
