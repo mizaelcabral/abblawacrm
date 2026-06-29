@@ -464,6 +464,21 @@ export async function POST(request: Request) {
           responseData = await res.json();
           evolutionMessageId = responseData.key?.id || responseData.message?.key?.id || '';
         } else if (isMediaKind) {
+          // ponytail: derive mimetype based on message type and extension to guarantee delivery by Evolution API
+          const ext = (media_url.split('.').pop() || '').toLowerCase().split('?')[0];
+          let mimetype = 'application/octet-stream';
+          if (message_type === 'image') {
+            mimetype = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+          } else if (message_type === 'video') {
+            mimetype = 'video/mp4';
+          } else if (message_type === 'audio') {
+            mimetype = 'audio/ogg';
+          } else if (message_type === 'document') {
+            if (ext === 'pdf') mimetype = 'application/pdf';
+            else if (ext === 'doc' || ext === 'docx') mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+            else if (ext === 'xls' || ext === 'xlsx') mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+          }
+
           const res = await fetch(`${webConfig.api_url}/message/sendMedia/${webConfig.instance_name}`, {
             method: 'POST',
             headers: {
@@ -474,6 +489,7 @@ export async function POST(request: Request) {
               number: sanitizedPhone,
               media: media_url,
               mediatype: message_type,
+              mimetype,
               caption: content_text || '',
               fileName: filename || 'file',
             }),
