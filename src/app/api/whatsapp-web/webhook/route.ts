@@ -376,6 +376,26 @@ async function findOrCreateContact(accountId: string, userId: string, phone: str
   );
 
   if (existing) {
+    // ponytail: update placeholder name or missing avatar if we have real profile data now
+    let needsUpdate = false;
+    const updatePayload: any = {};
+    if ((!existing.name || existing.name === 'WhatsApp Contact') && name && name !== 'WhatsApp Contact') {
+      updatePayload.name = name;
+      needsUpdate = true;
+    }
+    if (!existing.avatar_url && avatarUrl) {
+      updatePayload.avatar_url = avatarUrl;
+      needsUpdate = true;
+    }
+    if (needsUpdate) {
+      const { data } = await supabaseAdmin()
+        .from('contacts')
+        .update(updatePayload)
+        .eq('id', existing.id)
+        .select()
+        .single();
+      if (data) return data;
+    }
     return existing;
   }
 
