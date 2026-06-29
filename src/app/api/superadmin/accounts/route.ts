@@ -40,7 +40,7 @@ export async function GET() {
     const processedAccounts = (accounts || []).map((acc: any) => ({
       ...acc,
       has_ai_key: !!acc.ai_api_key,
-      ai_api_key: undefined, // remove from response for security
+      ai_api_key: acc.ai_api_key ? '••••••••' : undefined,
     }));
 
     return NextResponse.json(processedAccounts);
