@@ -118,7 +118,13 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Failed to update account' }, { status: 500 });
     }
 
-    return NextResponse.json(data);
+    const processedData = {
+      ...data,
+      has_ai_key: !!data.ai_api_key,
+      ai_api_key: data.ai_api_key ? '••••••••' : undefined,
+    };
+
+    return NextResponse.json(processedData);
   } catch (err: any) {
     console.error('[superadmin/accounts] PUT exception:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
