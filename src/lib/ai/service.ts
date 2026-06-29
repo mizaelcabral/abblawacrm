@@ -73,18 +73,42 @@ export async function getAccountAIConfig(accountId: string) {
     .maybeSingle()
 
   if (error || !data) {
+    const provider = 'gemini'
+    let defaultKey = undefined
+    if (provider === 'gemini') {
+      defaultKey = process.env.GEMINI_API_KEY
+    } else if (provider === 'openai') {
+      defaultKey = process.env.OPENAI_API_KEY
+    } else if (provider === 'anthropic') {
+      defaultKey = process.env.ANTHROPIC_API_KEY
+    } else if (provider === 'openrouter') {
+      defaultKey = process.env.OPENROUTER_API_KEY
+    }
+
     return {
-      provider: 'gemini',
-      model: 'gemini-1.5-flash',
-      apiKey: process.env.GEMINI_API_KEY,
+      provider,
+      model: provider === 'gemini' ? 'gemini-1.5-flash' : provider === 'openai' ? 'gpt-4o' : provider === 'anthropic' ? 'claude-3-5-sonnet' : 'meta-llama/llama-3-8b-instruct',
+      apiKey: defaultKey,
       apiUrl: null
     }
   }
     
+  const provider = data.ai_provider || 'gemini'
+  let defaultKey = undefined
+  if (provider === 'gemini') {
+    defaultKey = process.env.GEMINI_API_KEY
+  } else if (provider === 'openai') {
+    defaultKey = process.env.OPENAI_API_KEY
+  } else if (provider === 'anthropic') {
+    defaultKey = process.env.ANTHROPIC_API_KEY
+  } else if (provider === 'openrouter') {
+    defaultKey = process.env.OPENROUTER_API_KEY
+  }
+
   return {
-    provider: data.ai_provider || 'gemini',
-    model: data.ai_model || 'gemini-1.5-flash',
-    apiKey: data.ai_api_key ? decrypt(data.ai_api_key) : process.env.GEMINI_API_KEY,
+    provider,
+    model: data.ai_model || (provider === 'gemini' ? 'gemini-1.5-flash' : provider === 'openai' ? 'gpt-4o' : provider === 'anthropic' ? 'claude-3-5-sonnet' : 'meta-llama/llama-3-8b-instruct'),
+    apiKey: data.ai_api_key ? decrypt(data.ai_api_key) : defaultKey,
     apiUrl: data.ai_api_url || null
   }
 }
@@ -178,6 +202,10 @@ export async function dispatchLLMCompletion(
   }
 
   if (provider === 'anthropic') {
+    let system = systemInstruction
+    if (responseFormat === 'json') {
+      system += "\n\nCRITICAL: You must return ONLY a raw JSON object. Do not wrap the JSON in markdown blocks (like ```json) or include any conversational prefix/suffix. The response must start with '{' and end with '}'."
+    }
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -187,7 +215,7 @@ export async function dispatchLLMCompletion(
       },
       body: JSON.stringify({
         model,
-        system: systemInstruction,
+        system,
         messages: messages.map(m => ({
           role: m.role === 'model' ? 'assistant' : m.role,
           content: m.content
