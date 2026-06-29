@@ -52,6 +52,7 @@ export default function SuperAdminAccounts() {
   const [editModel, setEditModel] = useState('gemini-1.5-flash');
   const [editApiKey, setEditApiKey] = useState('');
   const [editApiUrl, setEditApiUrl] = useState('');
+  const [clearApiKey, setClearApiKey] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const fetchAccounts = async () => {
@@ -83,6 +84,7 @@ export default function SuperAdminAccounts() {
     setEditModel(acc.ai_model || 'gemini-1.5-flash');
     setEditApiKey(acc.has_ai_key ? '••••••••' : '');
     setEditApiUrl(acc.ai_api_url || '');
+    setClearApiKey(false);
   };
 
   const handleSave = async () => {
@@ -100,7 +102,7 @@ export default function SuperAdminAccounts() {
           ai_message_limit: editLimit || null,
           ai_provider: editProvider,
           ai_model: editModel,
-          ai_api_key: editApiKey,
+          ai_api_key: clearApiKey ? null : (editApiKey === '••••••••' ? undefined : editApiKey),
           ai_api_url: editApiUrl || null,
         }),
       });
@@ -389,12 +391,27 @@ export default function SuperAdminAccounts() {
                     placeholder={editingAccount.has_ai_key ? "Manter chave existente (••••••••)" : "Digite a nova chave de API"}
                     value={editApiKey === '••••••••' ? '' : editApiKey}
                     onChange={(e) => setEditApiKey(e.target.value)}
+                    disabled={clearApiKey}
                     className="bg-muted border-border text-sm"
                   />
                   {editingAccount.has_ai_key && (
-                    <span className="text-[10px] text-emerald-400">
-                      Chave configurada. Deixe vazio para manter a atual ou limpe/substitua para atualizar.
-                    </span>
+                    <>
+                      <span className="text-[10px] text-emerald-400">
+                        Chave configurada. Deixe vazio para manter a atual ou limpe/substitua para atualizar.
+                      </span>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <input
+                          type="checkbox"
+                          id="clearApiKey"
+                          checked={clearApiKey}
+                          onChange={(e) => setClearApiKey(e.target.checked)}
+                          className="rounded border-border text-primary focus:ring-primary bg-muted"
+                        />
+                        <Label htmlFor="clearApiKey" className="text-xs text-red-400 cursor-pointer">
+                          Remover chave de API existente do banco de dados
+                        </Label>
+                      </div>
+                    </>
                   )}
                 </div>
 

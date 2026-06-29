@@ -169,9 +169,9 @@ export async function dispatchLLMCompletion(
   }
 
   if (provider === 'openai' || provider === 'openrouter') {
-    const url = provider === 'openai' 
+    const url = apiUrl || (provider === 'openai' 
       ? 'https://api.openai.com/v1/chat/completions' 
-      : (apiUrl || 'https://openrouter.ai/api/v1/chat/completions')
+      : 'https://openrouter.ai/api/v1/chat/completions')
 
     const response = await fetch(url, {
       method: 'POST',
