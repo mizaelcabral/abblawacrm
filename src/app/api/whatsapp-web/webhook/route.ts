@@ -89,11 +89,15 @@ async function processIncomingMessage(config: any, messageData: any) {
     return;
   }
 
+  // ponytail: split by colon to strip multi-device index suffix (e.g. 5511930258947:77 -> 5511930258947)
+  let phone = remoteJid.split('@')[0].split(':')[0];
+
   const existingContact = await findExistingContact(supabaseAdmin(), config.account_id, phone);
   let avatarUrl: string | null = existingContact?.avatar_url || null;
+  let profileName: string | null = null;
 
-  // ponytail: only fetch profile if contact is new, has no avatar, or is a LID JID
-  if (!existingContact || !existingContact.avatar_url || remoteJid.endsWith('@lid')) {
+  // ponytail: only fetch profile if contact is new, has no avatar, has no real name, or is a LID JID
+  if (!existingContact || !existingContact.avatar_url || !existingContact.name || existingContact.name === 'WhatsApp Contact' || remoteJid.endsWith('@lid')) {
     try {
       const token = decrypt(config.api_token);
       const res = await fetch(`${config.api_url}/chat/fetchProfile/${config.instance_name}`, {
@@ -109,6 +113,16 @@ async function processIncomingMessage(config: any, messageData: any) {
         const resolvedJid = profileData.wuid || profileData.jid || profileData.id;
         if (resolvedJid && !resolvedJid.includes('@lid')) {
           phone = resolvedJid.split('@')[0].split(':')[0];
+        }
+        if (profileData.name) {
+          profileName = profileData.name;
+          if (existingContact && (!existingContact.name || existingContact.name === 'WhatsApp Contact')) {
+            await supabaseAdmin()
+              .from('contacts')
+              .update({ name: profileName })
+              .eq('id', existingContact.id);
+            existingContact.name = profileName;
+          }
         }
         if (profileData.picture) {
           avatarUrl = profileData.picture;
@@ -131,7 +145,9 @@ async function processIncomingMessage(config: any, messageData: any) {
 
   // 1) Find or create contact
   // ponytail: do not use agent's own pushName for contacts when syncing outgoing messages
-  const pushName = fromMe ? 'WhatsApp Contact' : (messageData.pushName || 'WhatsApp Contact');
+  const pushName = fromMe 
+    ? (profileName || 'WhatsApp Contact') 
+    : (messageData.pushName || profileName || 'WhatsApp Contact');
   const contact = await findOrCreateContact(config.account_id, config.user_id, phone, pushName, avatarUrl);
   if (!contact) return;
 
