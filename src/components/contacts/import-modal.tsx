@@ -608,7 +608,7 @@ export function ImportModal({
                 {result.failed > 0 && (
                   <div className="flex items-center gap-1.5 text-sm text-red-400">
                     <XCircle className="size-4 shrink-0" />
-                    {result.failed} falhou
+                    {result.failed} com falha
                   </div>
                 )}
               </div>

@@ -393,9 +393,9 @@ export default function TasksPage() {
                     className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="pending">Pendente</option>
-                    <option value="in_progress">Em Andamento</option>
-                    <option value="review_required">Aguardando Revisão</option>
-                    <option value="completed">Concluída</option>
+                    <option value="in_progress">Em andamento</option>
+                    <option value="review_required">Revisão necessária</option>
+                    <option value="completed">Concluído</option>
                   </select>
                 </div>
               </div>
@@ -514,7 +514,7 @@ export default function TasksPage() {
           <div className="tasks-scroll flex snap-x snap-mandatory gap-4 overflow-x-auto pb-4 md:snap-none md:grid md:grid-cols-4 md:items-start">
             <TaskColumn
               status="pending"
-              title="Pendentes"
+              title="Pendente"
               colorClass="bg-amber-500"
               badgeColorClass="bg-amber-500/10 text-amber-500"
               tasks={filteredTasks.filter((t) => t.status === "pending")}
@@ -525,7 +525,7 @@ export default function TasksPage() {
 
             <TaskColumn
               status="in_progress"
-              title="Em Andamento"
+              title="Em andamento"
               colorClass="bg-primary"
               badgeColorClass="bg-primary/10 text-primary"
               tasks={filteredTasks.filter((t) => t.status === "in_progress")}
@@ -536,7 +536,7 @@ export default function TasksPage() {
 
             <TaskColumn
               status="review_required"
-              title="Aguardando Revisão"
+              title="Revisão necessária"
               colorClass="bg-violet-500"
               badgeColorClass="bg-violet-500/10 text-violet-500"
               tasks={filteredTasks.filter((t) => t.status === "review_required")}
@@ -547,7 +547,7 @@ export default function TasksPage() {
 
             <TaskColumn
               status="completed"
-              title="Concluídas"
+              title="Concluído"
               colorClass="bg-emerald-500"
               badgeColorClass="bg-emerald-500/10 text-emerald-500"
               tasks={filteredTasks.filter((t) => t.status === "completed")}
@@ -653,9 +653,9 @@ export default function TasksPage() {
                     className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus-visible:outline-none"
                   >
                     <option value="pending">Pendente</option>
-                    <option value="in_progress">Em Andamento</option>
-                    <option value="review_required">Aguardando Revisão</option>
-                    <option value="completed">Concluída</option>
+                    <option value="in_progress">Em andamento</option>
+                    <option value="review_required">Revisão necessária</option>
+                    <option value="completed">Concluído</option>
                   </select>
                 </div>
               </div>
@@ -927,7 +927,7 @@ function TaskCard({
               onClick={() => onUpdateStatus(task.id, "in_progress")}
               className="text-[10px] h-6 px-2 text-muted-foreground hover:text-foreground"
             >
-              Em Andamento
+              Em andamento
             </Button>
           )}
           {task.status !== "completed" && task.status !== "review_required" && (
