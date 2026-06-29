@@ -89,10 +89,11 @@ async function processIncomingMessage(config: any, messageData: any) {
     return;
   }
 
-  // ponytail: split by colon to strip multi-device index suffix (e.g. 5511930258947:77 -> 5511930258947)
-  let phone = remoteJid.split('@')[0].split(':')[0];
-  
-  if (remoteJid.endsWith('@lid')) {
+  const existingContact = await findExistingContact(supabaseAdmin(), config.account_id, phone);
+  let avatarUrl: string | null = existingContact?.avatar_url || null;
+
+  // ponytail: only fetch profile if contact is new, has no avatar, or is a LID JID
+  if (!existingContact || !existingContact.avatar_url || remoteJid.endsWith('@lid')) {
     try {
       const token = decrypt(config.api_token);
       const res = await fetch(`${config.api_url}/chat/fetchProfile/${config.instance_name}`, {
@@ -108,11 +109,20 @@ async function processIncomingMessage(config: any, messageData: any) {
         const resolvedJid = profileData.wuid || profileData.jid || profileData.id;
         if (resolvedJid && !resolvedJid.includes('@lid')) {
           phone = resolvedJid.split('@')[0].split(':')[0];
-          console.log('[WhatsApp Web Webhook] Resolved LID JID to phone:', remoteJid, '->', phone);
+        }
+        if (profileData.picture) {
+          avatarUrl = profileData.picture;
+          if (existingContact && !existingContact.avatar_url) {
+            await supabaseAdmin()
+              .from('contacts')
+              .update({ avatar_url: avatarUrl })
+              .eq('id', existingContact.id);
+            existingContact.avatar_url = avatarUrl;
+          }
         }
       }
     } catch (err) {
-      console.error('[WhatsApp Web Webhook] Failed to resolve LID JID:', err);
+      console.error('[WhatsApp Web Webhook] Failed to fetch/resolve profile:', err);
     }
   }
 
@@ -122,7 +132,7 @@ async function processIncomingMessage(config: any, messageData: any) {
   // 1) Find or create contact
   // ponytail: do not use agent's own pushName for contacts when syncing outgoing messages
   const pushName = fromMe ? 'WhatsApp Contact' : (messageData.pushName || 'WhatsApp Contact');
-  const contact = await findOrCreateContact(config.account_id, config.user_id, phone, pushName);
+  const contact = await findOrCreateContact(config.account_id, config.user_id, phone, pushName, avatarUrl);
   if (!contact) return;
 
   // 2) Find or create conversation
@@ -340,7 +350,7 @@ async function processIncomingMessage(config: any, messageData: any) {
   }
 }
 
-async function findOrCreateContact(accountId: string, userId: string, phone: string, name: string) {
+async function findOrCreateContact(accountId: string, userId: string, phone: string, name: string, avatarUrl?: string | null) {
   // Normalize phone variant (matching our DB dedupe structure)
   const normalized = normalizePhone(phone);
   const existing = await findExistingContact(
@@ -360,6 +370,7 @@ async function findOrCreateContact(accountId: string, userId: string, phone: str
       user_id: userId,
       name,
       phone: normalized,
+      avatar_url: avatarUrl || null,
     })
     .select()
     .single();
