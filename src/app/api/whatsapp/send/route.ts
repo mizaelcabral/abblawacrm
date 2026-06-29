@@ -472,10 +472,13 @@ export async function POST(request: Request) {
             },
             body: JSON.stringify({
               number: sanitizedPhone,
-              media: media_url,
-              mediatype: message_type,
-              caption: content_text || '',
-              fileName: filename || 'file',
+              mediaMessage: {
+                // ponytail: wrap in mediaMessage for Evolution API compliance
+                media: media_url,
+                mediatype: message_type,
+                caption: content_text || '',
+                fileName: filename || 'file',
+              },
             }),
           });
 
