@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/automations/admin-client';
+import { encrypt } from '@/lib/whatsapp/encryption';
 
 export async function GET() {
   try {
@@ -36,7 +37,13 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch accounts' }, { status: 500 });
     }
 
-    return NextResponse.json(accounts);
+    const processedAccounts = (accounts || []).map((acc: any) => ({
+      ...acc,
+      has_ai_key: !!acc.ai_api_key,
+      ai_api_key: undefined, // remove from response for security
+    }));
+
+    return NextResponse.json(processedAccounts);
   } catch (err: any) {
     console.error('[superadmin/accounts] GET exception:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -66,7 +73,16 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json();
-    const { id, subscription_plan, subscription_status, ai_message_limit } = body;
+    const {
+      id,
+      subscription_plan,
+      subscription_status,
+      ai_message_limit,
+      ai_provider,
+      ai_model,
+      ai_api_key,
+      ai_api_url,
+    } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Account ID is required' }, { status: 400 });
@@ -78,6 +94,17 @@ export async function PUT(request: Request) {
     if (subscription_plan !== undefined) updateData.subscription_plan = subscription_plan;
     if (subscription_status !== undefined) updateData.subscription_status = subscription_status;
     if (ai_message_limit !== undefined) updateData.ai_message_limit = ai_message_limit;
+    if (ai_provider !== undefined) updateData.ai_provider = ai_provider;
+    if (ai_model !== undefined) updateData.ai_model = ai_model;
+    if (ai_api_url !== undefined) updateData.ai_api_url = ai_api_url;
+    
+    if (ai_api_key !== undefined) {
+      if (ai_api_key === null || (typeof ai_api_key === 'string' && ai_api_key.trim() === '')) {
+        updateData.ai_api_key = null;
+      } else if (typeof ai_api_key === 'string' && ai_api_key !== '••••••••') {
+        updateData.ai_api_key = encrypt(ai_api_key.trim());
+      }
+    }
 
     const { data, error } = await admin
       .from('accounts')
