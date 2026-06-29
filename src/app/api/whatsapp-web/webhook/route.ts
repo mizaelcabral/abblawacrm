@@ -89,7 +89,8 @@ async function processIncomingMessage(config: any, messageData: any) {
     return;
   }
 
-  let phone = remoteJid.split('@')[0];
+  // ponytail: split by colon to strip multi-device index suffix (e.g. 5511930258947:77 -> 5511930258947)
+  let phone = remoteJid.split('@')[0].split(':')[0];
   
   if (remoteJid.endsWith('@lid')) {
     try {
@@ -106,7 +107,7 @@ async function processIncomingMessage(config: any, messageData: any) {
         const profileData = await res.json();
         const resolvedJid = profileData.wuid || profileData.jid || profileData.id;
         if (resolvedJid && !resolvedJid.includes('@lid')) {
-          phone = resolvedJid.split('@')[0];
+          phone = resolvedJid.split('@')[0].split(':')[0];
           console.log('[WhatsApp Web Webhook] Resolved LID JID to phone:', remoteJid, '->', phone);
         }
       }
@@ -119,7 +120,8 @@ async function processIncomingMessage(config: any, messageData: any) {
   const senderType = fromMe ? 'agent' : 'customer';
 
   // 1) Find or create contact
-  const pushName = messageData.pushName || 'WhatsApp Contact';
+  // ponytail: do not use agent's own pushName for contacts when syncing outgoing messages
+  const pushName = fromMe ? 'WhatsApp Contact' : (messageData.pushName || 'WhatsApp Contact');
   const contact = await findOrCreateContact(config.account_id, config.user_id, phone, pushName);
   if (!contact) return;
 
