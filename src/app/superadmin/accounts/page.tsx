@@ -32,6 +32,10 @@ interface Account {
   ai_message_count: number;
   profiles: Profile[];
   whatsapp_config: WhatsAppConfig | null;
+  ai_provider: string | null;
+  ai_model: string | null;
+  ai_api_url: string | null;
+  has_ai_key?: boolean;
 }
 
 export default function SuperAdminAccounts() {
@@ -44,6 +48,10 @@ export default function SuperAdminAccounts() {
   const [editPlan, setEditPlan] = useState('');
   const [editStatus, setEditStatus] = useState('');
   const [editLimit, setEditLimit] = useState(0);
+  const [editProvider, setEditProvider] = useState('gemini');
+  const [editModel, setEditModel] = useState('gemini-1.5-flash');
+  const [editApiKey, setEditApiKey] = useState('');
+  const [editApiUrl, setEditApiUrl] = useState('');
   const [saving, setSaving] = useState(false);
 
   const fetchAccounts = async () => {
@@ -71,6 +79,10 @@ export default function SuperAdminAccounts() {
     setEditPlan(acc.subscription_plan);
     setEditStatus(acc.subscription_status);
     setEditLimit(acc.ai_message_limit ?? 0);
+    setEditProvider(acc.ai_provider || 'gemini');
+    setEditModel(acc.ai_model || 'gemini-1.5-flash');
+    setEditApiKey(acc.has_ai_key ? '••••••••' : '');
+    setEditApiUrl(acc.ai_api_url || '');
   };
 
   const handleSave = async () => {
@@ -86,6 +98,10 @@ export default function SuperAdminAccounts() {
           subscription_plan: editPlan,
           subscription_status: editStatus,
           ai_message_limit: editLimit || null,
+          ai_provider: editProvider,
+          ai_model: editModel,
+          ai_api_key: editApiKey,
+          ai_api_url: editApiUrl || null,
         }),
       });
 
@@ -323,6 +339,78 @@ export default function SuperAdminAccounts() {
                   onChange={(e) => setEditLimit(Number(e.target.value))}
                   className="bg-muted border-border"
                 />
+              </div>
+
+              {/* AI Provider Config */}
+              <div className="border-t border-border pt-4 mt-4 space-y-4">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <Key className="h-4 w-4 text-primary" /> Configuração do LLM (IA)
+                </h4>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="aiProvider" className="text-xs font-semibold text-muted-foreground uppercase">Provedor de IA</Label>
+                  <select
+                    id="aiProvider"
+                    value={editProvider}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEditProvider(val);
+                      if (val === 'gemini') setEditModel('gemini-1.5-flash');
+                      else if (val === 'openai') setEditModel('gpt-4o-mini');
+                      else if (val === 'anthropic') setEditModel('claude-3-5-haiku-20241022');
+                      else if (val === 'openrouter') setEditModel('google/gemini-flash-1.5');
+                    }}
+                    className="w-full rounded-md border border-border bg-muted p-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="gemini">Google Gemini</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="openrouter">OpenRouter</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="aiModel" className="text-xs font-semibold text-muted-foreground uppercase">Modelo</Label>
+                  <Input
+                    id="aiModel"
+                    type="text"
+                    placeholder="Ex: gemini-1.5-flash"
+                    value={editModel}
+                    onChange={(e) => setEditModel(e.target.value)}
+                    className="bg-muted border-border text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="aiApiKey" className="text-xs font-semibold text-muted-foreground uppercase">Chave de API</Label>
+                  <Input
+                    id="aiApiKey"
+                    type="password"
+                    placeholder={editingAccount.has_ai_key ? "Manter chave existente (••••••••)" : "Digite a nova chave de API"}
+                    value={editApiKey === '••••••••' ? '' : editApiKey}
+                    onChange={(e) => setEditApiKey(e.target.value)}
+                    className="bg-muted border-border text-sm"
+                  />
+                  {editingAccount.has_ai_key && (
+                    <span className="text-[10px] text-emerald-400">
+                      Chave configurada. Deixe vazio para manter a atual ou limpe/substitua para atualizar.
+                    </span>
+                  )}
+                </div>
+
+                {(editProvider === 'openai' || editProvider === 'openrouter') && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="aiApiUrl" className="text-xs font-semibold text-muted-foreground uppercase">URL Base da API (Opcional)</Label>
+                    <Input
+                      id="aiApiUrl"
+                      type="text"
+                      placeholder={editProvider === 'openrouter' ? "https://openrouter.ai/api/v1" : "https://api.openai.com/v1"}
+                      value={editApiUrl}
+                      onChange={(e) => setEditApiUrl(e.target.value)}
+                      className="bg-muted border-border text-sm"
+                    />
+                  </div>
+                )}
               </div>
 
               {editStatus === 'canceled' && (
