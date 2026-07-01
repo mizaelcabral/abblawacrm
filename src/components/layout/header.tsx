@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ModeToggle } from "@/components/layout/mode-toggle";
+import { Logo } from "./logo";
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -64,7 +65,12 @@ export function Header({ onOpenSidebar }: HeaderProps) {
         >
           <Menu className="h-5 w-5" />
         </button>
-        <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
+        {/* Logo — mobile only. */}
+        <Link href="/dashboard" className="flex items-center lg:hidden">
+          <Logo />
+        </Link>
+        {/* Page title — desktop only. */}
+        <h1 className="hidden truncate text-base font-semibold text-foreground sm:text-lg lg:block">
           {title}
         </h1>
       </div>
