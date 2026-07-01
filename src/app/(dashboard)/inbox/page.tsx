@@ -9,7 +9,7 @@ import { ConversationList } from "@/components/inbox/conversation-list";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
 import { toast } from "sonner";
-import { WifiOff } from "lucide-react";
+import { WifiOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function InboxPageContent() {
@@ -30,6 +30,7 @@ function InboxPageContent() {
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(
     null
   );
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   /**
    * Bumped whenever we want children (ConversationList, MessageThread)
    * to refetch from the DB — used as a safety net against missed
@@ -514,12 +515,22 @@ function InboxPageContent() {
     <div className="-m-4 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden sm:-m-6">
       {/* WhatsApp connection banner — in the flex column, not absolute,
           so it pushes the panels down instead of overlapping them. */}
-      {whatsappConnected === false && (
-        <div className="flex shrink-0 items-center justify-center gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2">
-          <WifiOff className="h-4 w-4 text-amber-400" />
-          <p className="text-xs text-amber-400">
-            WhatsApp® não está conectado. Vá em Configurações para conectar sua conta.
-          </p>
+      {whatsappConnected === false && !bannerDismissed && (
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-amber-500/20 bg-amber-500/10 px-4 py-2">
+          <div className="flex items-center justify-center gap-2 flex-1">
+            <WifiOff className="h-4 w-4 text-amber-400" />
+            <p className="text-xs text-amber-400">
+              WhatsApp® (API não oficial) não está conectado. Vá em Configurações para conectar sua conta.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setBannerDismissed(true)}
+            className="text-amber-400/70 hover:text-amber-400 focus:outline-none p-1 rounded hover:bg-amber-500/20 transition-colors"
+            aria-label="Fechar aviso"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
 
