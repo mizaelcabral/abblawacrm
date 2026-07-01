@@ -239,3 +239,9 @@ html[data-theme="rose"] {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+/* Ensure chart labels and numbers are readable (white) in dark mode */
+.dark .recharts-cartesian-axis-tick text,
+.dark svg text.fill-muted-foreground {
+  fill: #ffffff !important;
+}
