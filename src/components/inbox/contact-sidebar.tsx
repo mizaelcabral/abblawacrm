@@ -11,7 +11,7 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuCheckboxItem,
+  DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import {
   Phone,
@@ -501,17 +501,20 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                     {allTags.map((tag) => {
                       const isAttached = tags.some((t) => t.id === tag.id);
                       return (
-                        <DropdownMenuCheckboxItem
+                        <DropdownMenuItem
                           key={tag.id}
-                          checked={isAttached}
-                          onCheckedChange={() => handleToggleTag(tag, isAttached)}
+                          onClick={() => handleToggleTag(tag, isAttached)}
+                          className="flex items-center justify-between cursor-pointer"
                         >
-                          <span
-                            className="mr-2 h-2.5 w-2.5 rounded-full inline-block"
-                            style={{ backgroundColor: tag.color }}
-                          />
-                          {tag.name}
-                        </DropdownMenuCheckboxItem>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="mr-2 h-2.5 w-2.5 rounded-full inline-block"
+                              style={{ backgroundColor: tag.color }}
+                            />
+                            {tag.name}
+                          </div>
+                          {isAttached && <Check className="h-3.5 w-3.5 text-primary" />}
+                        </DropdownMenuItem>
                       );
                     })}
                   </DropdownMenuContent>
