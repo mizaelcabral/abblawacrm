@@ -645,7 +645,6 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                     </option>
                   ))}
                 </select>
-                <div className="w-[30px] shrink-0" />
               </div>
 
               <div className="mt-2 space-y-1">
