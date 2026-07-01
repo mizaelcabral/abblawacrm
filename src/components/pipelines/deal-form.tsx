@@ -40,6 +40,7 @@ interface DealFormProps {
   pipelineId: string;
   stages: PipelineStage[];
   defaultStageId?: string;
+  preselectedContactId?: string;
   onSaved: () => void;
 }
 
@@ -50,6 +51,7 @@ export function DealForm({
   pipelineId,
   stages,
   defaultStageId,
+  preselectedContactId,
   onSaved,
 }: DealFormProps) {
   const supabase = createClient();
@@ -96,13 +98,13 @@ export function DealForm({
       setTitle("");
       setValue("");
       setCurrency(defaultCurrency);
-      setContactId("");
+      setContactId(preselectedContactId || "");
       setStageId(defaultStageId || stages[0]?.id || "");
       setAssignedTo("");
       setExpectedCloseDate("");
       setNotes("");
     }
-  }, [open, deal, defaultStageId, stages, defaultCurrency]);
+  }, [open, deal, defaultStageId, stages, defaultCurrency, preselectedContactId]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Load supporting data once the sheet is open

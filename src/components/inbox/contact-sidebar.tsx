@@ -4,8 +4,15 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import type { Contact, Deal, ContactNote, Tag, Task } from "@/types";
+import type { Contact, Deal, ContactNote, Tag, Task, Pipeline, PipelineStage } from "@/types";
 import { KBSearchPanel } from "@/components/knowledge-base/kb-search-panel";
+import { DealForm } from "@/components/pipelines/deal-form";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+} from "@/components/ui/dropdown-menu";
 import {
   Phone,
   Mail,
@@ -54,6 +61,12 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const [updatingAi, setUpdatingAi] = useState(false);
   const [kbOpen, setKbOpen] = useState(false);
 
+  // States for dynamic tags and deals adding (ponytail: minimum logic)
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [stages, setStages] = useState<PipelineStage[]>([]);
+  const [dealFormOpen, setDealFormOpen] = useState(false);
+
   useEffect(() => {
     if (!accountId) return;
     const fetchMembers = async () => {
@@ -66,6 +79,41 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
       if (data) setMembers(data);
     };
     fetchMembers();
+  }, [accountId]);
+
+  // Load account tags, pipelines and stages for deals/tags management (ponytail: keep it simple)
+  useEffect(() => {
+    if (!accountId) return;
+    const fetchTagsAndPipelines = async () => {
+      const supabase = createClient();
+      
+      // Load all workspace tags
+      const { data: tagData } = await supabase
+        .from("tags")
+        .select("*")
+        .eq("account_id", accountId)
+        .order("name");
+      if (tagData) setAllTags(tagData);
+
+      // Load pipelines
+      const { data: pipelineData } = await supabase
+        .from("pipelines")
+        .select("*")
+        .eq("account_id", accountId)
+        .order("created_at");
+      
+      if (pipelineData && pipelineData.length > 0) {
+        setPipelines(pipelineData);
+        // Load stages for the first pipeline
+        const { data: stageData } = await supabase
+          .from("pipeline_stages")
+          .select("*")
+          .eq("pipeline_id", pipelineData[0].id)
+          .order("position");
+        if (stageData) setStages(stageData);
+      }
+    };
+    fetchTagsAndPipelines();
   }, [accountId]);
 
   const fetchContactData = useCallback(async () => {
@@ -228,6 +276,41 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
     }
   }, []);
+
+  const handleToggleTag = useCallback(async (tag: Tag, isAttached: boolean) => {
+    if (!contact) return;
+    const supabase = createClient();
+    if (isAttached) {
+      const link = tags.find((t) => t.id === tag.id);
+      if (link?.contact_tag_id) {
+        const { error } = await supabase
+          .from("contact_tags")
+          .delete()
+          .eq("id", link.contact_tag_id);
+        
+        if (!error) {
+          setTags((prev) => prev.filter((t) => t.id !== tag.id));
+        } else {
+          toast.error("Erro ao remover tag");
+        }
+      }
+    } else {
+      const { data, error } = await supabase
+        .from("contact_tags")
+        .insert({
+          contact_id: contact.id,
+          tag_id: tag.id,
+        })
+        .select()
+        .single();
+      
+      if (!error && data) {
+        setTags((prev) => [...prev, { ...tag, contact_tag_id: data.id }]);
+      } else {
+        toast.error("Erro ao adicionar tag");
+      }
+    }
+  }, [contact, tags]);
 
   const handleToggleAi = useCallback(async (enabled: boolean) => {
     if (!conversationId) return;
@@ -402,9 +485,38 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
           {/* Tags */}
           <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <TagIcon className="h-3 w-3" />
-              Tags
+            <div className="flex items-center justify-between px-1">
+              <span className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <TagIcon className="h-3 w-3" />
+                Tags
+              </span>
+              {contact && allTags.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 max-h-60 overflow-y-auto">
+                    {allTags.map((tag) => {
+                      const isAttached = tags.some((t) => t.id === tag.id);
+                      return (
+                        <DropdownMenuCheckboxItem
+                          key={tag.id}
+                          checked={isAttached}
+                          onCheckedChange={() => handleToggleTag(tag, isAttached)}
+                        >
+                          <span
+                            className="mr-2 h-2.5 w-2.5 rounded-full inline-block"
+                            style={{ backgroundColor: tag.color }}
+                          />
+                          {tag.name}
+                        </DropdownMenuCheckboxItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
             <div className="mt-2 flex flex-wrap gap-1">
               {tags.length === 0 ? (
@@ -431,9 +543,21 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
           {/* Active Deals */}
           <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <DollarSign className="h-3 w-3" />
-              Negócios Ativos
+            <div className="flex items-center justify-between px-1">
+              <span className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                <DollarSign className="h-3 w-3" />
+                Negócios Ativos
+              </span>
+              {contact && pipelines.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0 hover:bg-muted"
+                  onClick={() => setDealFormOpen(true)}
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+              )}
             </div>
             <div className="mt-2 space-y-2">
               {deals.length === 0 ? (
@@ -624,6 +748,18 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
           </div>
         </div>
       </ScrollArea>
+
+      {/* Deal creation form sheet (ponytail: reuse existing deal sheet) */}
+      {contact && pipelines.length > 0 && (
+        <DealForm
+          open={dealFormOpen}
+          onOpenChange={setDealFormOpen}
+          pipelineId={pipelines[0].id}
+          stages={stages}
+          preselectedContactId={contact.id}
+          onSaved={fetchContactData}
+        />
+      )}
     </div>
   );
 }
