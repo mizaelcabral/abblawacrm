@@ -520,7 +520,7 @@ function InboxPageContent() {
           <div className="flex items-center justify-center gap-2 flex-1">
             <WifiOff className="h-4 w-4 text-amber-400" />
             <p className="text-xs text-amber-400">
-              WhatsApp® (API não oficial) não está conectado. Vá em Configurações para conectar sua conta.
+              WhatsApp® (API Oficial) não está conectado. Vá em Configurações para conectar sua conta.
             </p>
           </div>
           <button
