@@ -634,12 +634,12 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                   type="date"
                   value={newTaskDueAt}
                   onChange={(e) => setNewTaskDueAt(e.target.value)}
-                  className="flex-1 rounded-lg border border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground outline-none focus:border-primary/50"
+                  className="flex-1 min-w-0 rounded-lg border border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground outline-none focus:border-primary/50"
                 />
                 <select
                   value={newTaskAgentId}
                   onChange={(e) => setNewTaskAgentId(e.target.value)}
-                  className="flex-1 rounded-lg border border-border bg-muted pl-2 pr-6 py-1 text-[11px] text-muted-foreground outline-none focus:border-primary/50"
+                  className="w-[120px] rounded-lg border border-border bg-muted pl-2 pr-6 py-1 text-[11px] text-muted-foreground outline-none focus:border-primary/50"
                 >
                   <option value="">Atendente...</option>
                   {members.map((m) => (
