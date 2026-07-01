@@ -87,7 +87,7 @@ export async function getAccountAIConfig(accountId: string) {
 
     return {
       provider,
-      model: provider === 'gemini' ? 'gemini-1.5-flash' : provider === 'openai' ? 'gpt-4o' : provider === 'anthropic' ? 'claude-3-5-sonnet' : 'meta-llama/llama-3-8b-instruct',
+      model: provider === 'gemini' ? 'gemini-2.5-flash' : provider === 'openai' ? 'gpt-4o' : provider === 'anthropic' ? 'claude-3-5-sonnet' : 'meta-llama/llama-3-8b-instruct',
       apiKey: defaultKey,
       apiUrl: null
     }
@@ -107,7 +107,7 @@ export async function getAccountAIConfig(accountId: string) {
 
   return {
     provider,
-    model: data.ai_model || (provider === 'gemini' ? 'gemini-1.5-flash' : provider === 'openai' ? 'gpt-4o' : provider === 'anthropic' ? 'claude-3-5-sonnet' : 'meta-llama/llama-3-8b-instruct'),
+    model: data.ai_model || (provider === 'gemini' ? 'gemini-2.5-flash' : provider === 'openai' ? 'gpt-4o' : provider === 'anthropic' ? 'claude-3-5-sonnet' : 'meta-llama/llama-3-8b-instruct'),
     apiKey: data.ai_api_key ? decrypt(data.ai_api_key) : defaultKey,
     apiUrl: data.ai_api_url || null
   }

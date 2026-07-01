@@ -53,7 +53,7 @@ describe('AI Config Loader', () => {
   it('should fallback to gemini default config if no account is found', async () => {
     const config = await getAccountAIConfig('missing-id')
     expect(config.provider).toBe('gemini')
-    expect(config.model).toBe('gemini-1.5-flash')
+    expect(config.model).toBe('gemini-2.5-flash')
   })
 
   it('should decrypt API key if present', async () => {
