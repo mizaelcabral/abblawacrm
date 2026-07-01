@@ -13,10 +13,14 @@ import {
   LayoutTemplate,
   ImageOff,
   CornerDownLeft,
+  Download,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ReplyQuote } from "./reply-quote";
 import { MessageReactions } from "./message-reactions";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+
 
 interface MessageBubbleProps {
   message: Message;
@@ -57,6 +61,7 @@ function MediaImage({ url, alt }: { url: string; alt: string }) {
   const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   const loadImage = useCallback(async () => {
     if (!url) return;
@@ -103,21 +108,54 @@ function MediaImage({ url, alt }: { url: string; alt: string }) {
   }
 
   return (
-    <a
-      href={src ?? ""}
-      target="_blank"
-      rel="noopener noreferrer"
-      download="whatsapp-image"
-      className="cursor-pointer block hover:opacity-90 transition-opacity"
-      title="Clique para abrir em tamanho real ou baixar"
-    >
-      <img
-        src={src ?? ""}
-        alt={alt}
-        className="max-h-64 max-w-60 rounded-lg object-cover"
-        onError={() => setError(true)}
-      />
-    </a>
+    <>
+      <div
+        onClick={() => setIsOpen(true)}
+        className="cursor-pointer block hover:opacity-90 transition-opacity"
+        title="Clique para abrir"
+      >
+        <img
+          src={src ?? ""}
+          alt={alt}
+          className="max-h-64 max-w-60 rounded-lg object-cover"
+          onError={() => setError(true)}
+        />
+      </div>
+
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="max-w-4xl w-auto max-h-[90vh] bg-background/95 backdrop-blur-md border border-border p-4 flex flex-col items-center justify-between gap-4">
+          <DialogHeader className="w-full flex flex-row items-center justify-between border-b pb-2">
+            <DialogTitle className="text-foreground font-semibold">Visualizar Imagem</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 flex items-center justify-center overflow-hidden max-h-[70vh]">
+            <img
+              src={src ?? ""}
+              alt={alt}
+              className="max-w-full max-h-[65vh] object-contain rounded-lg shadow-lg"
+            />
+          </div>
+
+          <div className="w-full flex justify-end gap-2 pt-2 border-t">
+            <a
+              href={src ?? ""}
+              download="whatsapp-image"
+              className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2 gap-1.5"
+            >
+              <Download className="h-4 w-4" />
+              Baixar
+            </a>
+            <Button
+              variant="outline"
+              onClick={() => setIsOpen(false)}
+              className="h-9 px-4 py-2"
+            >
+              Fechar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
