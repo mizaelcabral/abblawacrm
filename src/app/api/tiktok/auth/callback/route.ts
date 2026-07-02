@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     if (!dataObj || !dataObj.access_token) {
       console.error('TikTok token payload is missing data.access_token:', tokenData);
-      throw new Error('Token de acesso não retornado pelo TikTok.');
+      throw new Error(`Token de acesso não retornado pelo TikTok. Resposta: ${JSON.stringify(tokenData)}`);
     }
 
     const supabase = await createClient();
