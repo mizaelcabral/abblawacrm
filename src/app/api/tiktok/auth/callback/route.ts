@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
   if (error || !code || !state) {
     console.error('TikTok auth error or missing params:', { error, code, state });
-    return NextResponse.redirect(`${redirectBase}/dashboard/settings?integration=tiktok&status=error&message=${encodeURIComponent(error || 'Parâmetros ausentes')}`);
+    return NextResponse.redirect(`${redirectBase}/settings?integration=tiktok&status=error&message=${encodeURIComponent(error || 'Parâmetros ausentes')}`);
   }
 
   try {
@@ -58,24 +58,26 @@ export async function GET(request: NextRequest) {
     }
 
     const tokenData = await tokenResponse.json();
-    if (!tokenData.access_token) {
-      console.error('TikTok token payload is missing access_token:', tokenData);
+    const dataObj = tokenData.data;
+
+    if (!dataObj || !dataObj.access_token) {
+      console.error('TikTok token payload is missing data.access_token:', tokenData);
       throw new Error('Token de acesso não retornado pelo TikTok.');
     }
 
     const supabase = await createClient();
 
     // Encrypt the tokens
-    const encryptedAccess = encrypt(tokenData.access_token);
-    const encryptedRefresh = tokenData.refresh_token ? encrypt(tokenData.refresh_token) : null;
-    const expiresAt = new Date(Date.now() + (tokenData.expires_in || 86400) * 1000).toISOString();
+    const encryptedAccess = encrypt(dataObj.access_token);
+    const encryptedRefresh = dataObj.refresh_token ? encrypt(dataObj.refresh_token) : null;
+    const expiresAt = new Date(Date.now() + (dataObj.expires_in || 86400) * 1000).toISOString();
 
     const upsertPayload = {
       account_id: accountId,
       user_id: userId,
       access_token: encryptedAccess,
       refresh_token: encryptedRefresh,
-      tiktok_open_id: tokenData.open_id,
+      tiktok_open_id: dataObj.open_id,
       status: 'connected',
       expires_at: expiresAt,
       connected_at: new Date().toISOString(),
@@ -92,10 +94,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Successfully connected, redirect back to settings
-    return NextResponse.redirect(`${redirectBase}/dashboard/settings?integration=tiktok&status=success`);
+    return NextResponse.redirect(`${redirectBase}/settings?integration=tiktok&status=success`);
 
   } catch (err: any) {
     console.error('Error in TikTok callback handler:', err);
-    return NextResponse.redirect(`${redirectBase}/dashboard/settings?integration=tiktok&status=error&message=${encodeURIComponent(err.message || 'Erro de autenticação')}`);
+    return NextResponse.redirect(`${redirectBase}/settings?integration=tiktok&status=error&message=${encodeURIComponent(err.message || 'Erro de autenticação')}`);
   }
 }
