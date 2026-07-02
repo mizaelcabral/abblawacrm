@@ -12,6 +12,7 @@ import {
   Key,
   Share2,
   Send,
+  Video,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -32,6 +33,7 @@ export const SETTINGS_SECTIONS = [
   'whatsapp',
   'meta',
   'telegram',
+  'tiktok',
   'templates',
   'fields',
   'deals',
@@ -60,6 +62,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace' },
   meta: { id: 'meta', label: 'Facebook & Instagram', icon: Share2, group: 'workspace' },
   telegram: { id: 'telegram', label: 'Telegram', icon: Send, group: 'workspace' },
+  tiktok: { id: 'tiktok', label: 'TikTok', icon: Video, group: 'workspace' },
   templates: { id: 'templates', label: 'Modelos', icon: FileText, group: 'workspace' },
   fields: { id: 'fields', label: 'Campos e tags', icon: Tags, group: 'workspace' },
   deals: { id: 'deals', label: 'Negócios e moedas', icon: Coins, group: 'workspace' },

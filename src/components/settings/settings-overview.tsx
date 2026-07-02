@@ -52,6 +52,8 @@ export function SettingsOverview({
   const [metaLoading, setMetaLoading] = useState(true);
   const [telegramStatus, setTelegramStatus] = useState<{ configured: boolean; connected: boolean } | null>(null);
   const [telegramLoading, setTelegramLoading] = useState(true);
+  const [tiktokStatus, setTiktokStatus] = useState<{ configured: boolean; connected: boolean } | null>(null);
+  const [tiktokLoading, setTiktokLoading] = useState(true);
 
   useEffect(() => {
     if (!user || !accountId) return;
@@ -181,6 +183,25 @@ export function SettingsOverview({
       setTelegramLoading(false);
     })();
 
+    // TikTok connection status.
+    (async () => {
+      setTiktokLoading(true);
+      const [row, health] = await Promise.allSettled([
+        supabase
+          .from('tiktok_integration_config')
+          .select('access_token')
+          .eq('account_id', acctId)
+          .maybeSingle(),
+        fetch('/api/tiktok/config', { cache: 'no-store' }).then((r) => r.json()),
+      ]);
+      if (cancelled) return;
+      setTiktokStatus({
+        configured: row.status === 'fulfilled' && !!row.value.data?.access_token,
+        connected: health.status === 'fulfilled' && !!health.value?.connected,
+      });
+      setTiktokLoading(false);
+    })();
+
     return () => {
       cancelled = true;
     };
@@ -239,6 +260,21 @@ export function SettingsOverview({
       subtitle: !telegramStatus?.configured ? (
         'Não configurado'
       ) : telegramStatus.connected ? (
+        <>
+          <StatusDot tone="ok" /> Conectado
+        </>
+      ) : (
+        <>
+          <StatusDot tone="muted" /> Necessita reconexão
+        </>
+      ),
+    },
+    {
+      section: 'tiktok',
+      loading: tiktokLoading,
+      subtitle: !tiktokStatus?.configured ? (
+        'Não configurado'
+      ) : tiktokStatus.connected ? (
         <>
           <StatusDot tone="ok" /> Conectado
         </>
