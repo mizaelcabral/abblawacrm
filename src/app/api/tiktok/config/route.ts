@@ -111,7 +111,7 @@ export async function POST() {
     // Build TikTok Auth URL
     // Scopes needed: user.info.basic, video.list, im.messages, im.comments
     const state = `${accountId}:${user.id}`;
-    const scope = 'user.info.basic,video.list,im.messages,im.comments';
+    const scope = 'user.info.profile,user.info.stats,video.list';
     const authUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${encodeURIComponent(
       CLIENT_ID
     )}&scope=${encodeURIComponent(scope)}&response_type=code&redirect_uri=${encodeURIComponent(
