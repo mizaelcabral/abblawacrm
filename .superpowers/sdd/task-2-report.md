@@ -1,31 +1,25 @@
-# Task 2: Super Admin API Integration Report
+# Task 2 Report: Tradução do Módulo de Automações e Fluxos (Automations & Flows)
 
 ## Status
-Completed successfully.
+DONE
 
-## Changes Implemented
-- **GET Endpoint (`src/app/api/superadmin/accounts/route.ts`)**:
-  - Imported `encrypt` from `@/lib/whatsapp/encryption`.
-  - Mapped the retrieved accounts list to omit raw `ai_api_key` values for security (`ai_api_key: undefined`).
-  - Added a boolean `has_ai_key` field (`!!acc.ai_api_key`) to indicate to the frontend whether an API key exists for each account.
-- **PUT Endpoint (`src/app/api/superadmin/accounts/route.ts`)**:
-  - Extracted the new fields `ai_provider`, `ai_model`, `ai_api_key`, and `ai_api_url` from the request body.
-  - Dynamically built the `updateData` payload including `ai_provider`, `ai_model`, and `ai_api_url` if defined.
-  - Processed `ai_api_key` updates:
-    - If `ai_api_key` is provided and is not the mask string `"••••••••"`, it is encrypted using `encrypt`.
-    - If `ai_api_key` is provided as `null` or an empty/blank string, it clears the column in the database by setting it to `null`.
+## Completed Work
+1. **Telas de Automação Traduzidas:**
+   - Traduzidos os termos e links de voltar em `src/app/(dashboard)/automations/[id]/edit/page.tsx` e `src/app/(dashboard)/automations/[id]/logs/page.tsx`.
+   - Adicionada formatação e tradução inteligente para os status badges e logs de execução.
+2. **Componentes do Construtor de Automações Traduzidos:**
+   - Traduzidas todas as strings de interface e propriedades em `src/components/automations/automation-builder.tsx`, incluindo nomes das etapas (`STEP_META`), opções de gatilhos (`TRIGGER_OPTIONS`), e campos de configuração de nós.
+3. **Telas e Logs de Execução dos Fluxos Traduzidos:**
+   - Traduzidos mensagens de erro ("Fluxo não encontrado") e links de navegação em `src/app/(dashboard)/flows/[id]/page.tsx` e `src/app/(dashboard)/flows/page.tsx`.
+   - Traduzidos os badges de status e histórico de execuções em `src/app/(dashboard)/flows/[id]/runs/page.tsx`.
+4. **Formulários e Estados dos Nós de Fluxo Traduzidos:**
+   - Traduzidas as definições e pré-visualizações dos nós em `src/components/flows/shared.tsx`.
+   - Traduzido o seletor de visualizações e painel de validação em `src/components/flows/flow-editor-shell.tsx` e `src/components/flows/validation-panel.tsx`.
+   - Traduzidos os campos de configuração para botões, listas, condições, marcadores e mídias em `src/components/flows/forms/node-config-form.tsx`.
+   - Traduzidos os textos do cabeçalho em `src/components/flows/header.tsx`.
+   - Traduzidas as mensagens de confirmação e ações em `src/components/flows/flow-editor-state.tsx`.
+   - Traduzido o canvas de fluxo em `src/components/flows/flow-canvas.tsx`.
 
-## Verification Details
-- Executed `npm run typecheck` which ran successfully with zero TypeScript compilation errors.
-
-## Commits Created
-- `0e0fbb4`: feat(superadmin): implement LLM config retrieval and update in accounts API
-- `938aa22`: fix(superadmin): mask ai_api_key in GET accounts endpoint instead of returning undefined
-
-## Post-Implementation Fixes
-- **GET Endpoint Masking**: Fixed the GET endpoint mapping where `ai_api_key` was previously being set to `undefined`. Changed it to return `'••••••••'` if a key exists, ensuring that the masked key is returned to the frontend. This matches the behavior expected by the PUT endpoint update logic.
-- **Verification**: Ran `npm run typecheck` successfully.
-
-## Post-Implementation Fixes (Continued)
-- **PUT Endpoint Response Processing**: Updated the PUT endpoint return value to match the GET masking logic. It now returns the updated account data with `has_ai_key` set to `!!data.ai_api_key` and `ai_api_key` masked as `'••••••••'` if present (or `undefined` if not).
-- **Verification**: Ran `npm run typecheck` successfully.
+## Verification/Build Summary
+- Executado `npm run build` com sucesso.
+- Compilação concluída com sucesso e sem erros de TypeScript.

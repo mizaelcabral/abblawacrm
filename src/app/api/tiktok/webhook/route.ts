@@ -148,18 +148,26 @@ export async function POST(request: NextRequest) {
       // Run automation engine triggers
       await runAutomationsForTrigger({
         accountId,
-        triggerType: 'message_received',
-        contact,
-        messageBody: text || '',
-        channel: 'tiktok',
-      });
+        triggerType: 'new_message_received',
+        contactId: contact.id,
+        context: {
+          message_text: text || '',
+          conversation_id: conversation.id,
+        },
+      }).catch((err) => console.error('[automations] dispatch failed:', err));
 
       // Run flows engine triggers
       await dispatchInboundToFlows({
         accountId,
+        userId: config.user_id,
         contactId: contact.id,
-        messageBody: text || '',
-        channel: 'tiktok',
+        conversationId: conversation.id,
+        message: {
+          kind: 'text',
+          text: text || '',
+          meta_message_id: message_id || '',
+        },
+        isFirstInboundMessage: false, // We'd determine this properly in prod, default to false for mock
       });
 
       // Optionally invoke AI Autopilot if active
