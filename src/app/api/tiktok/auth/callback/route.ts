@@ -58,26 +58,30 @@ export async function GET(request: NextRequest) {
     }
 
     const tokenData = await tokenResponse.json();
-    const dataObj = tokenData.data;
+    
+    const accessToken = tokenData.access_token || tokenData.data?.access_token;
+    const refreshToken = tokenData.refresh_token || tokenData.data?.refresh_token;
+    const openId = tokenData.open_id || tokenData.data?.open_id;
+    const expiresIn = tokenData.expires_in || tokenData.data?.expires_in;
 
-    if (!dataObj || !dataObj.access_token) {
-      console.error('TikTok token payload is missing data.access_token:', tokenData);
+    if (!accessToken) {
+      console.error('TikTok token payload is missing access_token:', tokenData);
       throw new Error(`Token de acesso não retornado pelo TikTok. Resposta: ${JSON.stringify(tokenData)}`);
     }
 
     const supabase = await createClient();
 
     // Encrypt the tokens
-    const encryptedAccess = encrypt(dataObj.access_token);
-    const encryptedRefresh = dataObj.refresh_token ? encrypt(dataObj.refresh_token) : null;
-    const expiresAt = new Date(Date.now() + (dataObj.expires_in || 86400) * 1000).toISOString();
+    const encryptedAccess = encrypt(accessToken);
+    const encryptedRefresh = refreshToken ? encrypt(refreshToken) : null;
+    const expiresAt = new Date(Date.now() + (expiresIn || 86400) * 1000).toISOString();
 
     const upsertPayload = {
       account_id: accountId,
       user_id: userId,
       access_token: encryptedAccess,
       refresh_token: encryptedRefresh,
-      tiktok_open_id: dataObj.open_id,
+      tiktok_open_id: openId,
       status: 'connected',
       expires_at: expiresAt,
       connected_at: new Date().toISOString(),
