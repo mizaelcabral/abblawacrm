@@ -29,6 +29,20 @@ import { ptBR } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
+function formatTimeAgo(dateStr: string | null | undefined): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    return formatDistanceToNow(d, {
+      addSuffix: true,
+      locale: ptBR,
+    });
+  } catch (e) {
+    return "";
+  }
+}
+
 export function NotificationMenu() {
   const { account } = useAuth();
   const totalUnread = useTotalUnread();
@@ -42,9 +56,12 @@ export function NotificationMenu() {
   // Calculo do Trial
   let trialDaysLeft: number | null = null;
   if (account?.subscription_status === "trial" && account.subscription_expires_at) {
-    const diffTime = new Date(account.subscription_expires_at).getTime() - new Date().getTime();
-    trialDaysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    if (trialDaysLeft < 0) trialDaysLeft = 0;
+    const expiresAt = new Date(account.subscription_expires_at);
+    if (!isNaN(expiresAt.getTime())) {
+      const diffTime = expiresAt.getTime() - new Date().getTime();
+      trialDaysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (trialDaysLeft < 0) trialDaysLeft = 0;
+    }
   }
 
   // Cotas de IA
@@ -136,12 +153,7 @@ export function NotificationMenu() {
                           {c.contact?.name || "Contato Desconhecido"}
                         </span>
                         <span className="text-[10px] text-muted-foreground">
-                          {c.last_message_at
-                            ? formatDistanceToNow(new Date(c.last_message_at), {
-                                addSuffix: true,
-                                locale: ptBR,
-                              })
-                            : ""}
+                          {formatTimeAgo(c.last_message_at)}
                         </span>
                       </div>
                       <p className="text-[11px] text-muted-foreground truncate">
@@ -175,10 +187,7 @@ export function NotificationMenu() {
                           </h4>
                         </div>
                         <span className="text-[9px] text-muted-foreground shrink-0">
-                          {formatDistanceToNow(new Date(t.created_at), {
-                            addSuffix: true,
-                            locale: ptBR,
-                          })}
+                          {formatTimeAgo(t.created_at)}
                         </span>
                       </div>
                       {t.description && (

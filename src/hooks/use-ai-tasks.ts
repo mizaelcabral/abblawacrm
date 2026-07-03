@@ -63,7 +63,6 @@ export function useAiTasks(accountId: string | null) {
           event: "*",
           schema: "public",
           table: "tasks",
-          filter: `account_id=eq.${accountId}`,
         },
         () => {
           // Re-fetch all matching tasks to ensure relations (contacts) are resolved properly
