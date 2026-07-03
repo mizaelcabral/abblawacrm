@@ -133,13 +133,13 @@ export async function POST(request: NextRequest) {
       const { error: msgInsertError } = await supabaseAdmin()
         .from('messages')
         .insert({
-          account_id: accountId,
           conversation_id: conversation.id,
-          contact_id: contact.id,
+          sender_type: 'customer',
+          content_type: 'text',
+          content_text: text || '',
+          message_id: message_id || `tiktok_msg_${Date.now()}`,
+          status: 'delivered',
           channel: 'tiktok',
-          direction: 'inbound',
-          body: text || '',
-          sender_name: contact.name,
         });
 
       if (msgInsertError) {
