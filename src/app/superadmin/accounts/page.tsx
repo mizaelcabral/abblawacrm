@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { 
-  Loader2, Search, Edit2, Trash2, Key, CheckCircle, XCircle, ShieldAlert, Sparkles
+  Loader2, Search, Edit2, Trash2, Key, CheckCircle, XCircle, ShieldAlert, Sparkles, DollarSign, Cpu
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -162,6 +162,50 @@ export default function SuperAdminAccounts() {
     return matchesName || matchesOwnerName || matchesOwnerEmail;
   });
 
+  // ponytail: calculate AI cost based on model/provider if they use general platform keys
+  const calculateAICost = (acc: Account) => {
+    if (acc.has_ai_key) return 0; // Chave própria não custa nada para a plataforma
+
+    const model = (acc.ai_model || '').toLowerCase();
+    const provider = (acc.ai_provider || '').toLowerCase();
+
+    let costPerMessage = 0.004; // padrão R$ 0,004 por msg
+
+    if (model.includes('flash') || provider === 'gemini') {
+      costPerMessage = 0.002; // Gemini 1.5 Flash
+    } else if (model.includes('mini') || provider === 'openai') {
+      costPerMessage = 0.003; // GPT-4o Mini
+    } else if (model.includes('haiku') || provider === 'anthropic') {
+      costPerMessage = 0.006; // Claude Haiku
+    }
+
+    return acc.ai_message_count * costPerMessage;
+  };
+
+  const aiStats = useMemo(() => {
+    let totalCostGeneral = 0;
+    let totalMessagesGeneral = 0;
+    let accountsUsingGeneral = 0;
+    let accountsUsingOwn = 0;
+
+    accounts.forEach((acc) => {
+      if (acc.has_ai_key) {
+        accountsUsingOwn++;
+      } else {
+        accountsUsingGeneral++;
+        totalCostGeneral += calculateAICost(acc);
+        totalMessagesGeneral += acc.ai_message_count;
+      }
+    });
+
+    return {
+      totalCostGeneral,
+      totalMessagesGeneral,
+      accountsUsingGeneral,
+      accountsUsingOwn,
+    };
+  }, [accounts]);
+
   const getPlanBadge = (plan: string) => {
     switch (plan) {
       case 'scale':
@@ -193,6 +237,62 @@ export default function SuperAdminAccounts() {
         <p className="text-sm text-muted-foreground mt-1">
           Lista e controle de todas as instâncias de inquilinos registradas no SaaS.
         </p>
+      </div>
+
+      {/* ponytail: metric cards for AI consumption costs */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-border bg-card">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
+              Custo Estimado (Chave Geral)
+            </CardTitle>
+            <DollarSign className="h-4 w-4 text-emerald-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-extrabold text-foreground">
+              R$ {aiStats.totalCostGeneral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Gasto com chaves compartilhadas da plataforma.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border bg-card">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
+              Mensagens da Chave Geral
+            </CardTitle>
+            <Cpu className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-extrabold text-foreground">
+              {aiStats.totalMessagesGeneral.toLocaleString('pt-BR')}
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Total de interações sob a chave padrão.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border bg-card">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
+              Origem das API Keys
+            </CardTitle>
+            <Key className="h-4 w-4 text-purple-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-extrabold text-foreground flex items-baseline gap-2">
+              <span>{aiStats.accountsUsingOwn} <span className="text-xs text-muted-foreground font-normal">Própria</span></span>
+              <span className="text-muted-foreground text-sm">/</span>
+              <span>{aiStats.accountsUsingGeneral} <span className="text-xs text-muted-foreground font-normal">Geral</span></span>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Divisão de custos por inquilino.
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Control bar */}
@@ -269,8 +369,28 @@ export default function SuperAdminAccounts() {
                             </span>
                           )}
                         </td>
-                        <td className="p-4 text-xs text-muted-foreground">
-                          {acc.ai_message_count} / {acc.ai_message_limit ?? 'Plano'}
+                        <td className="p-4">
+                          <div className="flex flex-col gap-1 items-start text-xs">
+                            <span className="font-semibold text-foreground">
+                              {acc.ai_message_count} / {acc.ai_message_limit ?? 'Plano'}
+                            </span>
+                            {acc.has_ai_key ? (
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
+                                Chave Própria
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-zinc-500/10 text-zinc-400 border border-zinc-500/20 uppercase tracking-wider">
+                                Chave Geral
+                              </span>
+                            )}
+                            <span className="text-[10px] text-muted-foreground font-medium">
+                              {acc.has_ai_key ? (
+                                'R$ 0,00'
+                              ) : (
+                                <>Est. <span className="text-red-400">R$ {calculateAICost(acc).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></>
+                              )}
+                            </span>
+                          </div>
                         </td>
                         <td className="p-4 text-xs text-muted-foreground">
                           {new Date(acc.created_at).toLocaleDateString('pt-BR')}
