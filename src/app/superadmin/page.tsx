@@ -397,7 +397,7 @@ export default function SuperAdminDashboard() {
                         )}
                       </td>
                       <td className="p-4">
-                        {acc.subscription_status === 'active' ? (
+                        {(acc.subscription_status === 'active' || (acc as any).is_lifetime) ? (
                           <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase">Ativo</span>
                         ) : (
                           <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase">{acc.subscription_status}</span>

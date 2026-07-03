@@ -350,7 +350,7 @@ export default function SuperAdminAccounts() {
                         <td className="p-4">{getPlanBadge(acc.subscription_plan)}</td>
                         <td className="p-4">
                           <div className="flex flex-col gap-1 items-start">
-                            {getStatusBadge(acc.subscription_status)}
+                            {getStatusBadge(acc.is_lifetime ? 'active' : acc.subscription_status)}
                             {acc.is_lifetime && (
                               <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-primary/20 text-primary border border-primary/30 uppercase tracking-wider">
                                 Lifetime {acc.lifetime_has_ai ? '+ IA' : 'S/ IA'}
