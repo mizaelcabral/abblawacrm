@@ -81,7 +81,7 @@ describe('LLM Completion Dispatcher', () => {
   it('should dispatch to gemini API structure', async () => {
     h.state.account = {
       ai_provider: 'gemini',
-      ai_model: 'gemini-1.5-flash',
+      ai_model: 'gemini-2.5-flash',
       ai_api_key: null,
       ai_api_url: null
     }
@@ -107,7 +107,7 @@ describe('LLM Completion Dispatcher', () => {
 
     expect(response).toBe('Gemini says hi')
     expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining('generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=gemini-env-key'),
+      expect.stringContaining('generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=gemini-env-key'),
       expect.objectContaining({
         method: 'POST',
         body: expect.stringContaining('"contents":[{"role":"user","parts":[{"text":"hello"}]}]')

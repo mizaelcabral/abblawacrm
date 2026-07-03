@@ -51,7 +51,7 @@ export default function SuperAdminAccounts() {
   const [editStatus, setEditStatus] = useState('');
   const [editLimit, setEditLimit] = useState(0);
   const [editProvider, setEditProvider] = useState('gemini');
-  const [editModel, setEditModel] = useState('gemini-1.5-flash');
+  const [editModel, setEditModel] = useState('gemini-2.5-flash');
   const [editApiKey, setEditApiKey] = useState('');
   const [editApiUrl, setEditApiUrl] = useState('');
   const [clearApiKey, setClearApiKey] = useState(false);
@@ -85,7 +85,7 @@ export default function SuperAdminAccounts() {
     setEditStatus(acc.subscription_status);
     setEditLimit(acc.ai_message_limit ?? 0);
     setEditProvider(acc.ai_provider || 'gemini');
-    setEditModel(acc.ai_model || 'gemini-1.5-flash');
+    setEditModel(acc.ai_model || 'gemini-2.5-flash');
     setEditApiKey(acc.has_ai_key ? '••••••••' : '');
     setEditApiUrl(acc.ai_api_url || '');
     setClearApiKey(false);
@@ -531,7 +531,7 @@ export default function SuperAdminAccounts() {
                     onChange={(e) => {
                       const val = e.target.value;
                       setEditProvider(val);
-                      if (val === 'gemini') setEditModel('gemini-1.5-flash');
+                      if (val === 'gemini') setEditModel('gemini-2.5-flash');
                       else if (val === 'openai') setEditModel('gpt-4o-mini');
                       else if (val === 'anthropic') setEditModel('claude-3-5-haiku-20241022');
                       else if (val === 'openrouter') setEditModel('google/gemini-flash-1.5');
@@ -550,7 +550,7 @@ export default function SuperAdminAccounts() {
                   <Input
                     id="aiModel"
                     type="text"
-                    placeholder="Ex: gemini-1.5-flash"
+                    placeholder="Ex: gemini-2.5-flash"
                     value={editModel}
                     onChange={(e) => setEditModel(e.target.value)}
                     className="bg-muted border-border text-sm"
