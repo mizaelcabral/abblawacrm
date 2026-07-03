@@ -23,12 +23,14 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
   const isTrialExpired =
     account &&
+    !account.is_lifetime &&
     account.subscription_status === "trial" &&
     account.subscription_expires_at &&
     new Date(account.subscription_expires_at) < new Date();
 
   const isDelinquent =
     account &&
+    !account.is_lifetime &&
     (account.subscription_status === "past_due" ||
       account.subscription_status === "unpaid" ||
       account.subscription_status === "canceled");

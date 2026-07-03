@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { 
-  Loader2, Search, Edit2, Trash2, Key, CheckCircle, XCircle, ShieldAlert
+  Loader2, Search, Edit2, Trash2, Key, CheckCircle, XCircle, ShieldAlert, Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -36,6 +36,8 @@ interface Account {
   ai_model: string | null;
   ai_api_url: string | null;
   has_ai_key?: boolean;
+  is_lifetime?: boolean;
+  lifetime_has_ai?: boolean;
 }
 
 export default function SuperAdminAccounts() {
@@ -53,6 +55,8 @@ export default function SuperAdminAccounts() {
   const [editApiKey, setEditApiKey] = useState('');
   const [editApiUrl, setEditApiUrl] = useState('');
   const [clearApiKey, setClearApiKey] = useState(false);
+  const [editIsLifetime, setEditIsLifetime] = useState(false);
+  const [editLifetimeHasAi, setEditLifetimeHasAi] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const fetchAccounts = async () => {
@@ -85,6 +89,8 @@ export default function SuperAdminAccounts() {
     setEditApiKey(acc.has_ai_key ? '••••••••' : '');
     setEditApiUrl(acc.ai_api_url || '');
     setClearApiKey(false);
+    setEditIsLifetime(acc.is_lifetime || false);
+    setEditLifetimeHasAi(acc.lifetime_has_ai !== false);
   };
 
   const handleSave = async () => {
@@ -104,6 +110,8 @@ export default function SuperAdminAccounts() {
           ai_model: editModel,
           ai_api_key: clearApiKey ? null : (editApiKey === '••••••••' ? undefined : editApiKey),
           ai_api_url: editApiUrl || null,
+          is_lifetime: editIsLifetime,
+          lifetime_has_ai: editLifetimeHasAi,
         }),
       });
 
@@ -240,7 +248,16 @@ export default function SuperAdminAccounts() {
                           </div>
                         </td>
                         <td className="p-4">{getPlanBadge(acc.subscription_plan)}</td>
-                        <td className="p-4">{getStatusBadge(acc.subscription_status)}</td>
+                        <td className="p-4">
+                          <div className="flex flex-col gap-1 items-start">
+                            {getStatusBadge(acc.subscription_status)}
+                            {acc.is_lifetime && (
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-primary/20 text-primary border border-primary/30 uppercase tracking-wider">
+                                Lifetime {acc.lifetime_has_ai ? '+ IA' : 'S/ IA'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="p-4">
                           {whatsappConnected ? (
                             <span className="flex items-center gap-1 text-emerald-400 text-xs font-semibold">
@@ -341,6 +358,43 @@ export default function SuperAdminAccounts() {
                   onChange={(e) => setEditLimit(Number(e.target.value))}
                   className="bg-muted border-border"
                 />
+              </div>
+
+              {/* ponytail: Simple switches/checkboxes for lifetime status and lifetime AI rules */}
+              <div className="border-t border-border pt-4 mt-4 space-y-3">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-primary" /> Conta Vitalícia
+                </h4>
+                
+                <div className="flex items-center justify-between rounded-lg border border-border p-3 bg-muted/30">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="isLifetime" className="text-xs font-semibold text-foreground cursor-pointer">Definir como Lifetime</Label>
+                    <p className="text-[10px] text-muted-foreground">Bypassa expiração de trial e inadimplência do Stripe.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    id="isLifetime"
+                    checked={editIsLifetime}
+                    onChange={(e) => setEditIsLifetime(e.target.checked)}
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary bg-muted"
+                  />
+                </div>
+
+                {editIsLifetime && (
+                  <div className="flex items-center justify-between rounded-lg border border-primary/20 p-3 bg-primary/5 animate-in slide-in-from-top-1 duration-200">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="lifetimeHasAi" className="text-xs font-semibold text-foreground cursor-pointer">Permitir recursos de IA</Label>
+                      <p className="text-[10px] text-muted-foreground">Define se a conta vitalícia tem permissão para usar IA.</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      id="lifetimeHasAi"
+                      checked={editLifetimeHasAi}
+                      onChange={(e) => setEditLifetimeHasAi(e.target.checked)}
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary bg-muted"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* AI Provider Config */}

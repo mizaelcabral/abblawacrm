@@ -24,6 +24,8 @@ interface AccountBillingDetails {
   ai_message_count: number;
   ai_message_limit: number;
   stripe_customer_id: string | null;
+  is_lifetime?: boolean;
+  lifetime_has_ai?: boolean;
 }
 
 export function PlansPanel() {
@@ -41,7 +43,7 @@ export function PlansPanel() {
     try {
       const { data, error } = await supabase
         .from("accounts")
-        .select("subscription_status, subscription_plan, subscription_expires_at, ai_message_count, ai_message_limit, stripe_customer_id")
+        .select("subscription_status, subscription_plan, subscription_expires_at, ai_message_count, ai_message_limit, stripe_customer_id, is_lifetime, lifetime_has_ai")
         .eq("id", accountId)
         .single();
 
@@ -141,7 +143,7 @@ export function PlansPanel() {
 
   const currentPlanKey = billing?.subscription_plan || "starter";
   const currentPlan = PLANS[currentPlanKey];
-  const isDelinquent = billing?.subscription_status === "past_due" || billing?.subscription_status === "unpaid";
+  const isDelinquent = !billing?.is_lifetime && (billing?.subscription_status === "past_due" || billing?.subscription_status === "unpaid");
   
   // Calculate AI Usage Progress
   const usageCount = billing?.ai_message_count || 0;
@@ -154,6 +156,24 @@ export function PlansPanel() {
         title="Planos e Faturamento"
         description="Gerencie a assinatura do seu workspace, acompanhe o consumo da cota de IA e faça upgrades."
       />
+
+      {/* Lifetime account banner */}
+      {billing?.is_lifetime && (
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-primary animate-in fade-in-50 duration-300">
+          <Sparkles className="h-5 w-5 shrink-0 text-primary" />
+          <div>
+            <p className="font-semibold text-foreground">Assinatura Vitalícia Ativa (Lifetime)</p>
+            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+              Este workspace está configurado com uma conta vitalícia cortesia da administração. Você possui acesso completo à plataforma sem cobranças recorrentes.
+              {billing.lifetime_has_ai ? (
+                <span className="text-primary font-medium block mt-1">✓ Recursos de Inteligência Artificial estão ativos nesta conta.</span>
+              ) : (
+                <span className="text-destructive font-medium block mt-1">✗ Recursos de Inteligência Artificial estão desativados para esta assinatura vitalícia.</span>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Subscription Status & Billing Alerts */}
       {isDelinquent && (
@@ -251,7 +271,7 @@ export function PlansPanel() {
 
                 <Button
                   onClick={() => handleSubscribe(key as "starter" | "pro" | "scale")}
-                  disabled={isCurrent || isUpgrading || !canEditSettings}
+                  disabled={isCurrent || isUpgrading || !canEditSettings || billing?.is_lifetime}
                   className={`w-full text-xs font-semibold ${
                     isCurrent
                       ? "bg-muted text-muted-foreground cursor-not-allowed hover:bg-muted"

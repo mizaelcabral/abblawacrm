@@ -82,6 +82,8 @@ export async function PUT(request: Request) {
       ai_model,
       ai_api_key,
       ai_api_url,
+      is_lifetime,
+      lifetime_has_ai,
     } = body;
 
     if (!id) {
@@ -97,6 +99,8 @@ export async function PUT(request: Request) {
     if (ai_provider !== undefined) updateData.ai_provider = ai_provider;
     if (ai_model !== undefined) updateData.ai_model = ai_model;
     if (ai_api_url !== undefined) updateData.ai_api_url = ai_api_url;
+    if (is_lifetime !== undefined) updateData.is_lifetime = is_lifetime;
+    if (lifetime_has_ai !== undefined) updateData.lifetime_has_ai = lifetime_has_ai;
     
     if (ai_api_key !== undefined) {
       if (ai_api_key === null || (typeof ai_api_key === 'string' && ai_api_key.trim() === '')) {

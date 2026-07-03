@@ -11,12 +11,30 @@ export async function verifyBillingAndUsage(
   try {
     const { data: account, error } = await supabaseAdmin()
       .from('accounts')
-      .select('subscription_status, subscription_expires_at, subscription_plan, ai_message_count, ai_message_limit')
+      .select('subscription_status, subscription_expires_at, subscription_plan, ai_message_count, ai_message_limit, is_lifetime, lifetime_has_ai')
       .eq('id', accountId)
       .single()
 
     if (error || !account) {
       return { allowed: false, reason: 'Conta de faturamento não encontrada.' }
+    }
+
+    // ponytail: bypass billing blocks for lifetime accounts but check if they have AI allowed
+    if (account.is_lifetime) {
+      if (!account.lifetime_has_ai) {
+        return {
+          allowed: false,
+          reason: 'Sua assinatura vitalícia não possui acesso aos recursos de IA.'
+        }
+      }
+      // Continue check for message limits if limit is specifically configured
+      if (account.ai_message_limit && account.ai_message_limit > 0 && account.ai_message_count >= account.ai_message_limit) {
+        return {
+          allowed: false,
+          reason: 'Limite mensal de mensagens de IA atingido para esta conta vitalícia.'
+        }
+      }
+      return { allowed: true }
     }
 
     // 1. Check subscription status (block if past_due, canceled, unpaid)

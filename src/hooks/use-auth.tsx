@@ -47,6 +47,8 @@ interface AccountSummary {
   subscription_expires_at?: string | null;
   ai_message_count?: number;
   ai_message_limit?: number;
+  is_lifetime?: boolean;
+  lifetime_has_ai?: boolean;
 }
 
 interface AuthContextValue {
@@ -141,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // missing account collapses to null rather than a half-
           // populated row (shouldn't happen post-017 NOT NULL, but
           // belt-and-braces against forks running older schemas).
-          "id, full_name, email, avatar_url, role, beta_features, account_id, account_role, account:accounts!inner(id, name, default_currency, subscription_status, subscription_plan, subscription_expires_at, ai_message_count, ai_message_limit)",
+          "id, full_name, email, avatar_url, role, beta_features, account_id, account_role, account:accounts!inner(id, name, default_currency, subscription_status, subscription_plan, subscription_expires_at, ai_message_count, ai_message_limit, is_lifetime, lifetime_has_ai)",
         )
         .eq("user_id", userId)
         .maybeSingle();
@@ -172,6 +174,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               subscription_expires_at?: string | null;
               ai_message_count?: number;
               ai_message_limit?: number;
+              is_lifetime?: boolean;
+              lifetime_has_ai?: boolean;
             } | null);
         // Narrow default_currency defensively: forks running pre-021
         // schemas won't have the column, so a missing/null value reads
@@ -186,6 +190,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               subscription_expires_at: accountRaw.subscription_expires_at || null,
               ai_message_count: accountRaw.ai_message_count || 0,
               ai_message_limit: accountRaw.ai_message_limit || 0,
+              is_lifetime: accountRaw.is_lifetime || false,
+              lifetime_has_ai: accountRaw.lifetime_has_ai !== false,
             }
           : null;
 
