@@ -12,7 +12,7 @@ export function useUnreadConversations() {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("conversations")
-      .select("*, contact:contacts(name, phone)")
+      .select("*, contact:contacts(*)")
       .gt("unread_count", 0)
       .order("last_message_at", { ascending: false })
       .limit(5);

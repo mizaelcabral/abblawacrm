@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadConversations } from "@/hooks/use-unread-conversations";
@@ -50,6 +50,11 @@ export function NotificationMenu() {
   const { tasks: aiTasks, refetch: refetchTasks } = useAiTasks(account?.id ?? null);
   const [activeTab, setActiveTab] = useState<string>("messages");
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const totalNotifications = totalUnread + aiTasks.length;
 
@@ -72,6 +77,17 @@ export function NotificationMenu() {
 
   // Avisos de Pagamento
   const isPastDue = account?.subscription_status === "past_due" || account?.subscription_status === "unpaid";
+
+  if (!mounted) {
+    return (
+      <button
+        type="button"
+        className="relative flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <Bell className="h-5 w-5" />
+      </button>
+    );
+  }
 
   const handleApproveTask = async (taskId: string, e: React.MouseEvent) => {
     e.preventDefault();
