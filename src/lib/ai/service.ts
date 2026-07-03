@@ -114,21 +114,18 @@ export async function getAccountAIConfig(accountId: string) {
 }
 
 /**
- * Dynamically dispatch LLM completions to Gemini, OpenAI, OpenRouter, or Anthropic
+ * ponytail: execute single completion API call, isolated from failover retry loops
  */
-export async function dispatchLLMCompletion(
+async function executeSingleLLMCompletion(
+  provider: string,
+  model: string,
+  apiKey: string,
+  apiUrl: string | null,
   messages: Array<{ role: string; content: string }>,
   systemInstruction: string,
-  accountId: string,
   responseFormat?: 'json' | 'text',
   responseSchema?: any
 ): Promise<string> {
-  const { provider, model, apiKey, apiUrl } = await getAccountAIConfig(accountId)
-
-  if (!apiKey) {
-    throw new Error(`API key is missing for AI provider: ${provider}`)
-  }
-
   const modelName = model.startsWith('models/') ? model.replace('models/', '') : model
 
   if (provider === 'gemini') {
@@ -234,6 +231,71 @@ export async function dispatchLLMCompletion(
   }
 
   throw new Error(`Unsupported AI provider: ${provider}`)
+}
+
+/**
+ * Dynamically dispatch LLM completions to Gemini, OpenAI, OpenRouter, or Anthropic with failover support
+ */
+export async function dispatchLLMCompletion(
+  messages: Array<{ role: string; content: string }>,
+  systemInstruction: string,
+  accountId: string,
+  responseFormat?: 'json' | 'text',
+  responseSchema?: any
+): Promise<string> {
+  const config = await getAccountAIConfig(accountId)
+
+  // ponytail: define the execution attempt priority queue
+  const attempts: Array<{ provider: string; model: string; apiKey: string | undefined; apiUrl: string | null }> = [
+    { provider: config.provider, model: config.model, apiKey: config.apiKey, apiUrl: config.apiUrl }
+  ]
+
+  // Add same-provider alternatives
+  if (config.provider === 'gemini') {
+    if (config.model !== 'gemini-2.5-flash') {
+      attempts.push({ provider: 'gemini', model: 'gemini-2.5-flash', apiKey: config.apiKey, apiUrl: config.apiUrl })
+    }
+    attempts.push({ provider: 'gemini', model: 'gemini-2.5-pro', apiKey: config.apiKey, apiUrl: config.apiUrl })
+    
+    // Cross-provider backup using platform standard OpenAI key
+    if (process.env.OPENAI_API_KEY) {
+      attempts.push({ provider: 'openai', model: 'gpt-4o-mini', apiKey: process.env.OPENAI_API_KEY, apiUrl: null })
+    }
+  } else if (config.provider === 'openai') {
+    if (config.model !== 'gpt-4o-mini') {
+      attempts.push({ provider: 'openai', model: 'gpt-4o-mini', apiKey: config.apiKey, apiUrl: config.apiUrl })
+    }
+    attempts.push({ provider: 'openai', model: 'gpt-4o', apiKey: config.apiKey, apiUrl: config.apiUrl })
+
+    // Cross-provider backup using platform standard Gemini key
+    if (process.env.GEMINI_API_KEY) {
+      attempts.push({ provider: 'gemini', model: 'gemini-2.5-flash', apiKey: process.env.GEMINI_API_KEY, apiUrl: null })
+    }
+  }
+
+  let lastError: any = null
+
+  for (const attempt of attempts) {
+    if (!attempt.apiKey) continue
+
+    try {
+      return await executeSingleLLMCompletion(
+        attempt.provider,
+        attempt.model,
+        attempt.apiKey,
+        attempt.apiUrl,
+        messages,
+        systemInstruction,
+        responseFormat,
+        responseSchema
+      )
+    } catch (err: any) {
+      console.warn(`[AI Failover] Failed with ${attempt.provider}/${attempt.model}. Trying next fallback. Error: ${err.message || err}`)
+      lastError = err
+    }
+  }
+
+  throw new Error(`All LLM failover attempts failed. Last error: ${lastError?.message || lastError}`)
 }
 
 /**
