@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
           .from('contacts')
           .insert({
             account_id: accountId,
+            user_id: config.user_id,
             name: name,
             tiktok_user_id: sender_openid,
           })
@@ -109,6 +110,7 @@ export async function POST(request: NextRequest) {
           .from('conversations')
           .insert({
             account_id: accountId,
+            user_id: config.user_id,
             contact_id: contact.id,
             channel: 'tiktok',
             status: 'open',
