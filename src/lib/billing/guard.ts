@@ -11,7 +11,7 @@ export async function verifyBillingAndUsage(
   try {
     const { data: account, error } = await supabaseAdmin()
       .from('accounts')
-      .select('subscription_status, subscription_plan, ai_message_count, ai_message_limit')
+      .select('subscription_status, subscription_expires_at, subscription_plan, ai_message_count, ai_message_limit')
       .eq('id', accountId)
       .single()
 
@@ -25,6 +25,19 @@ export async function verifyBillingAndUsage(
       return { 
         allowed: false, 
         reason: 'Assinatura pendente. Por favor, regularize o pagamento em Configurações > Planos.' 
+      }
+    }
+
+    // 2. Check if trial has expired
+    // ponytail: keep verification inline and simple using native Date checks
+    if (
+      account.subscription_status === 'trial' &&
+      account.subscription_expires_at &&
+      new Date(account.subscription_expires_at) < new Date()
+    ) {
+      return {
+        allowed: false,
+        reason: 'Período de teste gratuito expirado. Por favor, regularize o pagamento em Configurações > Planos.'
       }
     }
 
