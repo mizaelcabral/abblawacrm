@@ -27,8 +27,9 @@ export function useUnreadConversations() {
     fetchUnread();
 
     const supabase = createClient();
+    const channelId = `unread-conversations-realtime-${Math.random().toString(36).substring(2, 11)}`;
     const channel = supabase
-      .channel("unread-conversations-realtime")
+      .channel(channelId)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "conversations" },

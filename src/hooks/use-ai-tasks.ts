@@ -55,8 +55,9 @@ export function useAiTasks(accountId: string | null) {
     fetchTasks();
 
     const supabase = createClient();
+    const channelId = `ai-tasks-realtime-${Math.random().toString(36).substring(2, 11)}`;
     const channel = supabase
-      .channel("ai-tasks-realtime")
+      .channel(channelId)
       .on(
         "postgres_changes",
         {
