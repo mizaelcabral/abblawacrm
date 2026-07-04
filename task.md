@@ -1,0 +1,7 @@
+- [x] Create and apply Supabase SQL migration for audit logs & trigger
+- [x] Modify settings-sections.ts to add audit tab
+- [x] Modify settings-rail.tsx to support adminOnly tabs
+- [x] Modify settings/page.tsx to register audit panel mapping
+- [x] Create audit-panel.tsx settings UI component
+- [x] Implement Contacts CSV export & audit logging in contacts/page.tsx
+- [x] Run typescript typechecking and unit tests

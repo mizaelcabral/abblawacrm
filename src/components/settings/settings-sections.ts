@@ -14,6 +14,7 @@ import {
   Send,
   Video,
   FileCheck,
+  History,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -41,6 +42,7 @@ export const SETTINGS_SECTIONS = [
   'deals',
   'members',
   'mcp',
+  'audit',
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
@@ -53,6 +55,7 @@ export interface SectionMeta {
   label: string;
   icon: LucideIcon;
   group: 'top' | 'account' | 'workspace';
+  adminOnly?: boolean;
 }
 
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
@@ -71,6 +74,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   deals: { id: 'deals', label: 'Negócios e moedas', icon: Coins, group: 'workspace' },
   members: { id: 'members', label: 'Membros da equipe', icon: UsersRound, group: 'workspace' },
   mcp: { id: 'mcp', label: 'Integração MCP (IA)', icon: Key, group: 'workspace' },
+  audit: { id: 'audit', label: 'Registro de auditoria', icon: History, group: 'workspace', adminOnly: true },
 };
 
 export const RAIL_GROUPS: { label: string | null; group: SectionMeta['group'] }[] = [

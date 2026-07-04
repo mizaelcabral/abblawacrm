@@ -41,6 +41,7 @@ import {
   ChevronLeft,
   ChevronRight,
   SlidersHorizontal,
+  Download,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
@@ -49,6 +50,7 @@ import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useAuth } from '@/hooks/use-auth';
 
 const PAGE_SIZE = 25;
 
@@ -58,6 +60,7 @@ interface ContactWithTags extends Contact {
 
 export default function ContactsPage() {
   const supabase = createClient();
+  const { profile } = useAuth();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
 
@@ -78,6 +81,67 @@ export default function ContactsPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*');
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        toast.info('Não há contatos para exportar.');
+        return;
+      }
+
+      // Generate CSV
+      const headers = ['ID', 'Nome', 'Telefone', 'E-mail', 'Empresa', 'Criado em'];
+      const rows = data.map((c) => [
+        c.id,
+        c.name || '',
+        c.phone || '',
+        c.email || '',
+        c.company || '',
+        c.created_at ? new Date(c.created_at).toLocaleString('pt-BR') : '',
+      ]);
+
+      const csvContent =
+        '\uFEFF' + // UTF-8 BOM so Excel displays accents correctly
+        [headers.join(','), ...rows.map((row) => row.map((val) => `"${val.replace(/"/g, '""')}"`).join(','))].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `contatos_abbla_hub_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Log the export action
+      if (profile?.account_id) {
+        await supabase.from('audit_logs').insert({
+          account_id: profile.account_id,
+          user_id: profile.id,
+          user_email: profile.email,
+          action: 'contact.export',
+          target_type: 'contacts',
+          details: { count: data.length },
+        });
+      }
+
+      toast.success('Contatos exportados com sucesso!');
+    } catch (err: any) {
+      console.error('[ContactsPage] Error exporting contacts:', err);
+      toast.error('Erro ao exportar contatos', {
+        description: err.message || 'Ocorreu um erro inesperado.',
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Bulk selection (page-scoped — only the loaded rows are selectable)
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -295,6 +359,17 @@ export default function ContactsPage() {
           >
             <Upload className="size-4" />
             Importar
+          </GatedButton>
+          <GatedButton
+            variant="outline"
+            canAct={canEdit}
+            gateReason="exportar contatos"
+            onClick={handleExport}
+            disabled={exporting}
+            className="border-border text-muted-foreground hover:bg-muted"
+          >
+            <Download className="size-4" />
+            {exporting ? 'Exportando...' : 'Exportar'}
           </GatedButton>
           <GatedButton
             canAct={canEdit}

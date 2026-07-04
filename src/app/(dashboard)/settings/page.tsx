@@ -21,6 +21,7 @@ import { DealsSettings } from '@/components/settings/deals-settings';
 import { MembersTab } from '@/components/settings/members-tab';
 import { McpKeysCard } from '@/components/settings/mcp-keys-card';
 import { ConsentPanel } from '@/components/settings/consent-panel';
+import { AuditPanel } from '@/components/settings/audit-panel';
 import {
   resolveSection,
   type SettingsSection,
@@ -29,21 +30,32 @@ import {
 function SettingsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { defaultCurrency } = useAuth();
+  const { defaultCurrency, isOwner, isAdmin } = useAuth();
   const { mode } = useTheme();
+
+  const canViewAudit = isOwner || isAdmin;
 
   // Resolve section initially from URL search parameter
   const initialSection = useMemo(() => {
-    return resolveSection(searchParams.get('tab'));
-  }, [searchParams]);
+    const resolved = resolveSection(searchParams.get('tab'));
+    if (resolved === 'audit' && !canViewAudit) {
+      return 'overview';
+    }
+    return resolved;
+  }, [searchParams, canViewAudit]);
 
   // Maintain local React state to guarantee instant visual updates
   const [section, setSection] = useState<SettingsSection>(initialSection);
 
   // Sync state if URL changes externally (like clicking links or back navigation)
   useEffect(() => {
-    setSection(resolveSection(searchParams.get('tab')));
-  }, [searchParams]);
+    const resolved = resolveSection(searchParams.get('tab'));
+    if (resolved === 'audit' && !canViewAudit) {
+      setSection('overview');
+    } else {
+      setSection(resolved);
+    }
+  }, [searchParams, canViewAudit]);
 
   const go = (next: SettingsSection) => {
     setSection(next);
@@ -79,6 +91,7 @@ function SettingsPageContent() {
     deals: <DealsSettings />,
     members: <MembersTab />,
     mcp: <McpKeysCard />,
+    audit: <AuditPanel />,
   };
 
   return (
