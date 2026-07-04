@@ -119,7 +119,7 @@ export async function PUT(request: Request) {
 
     if (error) {
       console.error('[superadmin/accounts] PUT error:', error);
-      return NextResponse.json({ error: 'Failed to update account' }, { status: 500 });
+      return NextResponse.json({ error: `Failed to update account: ${error.message} (${error.code})` }, { status: 500 });
     }
 
     const processedData = {
@@ -131,7 +131,7 @@ export async function PUT(request: Request) {
     return NextResponse.json(processedData);
   } catch (err: any) {
     console.error('[superadmin/accounts] PUT exception:', err);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: `Internal server error: ${err.message || err}` }, { status: 500 });
   }
 }
 
