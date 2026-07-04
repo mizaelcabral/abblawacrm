@@ -105,7 +105,7 @@ export default function SuperAdminAccounts() {
           id: editingAccount.id,
           subscription_plan: editPlan,
           subscription_status: editStatus,
-          ai_message_limit: editLimit || null,
+          ai_message_limit: editLimit,
           ai_provider: editProvider,
           ai_model: editModel,
           ai_api_key: clearApiKey ? null : (editApiKey === '••••••••' ? undefined : editApiKey),
