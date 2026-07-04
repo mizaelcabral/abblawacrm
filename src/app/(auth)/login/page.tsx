@@ -39,6 +39,7 @@ function LoginPageInner() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [consentChecked, setConsentChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -49,7 +50,7 @@ function LoginPageInner() {
     setError(null);
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -58,6 +59,20 @@ function LoginPageInner() {
       setError(error.message);
       setLoading(false);
       return;
+    }
+
+    // Update consent fields if checkbox accepted
+    if (consentChecked && data?.user) {
+      await supabase
+        .from('profiles')
+        .update({
+          terms_accepted: true,
+          privacy_accepted: true,
+          terms_accepted_at: new Date().toISOString(),
+          privacy_accepted_at: new Date().toISOString(),
+          consent_version: 'v1.0',
+        })
+        .eq('user_id', data.user.id);
     }
 
     if (inviteToken) {
@@ -134,6 +149,21 @@ function LoginPageInner() {
                 className="border-border bg-muted text-foreground placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/20"
               />
             </div>
+
+            <label className="flex items-center space-x-2 mt-4 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                required
+                checked={consentChecked}
+                onChange={(e) => setConsentChecked(e.target.checked)}
+              />
+              <span>
+                Eu li e concordo com os{" "}
+                <Link href="/terms-of-service" className="underline">Termos de Serviço</Link>
+                {" "}e a{" "}
+                <Link href="/politica-de-privacidade" className="underline">Política de Privacidade</Link>.
+              </span>
+            </label>
 
             <Button
               type="submit"

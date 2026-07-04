@@ -20,6 +20,7 @@ import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel'
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { MembersTab } from '@/components/settings/members-tab';
 import { McpKeysCard } from '@/components/settings/mcp-keys-card';
+import { ConsentPanel } from '@/components/settings/consent-panel';
 import {
   resolveSection,
   type SettingsSection,
@@ -66,6 +67,7 @@ function SettingsPageContent() {
     overview: <SettingsOverview onSelect={go} />,
     profile: <ProfileForm />,
     security: <SecurityPanel />,
+    consent: <ConsentPanel />,
     appearance: <AppearancePanel />,
     plans: <PlansPanel />,
     whatsapp: <WhatsAppConfig />,

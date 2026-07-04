@@ -13,6 +13,7 @@ import {
   Share2,
   Send,
   Video,
+  FileCheck,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -28,6 +29,7 @@ export const SETTINGS_SECTIONS = [
   'overview',
   'profile',
   'security',
+  'consent',
   'appearance',
   'plans',
   'whatsapp',
@@ -57,6 +59,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   overview: { id: 'overview', label: 'Visão geral', icon: LayoutGrid, group: 'top' },
   profile: { id: 'profile', label: 'Seu perfil', icon: User, group: 'account' },
   security: { id: 'security', label: 'Segurança e login', icon: Shield, group: 'account' },
+  consent: { id: 'consent', label: 'Consentimentos (LGPD)', icon: FileCheck, group: 'account' },
   appearance: { id: 'appearance', label: 'Aparência', icon: Palette, group: 'account' },
   plans: { id: 'plans', label: 'Planos & Faturamento', icon: CreditCard, group: 'account' },
   whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace' },
