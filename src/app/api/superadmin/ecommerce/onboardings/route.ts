@@ -1,6 +1,31 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/automations/admin-client';
+import fs from 'fs';
+import path from 'path';
+
+// Force load .env.local manually as fallback for Next.js Turbopack env parsing bugs
+try {
+  const envPath = path.resolve(process.cwd(), '.env.local');
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf-8');
+    envContent.split('\n').forEach((line) => {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const firstEquals = trimmed.indexOf('=');
+        if (firstEquals !== -1) {
+          const key = trimmed.substring(0, firstEquals).trim();
+          const val = trimmed.substring(firstEquals + 1).trim();
+          if (key && val && !process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      }
+    });
+  }
+} catch (err) {
+  console.error('Failed to manually parse .env.local:', err);
+}
 
 export async function GET() {
   try {
@@ -125,6 +150,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, data });
     } else {
       // Modo automático: chamar a Woovi
+      console.log('DEBUG: process.env.WOOVI_MASTER_APP_ID =', process.env.WOOVI_MASTER_APP_ID);
       const masterAppId = process.env.WOOVI_MASTER_APP_ID;
       if (!masterAppId) {
         return NextResponse.json({ error: 'WOOVI_MASTER_APP_ID is not configured.' }, { status: 400 });
