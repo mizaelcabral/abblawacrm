@@ -8,9 +8,23 @@ import path from 'path';
 function loadEnvLocal() {
   if (process.env.NODE_ENV === 'test') return;
   try {
-    const envPath = path.resolve(process.cwd(), '.env.local');
-    if (fs.existsSync(envPath)) {
-      const envContent = fs.readFileSync(envPath, 'utf-8');
+    let currentDir = process.cwd();
+    let foundPath = '';
+    
+    // Search up to 5 levels up from process.cwd() for .env.local
+    for (let i = 0; i < 5; i++) {
+      const checkPath = path.resolve(currentDir, '.env.local');
+      if (fs.existsSync(checkPath)) {
+        foundPath = checkPath;
+        break;
+      }
+      const parentDir = path.dirname(currentDir);
+      if (parentDir === currentDir) break;
+      currentDir = parentDir;
+    }
+
+    if (foundPath) {
+      const envContent = fs.readFileSync(foundPath, 'utf-8');
       envContent.split('\n').forEach((line) => {
         const trimmed = line.trim();
         if (trimmed && !trimmed.startsWith('#')) {
@@ -24,6 +38,8 @@ function loadEnvLocal() {
           }
         }
       });
+    } else {
+      console.error('[superadmin/ecommerce/onboardings] loadEnvLocal: Could not locate .env.local starting from', process.cwd());
     }
   } catch (err) {
     console.error('Failed to manually parse .env.local:', err);
