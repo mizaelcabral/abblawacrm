@@ -124,6 +124,27 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [pendingOnboardingCount, setPendingOnboardingCount] = useState(0);
+
+  useEffect(() => {
+    if (profile?.role !== 'super_admin') return;
+
+    const fetchPendingCount = async () => {
+      try {
+        const res = await fetch('/api/superadmin/ecommerce/onboardings');
+        if (res.ok) {
+          const data = await res.json();
+          setPendingOnboardingCount(data.length);
+        }
+      } catch (err) {
+        console.error('Failed to fetch pending onboardings count:', err);
+      }
+    };
+
+    fetchPendingCount();
+    const interval = setInterval(fetchPendingCount, 60000);
+    return () => clearInterval(interval);
+  }, [profile?.role]);
 
   useEffect(() => {
     const saved = localStorage.getItem("abbla_sidebar_collapsed");
@@ -326,7 +347,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 <Link
                   href="/superadmin"
                   className={cn(
-                    "flex items-center rounded-lg text-sm font-medium transition-all duration-300 lg:py-2",
+                    "flex items-center rounded-lg text-sm font-medium transition-all duration-300 lg:py-2 relative",
                     mounted && isCollapsed
                       ? "justify-center px-0 w-10 mx-auto py-2.5"
                       : "gap-3 px-3 py-2.5",
@@ -335,7 +356,15 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                       : "text-amber-500 hover:bg-muted"
                   )}
                 >
-                  <Shield className="h-4 w-4" />
+                  <div className="relative">
+                    <Shield className="h-4 w-4" />
+                    {pendingOnboardingCount > 0 && mounted && isCollapsed && (
+                      <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                      </span>
+                    )}
+                  </div>
                   <span
                     className={cn(
                       "flex-1 transition-all duration-300 overflow-hidden whitespace-nowrap",
@@ -344,6 +373,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                   >
                     Painel Super Admin
                   </span>
+                  {pendingOnboardingCount > 0 && !(mounted && isCollapsed) && (
+                    <span className="bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 animate-pulse">
+                      {pendingOnboardingCount}
+                    </span>
+                  )}
                 </Link>
               </li>
             )}
