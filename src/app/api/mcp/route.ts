@@ -3,7 +3,8 @@ import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/automations/admin-client';
 import { sendTextMessage } from '@/lib/whatsapp/meta-api';
 import { decrypt } from '@/lib/whatsapp/encryption';
-import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
+import { sanitizePhoneForMeta, isValidE164, normalizePhone } from '@/lib/whatsapp/phone-utils';
+import { WooviClient } from '@/lib/woovi/client';
 
 async function authenticateApiKey(request: Request): Promise<{ accountId: string; userId: string; keyId: string } | null> {
   try {
@@ -209,6 +210,29 @@ export async function POST(request: Request) {
                 inputSchema: {
                   type: 'object',
                   properties: {}
+                }
+              },
+              {
+                name: 'search_store_products',
+                description: 'Search active products in the store catalog.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    query: { type: 'string', description: 'Search term for product name or description' }
+                  }
+                }
+              },
+              {
+                name: 'create_direct_charge',
+                description: 'Generate a Pix payment charge for a specific product and send it directly to the customer.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    phone: { type: 'string', description: 'Recipient phone number (international format, e.g. +5511999999999)' },
+                    product_id: { type: 'string', description: 'UUID of the product to sell' },
+                    variation_id: { type: 'string', description: 'Optional UUID of the specific product variation. Defaults to first variation if omitted.' }
+                  },
+                  required: ['phone', 'product_id']
                 }
               }
             ],
@@ -548,6 +572,232 @@ export async function handleToolCall(name: string, args: any, accountId: string)
           {
             type: 'text',
             text: JSON.stringify({ pipelines, stages, deals }, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'search_store_products': {
+      const query = args?.query || '';
+      let builder = admin
+        .from('products')
+        .select('*, category:product_categories(name), variations:product_variations(*)')
+        .eq('account_id', accountId)
+        .eq('active', true);
+      
+      if (query) {
+        builder = builder.ilike('name', `%${query}%`);
+      }
+
+      const { data, error } = await builder;
+      if (error) throw error;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(data || [], null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'create_direct_charge': {
+      const { phone, product_id, variation_id } = args;
+      const sanitizedPhone = sanitizePhoneForMeta(phone);
+      if (!isValidE164(sanitizedPhone)) {
+        throw new Error('Invalid phone format. Please use international E.164 format (e.g. +5511999999999)');
+      }
+
+      // 1. Fetch Woovi Config
+      const { data: wooviConfig, error: configError } = await admin
+        .from('woovi_config')
+        .select('*')
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (configError || !wooviConfig || !wooviConfig.app_id) {
+        throw new Error('Loja ou credenciais Woovi do tenant não configuradas.');
+      }
+
+      // Fetch markup rates from accounts (Super Admin)
+      const { data: account } = await admin
+        .from('accounts')
+        .select('woovi_markup_fixed, woovi_markup_percent, woovi_markup_pix_key')
+        .eq('id', accountId)
+        .maybeSingle();
+
+      // 2. Fetch Product and Variation
+      const { data: product, error: prodError } = await admin
+        .from('products')
+        .select('*')
+        .eq('id', product_id)
+        .eq('active', true)
+        .maybeSingle();
+
+      if (prodError || !product) {
+        throw new Error('Produto não encontrado ou inativo.');
+      }
+
+      const { data: variations, error: varError } = await admin
+        .from('product_variations')
+        .select('*')
+        .eq('product_id', product_id);
+
+      if (varError || !variations || variations.length === 0) {
+        throw new Error('Nenhuma variação de preço disponível para este produto.');
+      }
+
+      const selectedVar = variation_id
+        ? variations.find((v: any) => v.id === variation_id)
+        : variations[0];
+
+      if (!selectedVar) {
+        throw new Error('Variação de produto especificada não encontrada.');
+      }
+
+      // 3. Find or Create Contact in CRM
+      const suffix = sanitizedPhone.length >= 8 ? sanitizedPhone.slice(-8) : sanitizedPhone;
+      let contactId: string | null = null;
+      let contactName = 'Cliente';
+      let contactEmail = 'cliente@email.com';
+
+      const { data: contacts } = await admin
+        .from('contacts')
+        .select('*')
+        .eq('account_id', accountId)
+        .like('phone', `%${suffix}`);
+
+      if (contacts && contacts.length > 0) {
+        const matched = contacts.find((c) => {
+          const cNorm = normalizePhone(c.phone || '');
+          return cNorm.slice(-8) === sanitizedPhone.slice(-8);
+        });
+        if (matched) {
+          contactId = matched.id;
+          contactName = matched.name || 'Cliente';
+          contactEmail = matched.email || 'cliente@email.com';
+        }
+      }
+
+      if (!contactId) {
+        const { data: newContact, error: insertError } = await admin
+          .from('contacts')
+          .insert({
+            account_id: accountId,
+            phone: sanitizedPhone,
+            name: `Cliente (${phone})`,
+          })
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+        contactId = newContact.id;
+        contactName = newContact.name;
+      }
+
+      // 4. Create Order
+      const totalAmount = Number(selectedVar.price);
+      const { data: order, error: orderError } = await admin
+        .from('orders')
+        .insert({
+          account_id: accountId,
+          contact_id: contactId,
+          status: 'pending',
+          shipping_amount: 0.00,
+          items_amount: totalAmount,
+          total_amount: totalAmount,
+          customer_info: {
+            name: contactName,
+            phone: sanitizedPhone,
+            email: contactEmail,
+          },
+        })
+        .select()
+        .single();
+
+      if (orderError || !order) {
+        throw new Error(`Falha ao criar o pedido: ${orderError?.message}`);
+      }
+
+      // Create Order Item
+      const { error: itemError } = await admin
+        .from('order_items')
+        .insert({
+          order_id: order.id,
+          product_variation_id: selectedVar.id,
+          quantity: 1,
+          unit_price: totalAmount,
+        });
+
+      if (itemError) {
+        await admin.from('orders').delete().eq('id', order.id);
+        throw new Error(`Falha ao criar item de pedido: ${itemError.message}`);
+      }
+
+      // 5. Call Woovi API
+      const isSandbox =
+        wooviConfig.app_id.includes('sandbox') ||
+        wooviConfig.app_id.startsWith('plugin_sb') ||
+        process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('localhost');
+
+      const wooviClient = new WooviClient(wooviConfig.app_id, isSandbox);
+      const valueCents = Math.round(totalAmount * 100);
+
+      const markupFixed = account?.woovi_markup_fixed !== undefined && account?.woovi_markup_fixed !== null 
+        ? Number(account.woovi_markup_fixed) 
+        : 0.50;
+      const markupPercent = account?.woovi_markup_percent !== undefined && account?.woovi_markup_percent !== null 
+        ? Number(account.woovi_markup_percent) 
+        : 1.00;
+      const markupPixKey = account?.woovi_markup_pix_key || process.env.WOOVI_MASTER_PIX_KEY;
+
+      const splits = [];
+      if (markupPixKey) {
+        const fixedCents = Math.round(markupFixed * 100);
+        const percentCents = Math.round(valueCents * (markupPercent / 100));
+        const splitValue = fixedCents + percentCents;
+
+        // ponytail: Only split if the calculated markup is valid and strictly less than total value
+        if (splitValue > 0 && splitValue < valueCents) {
+          splits.push({
+            pixKey: markupPixKey,
+            value: splitValue,
+          });
+        }
+      }
+
+      const chargeResponse = await wooviClient.createCharge({
+        correlationID: order.id,
+        value: valueCents,
+        customer: {
+          name: contactName,
+          email: contactEmail,
+          phone: sanitizedPhone,
+        },
+        ...(splits.length > 0 ? { splits } : {}),
+      });
+
+      // Update Order with Woovi response
+      const { data: updatedOrder, error: updateError } = await admin
+        .from('orders')
+        .update({
+          woovi_correlation_id: chargeResponse.correlationID,
+          woovi_qrcode_image: chargeResponse.charge.qrCodeImage,
+          woovi_brcode: chargeResponse.charge.brCode,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', order.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(updatedOrder, null, 2),
           },
         ],
       };

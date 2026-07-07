@@ -1,5 +1,9 @@
 import { handleToolCall } from '@/app/api/mcp/route'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
+import { decrypt } from '@/lib/whatsapp/encryption'
+import { sendTextMessage } from '@/lib/whatsapp/meta-api'
+import { normalizePhone } from '@/lib/whatsapp/phone-utils'
+
 
 interface GeminiMessagePart {
   text?: string
@@ -86,6 +90,29 @@ const GEMINI_TOOLS = [
           type: 'OBJECT',
           properties: {}
         }
+      },
+      {
+        name: 'search_store_products',
+        description: 'Search active products in the store catalog. Optional query parameter to filter by name or description.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            query: { type: 'STRING', description: 'Filter products by keyword in name or description' }
+          }
+        }
+      },
+      {
+        name: 'create_direct_charge',
+        description: 'Generate a Pix payment charge for a specific product and send it directly to the customer in the WhatsApp chat.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            phone: { type: 'STRING', description: 'Recipient phone number (international format, e.g. +5511999999999)' },
+            product_id: { type: 'STRING', description: 'UUID of the product to sell' },
+            variation_id: { type: 'STRING', description: 'Optional UUID of the specific product variation.' }
+          },
+          required: ['phone', 'product_id']
+        }
       }
     ]
   }
@@ -94,6 +121,13 @@ const GEMINI_TOOLS = [
 export async function executePendingAITasks(): Promise<{ processed: number; errors: number }> {
   const db = supabaseAdmin()
   
+  // Executar varredura de lembretes de recompra
+  try {
+    await sendRepurchaseReminders()
+  } catch (cronErr) {
+    console.error('[AI Task Worker] Erro na varredura de lembretes de recompra:', cronErr)
+  }
+
   // 1. Fetch pending tasks flagged as AI tasks
   const { data: tasks, error } = await db
     .from('tasks')
@@ -263,3 +297,95 @@ Instruções importantes:
 
   return finalResponseText || 'A tarefa foi analisada, mas nenhuma resposta de texto foi gerada.'
 }
+
+/**
+ * Varre todos os pedidos pagos buscando itens com repurchase_reminder_at atingido,
+ * e envia lembrete automático no WhatsApp.
+ */
+export async function sendRepurchaseReminders(): Promise<{ sent: number; errors: number }> {
+  const db = supabaseAdmin()
+  let sentCount = 0
+  let errorCount = 0
+
+  try {
+    const { data: orders, error } = await db
+      .from('orders')
+      .select(`
+        *,
+        order_items(
+          *,
+          variation:product_variations(
+            *,
+            product:products(*)
+          )
+        )
+      `)
+      .eq('status', 'paid')
+      .eq('repurchase_reminder_sent', false)
+      .lte('repurchase_reminder_at', new Date().toISOString());
+
+    if (error) {
+      console.error('[Repurchase Scheduler] Failed to fetch reminders:', error)
+      return { sent: 0, errors: 1 }
+    }
+
+    if (!orders || orders.length === 0) {
+      return { sent: 0, errors: 0 }
+    }
+
+    for (const order of orders as any[]) {
+      try {
+        const accountId = order.account_id
+        const customerPhone = normalizePhone(order.customer_info?.phone || '')
+
+        if (!customerPhone) {
+          await db.from('orders').update({ repurchase_reminder_sent: true }).eq('id', order.id)
+          continue
+        }
+
+        const { data: waConfig } = await db
+          .from('whatsapp_config')
+          .select('*')
+          .eq('account_id', accountId)
+          .maybeSingle()
+
+        if (waConfig && waConfig.access_token && waConfig.phone_number_id) {
+          const accessToken = decrypt(waConfig.access_token)
+          const customerName = order.customer_info?.name || 'Cliente'
+
+          const itemNames = order.order_items
+            .map((item: any) => item.variation?.product?.name)
+            .filter((name: string) => !!name)
+            .join(', ')
+
+          const messageText = `Olá, *${customerName}*! Tudo bem?\n\nFaz algum tempo desde sua última compra de *${itemNames || 'nossos produtos'}*.\nQue tal repor seu estoque ou renovar seus serviços conosco?\n\nPara fazer um novo pedido, visite nossa vitrine online:\n👉 https://${process.env.NEXT_PUBLIC_APP_URL || 'abbla.chat'}/shop/${accountId}`
+
+          await sendTextMessage({
+            phoneNumberId: waConfig.phone_number_id,
+            accessToken,
+            to: customerPhone,
+            text: messageText,
+          })
+
+          sentCount++
+        }
+
+        await db
+          .from('orders')
+          .update({ repurchase_reminder_sent: true, updated_at: new Date().toISOString() })
+          .eq('id', order.id)
+
+      } catch (err) {
+        console.error(`[Repurchase Scheduler] Failed to process order ${order.id}:`, err)
+        errorCount++
+      }
+    }
+
+  } catch (err) {
+    console.error('[Repurchase Scheduler] Error during run:', err)
+    errorCount++
+  }
+
+  return { sent: sentCount, errors: errorCount }
+}
+

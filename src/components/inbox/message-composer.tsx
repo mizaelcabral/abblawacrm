@@ -20,6 +20,7 @@ import {
   Loader2,
   Sparkles,
   BookMarked,
+  ShoppingBag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GatedButton } from "@/components/ui/gated-button";
@@ -29,6 +30,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useAuth } from "@/hooks/use-auth";
+import { createClient } from "@/lib/supabase/client";
+import type { Product, ProductVariation } from "@/types";
 import { useCan } from "@/hooks/use-can";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -128,6 +138,121 @@ export function MessageComposer({
   const [sending, setSending] = useState(false);
   const [suggestion, setSuggestion] = useState("");
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
+
+  // E-commerce Direct Integration States
+  const { accountId } = useAuth();
+  const supabase = createClient();
+  const [storeDialogOpen, setStoreDialogOpen] = useState(false);
+  const [catalogProducts, setCatalogProducts] = useState<(Product & { variations: ProductVariation[] })[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [selectedProd, setSelectedProd] = useState<(Product & { variations: ProductVariation[] }) | null>(null);
+  const [selectedVar, setSelectedVar] = useState<ProductVariation | null>(null);
+  const [generatingPix, setGeneratingPix] = useState(false);
+
+  const handleOpenStoreDialog = useCallback(async () => {
+    if (!accountId) return;
+    setStoreDialogOpen(true);
+    setCatalogLoading(true);
+    try {
+      const { data: prods } = await supabase
+        .from('products')
+        .select('*, variations:product_variations(*)')
+        .eq('account_id', accountId)
+        .eq('active', true);
+      
+      if (prods) {
+        setCatalogProducts(prods as any[]);
+        if (prods.length > 0) {
+          setSelectedProd(prods[0] as any);
+          if (prods[0].variations && prods[0].variations.length > 0) {
+            setSelectedVar(prods[0].variations[0]);
+          }
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCatalogLoading(false);
+    }
+  }, [accountId, supabase]);
+
+  const handleSendProductLink = () => {
+    if (!selectedProd) return;
+    const linkText = `Confira nosso produto *${selectedProd.name}* em nossa vitrine virtual:\n👉 https://${window.location.host}/shop/${accountId}/product/${selectedProd.slug}`;
+    setText((prev) => prev ? `${prev}\n${linkText}` : linkText);
+    setStoreDialogOpen(false);
+    toast.success('Link do produto inserido no editor!');
+  };
+
+  const handleGenerateAndSendPix = async () => {
+    if (!selectedProd || !selectedVar || !accountId) return;
+    setGeneratingPix(true);
+    try {
+      // 1. Obter contato da conversa atual
+      const { data: conv, error: convError } = await supabase
+        .from('conversations')
+        .select('*, contact:contacts(*)')
+        .eq('id', conversationId)
+        .maybeSingle();
+
+      if (convError || !conv || !conv.contact) {
+        toast.error('Erro ao buscar contato vinculado a esta conversa.');
+        return;
+      }
+
+      const contact = conv.contact;
+
+      // 2. Chamar a rota de checkout para criar o pedido e gerar cobrança Pix
+      const res = await fetch('/api/ecommerce/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId,
+          customerInfo: {
+            name: contact.name || 'Cliente',
+            phone: contact.phone || '',
+            email: contact.email || 'cliente@email.com'
+          },
+          cartItems: [{
+            variationId: selectedVar.id,
+            quantity: 1
+          }],
+          shippingAddress: null
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Erro ao gerar Pix');
+      }
+
+      const order = await res.json();
+
+      // 3. Montar mensagem com QR Code e Copia e Cola
+      let msg = `Olá, *${contact.name || 'Cliente'}*! Geramos uma cobrança Pix para o produto *${selectedProd.name}* no valor de *R$ ${Number(selectedVar.price).toFixed(2)}*.\n\n`;
+      
+      if (order.woovi_brcode) {
+        msg += `🔹 *Código Copia e Cola:*\n\`${order.woovi_brcode}\`\n\n`;
+      }
+      
+      if (order.woovi_qrcode_image) {
+        msg += `🔹 *Link QR Code:*\n${order.woovi_qrcode_image}\n\n`;
+      }
+
+      msg += `Você também pode finalizar a compra informando seus dados de entrega no link:\n👉 https://${window.location.host}/shop/${accountId}/product/${selectedProd.slug}`;
+
+      // 4. Enviar mensagem
+      onSend(msg, replyTo?.id);
+      setStoreDialogOpen(false);
+      toast.success('Cobrança Pix gerada e enviada com sucesso no chat!');
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || 'Erro ao gerar cobrança Pix.');
+    } finally {
+      setGeneratingPix(false);
+    }
+  };
+
   const [kbOpen, setKbOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -666,6 +791,19 @@ export function MessageComposer({
             <Sparkles className="h-4 w-4" />
           </GatedButton>
 
+          <GatedButton
+            variant="ghost"
+            size="sm"
+            canAct={!readOnly}
+            gateReason="enviar mensagens"
+            title={readOnly ? undefined : "Produtos & Link de Vendas"}
+            className="h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+            onClick={handleOpenStoreDialog}
+            disabled={inputsDisabled}
+          >
+            <ShoppingBag className="h-4 w-4" />
+          </GatedButton>
+
           <textarea
             ref={textareaRef}
             value={text}
@@ -719,6 +857,89 @@ export function MessageComposer({
           Digite &apos;/&apos; para respostas rápidas
         </p>
       )}
+
+      {/* Dialog de Integração de Produtos & Pix Rápido */}
+      <Dialog open={storeDialogOpen} onOpenChange={setStoreDialogOpen}>
+        <DialogContent className="max-w-md bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground font-bold">
+              <ShoppingBag className="h-5 w-5 text-primary" />
+              Enviar Link ou Pix de Produto
+            </DialogTitle>
+          </DialogHeader>
+
+          {catalogLoading ? (
+            <div className="flex h-36 items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-primary animate-pulse" />
+            </div>
+          ) : catalogProducts.length === 0 ? (
+            <div className="text-center py-6 text-sm text-muted-foreground">
+              Nenhum produto cadastrado ou ativo na loja.
+            </div>
+          ) : (
+            <div className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-muted-foreground">Selecione o Produto:</label>
+                <select
+                  className="w-full bg-muted border border-border rounded-xl p-2.5 text-sm text-foreground focus:outline-none"
+                  value={selectedProd?.id || ''}
+                  onChange={(e) => {
+                    const matched = catalogProducts.find(p => p.id === e.target.value);
+                    if (matched) {
+                      setSelectedProd(matched);
+                      setSelectedVar(matched.variations?.[0] || null);
+                    }
+                  }}
+                >
+                  {catalogProducts.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.product_type === 'digital' ? 'Digital' : 'Físico'})</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedProd && selectedProd.variations && selectedProd.variations.length > 0 && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted-foreground">Variação / Preço:</label>
+                  <select
+                    className="w-full bg-muted border border-border rounded-xl p-2.5 text-sm text-foreground focus:outline-none"
+                    value={selectedVar?.id || ''}
+                    onChange={(e) => {
+                      const matched = selectedProd.variations.find(v => v.id === e.target.value);
+                      if (matched) setSelectedVar(matched);
+                    }}
+                  >
+                    {selectedProd.variations.map(v => {
+                      const attrs = Object.values(v.attributes).join(' / ') || 'Única';
+                      return (
+                        <option key={v.id} value={v.id}>
+                          {attrs} - R$ {Number(v.price).toFixed(2)}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2 border-t border-border">
+                <Button
+                  variant="outline"
+                  className="flex-1 rounded-xl text-xs"
+                  onClick={handleSendProductLink}
+                >
+                  Inserir Link no Editor
+                </Button>
+                <Button
+                  className="flex-1 rounded-xl text-xs"
+                  onClick={handleGenerateAndSendPix}
+                  disabled={generatingPix}
+                >
+                  {generatingPix ? 'Gerando Pix...' : 'Gerar & Enviar Pix'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

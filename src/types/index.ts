@@ -579,3 +579,109 @@ export interface Task {
     avatar_url?: string | null;
   } | null;
 }
+
+// ============================================================
+// E-commerce & Woovi Payment Entities
+// ============================================================
+
+export type WooviOnboardingStatus = 'none' | 'pending_approval' | 'approved';
+export type ProductType = 'physical' | 'digital';
+export type OrderStatus = 'pending' | 'paid' | 'cancelled';
+
+export interface WooviConfig {
+  id: string;
+  account_id: string;
+  onboarding_status: WooviOnboardingStatus;
+  app_id?: string | null;
+  secret_key?: string | null;
+  default_shipping_fee: number;
+  store_description?: string | null;
+  store_logo_url?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductCategory {
+  id: string;
+  account_id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+}
+
+export interface Product {
+  id: string;
+  account_id: string;
+  category_id?: string | null;
+  name: string;
+  slug: string;
+  description?: string | null;
+  images: string[];
+  active: boolean;
+  product_type: ProductType;
+  digital_content?: string | null;
+  repurchase_reminder_days?: number | null;
+  shipping_fee?: number | null;
+  upsell_product_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductVariation {
+  id: string;
+  product_id: string;
+  sku?: string | null;
+  price: number;
+  stock: number;
+  attributes: Record<string, string>;
+  created_at: string;
+}
+
+export interface ShippingAddress {
+  id: string;
+  contact_id: string;
+  label?: string;
+  street: string;
+  number: string;
+  complement?: string | null;
+  neighborhood: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Order {
+  id: string;
+  account_id: string;
+  contact_id?: string | null;
+  status: OrderStatus;
+  shipping_amount: number;
+  items_amount: number;
+  total_amount: number;
+  customer_info: {
+    name: string;
+    phone: string;
+    email: string;
+  };
+  shipping_address_id?: string | null;
+  woovi_correlation_id?: string | null;
+  woovi_qrcode_image?: string | null;
+  woovi_brcode?: string | null;
+  repurchase_reminder_at?: string | null;
+  repurchase_reminder_sent: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrderItem {
+  id: string;
+  order_id: string;
+  product_variation_id: string;
+  quantity: number;
+  unit_price: number;
+  is_upsell: boolean;
+}
+

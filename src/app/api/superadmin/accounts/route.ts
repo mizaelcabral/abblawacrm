@@ -84,6 +84,9 @@ export async function PUT(request: Request) {
       ai_api_url,
       is_lifetime,
       lifetime_has_ai,
+      woovi_markup_fixed,
+      woovi_markup_percent,
+      woovi_markup_pix_key,
     } = body;
 
     if (!id) {
@@ -101,6 +104,9 @@ export async function PUT(request: Request) {
     if (ai_api_url !== undefined) updateData.ai_api_url = ai_api_url;
     if (is_lifetime !== undefined) updateData.is_lifetime = is_lifetime;
     if (lifetime_has_ai !== undefined) updateData.lifetime_has_ai = lifetime_has_ai;
+    if (woovi_markup_fixed !== undefined) updateData.woovi_markup_fixed = woovi_markup_fixed;
+    if (woovi_markup_percent !== undefined) updateData.woovi_markup_percent = woovi_markup_percent;
+    if (woovi_markup_pix_key !== undefined) updateData.woovi_markup_pix_key = woovi_markup_pix_key;
     
     if (ai_api_key !== undefined) {
       if (ai_api_key === null || (typeof ai_api_key === 'string' && ai_api_key.trim() === '')) {

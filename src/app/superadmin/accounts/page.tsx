@@ -38,6 +38,9 @@ interface Account {
   has_ai_key?: boolean;
   is_lifetime?: boolean;
   lifetime_has_ai?: boolean;
+  woovi_markup_fixed?: number;
+  woovi_markup_percent?: number;
+  woovi_markup_pix_key?: string | null;
 }
 
 export default function SuperAdminAccounts() {
@@ -57,6 +60,9 @@ export default function SuperAdminAccounts() {
   const [clearApiKey, setClearApiKey] = useState(false);
   const [editIsLifetime, setEditIsLifetime] = useState(false);
   const [editLifetimeHasAi, setEditLifetimeHasAi] = useState(true);
+  const [editMarkupFixed, setEditMarkupFixed] = useState(0.50);
+  const [editMarkupPercent, setEditMarkupPercent] = useState(1.00);
+  const [editMarkupPixKey, setEditMarkupPixKey] = useState('');
   const [saving, setSaving] = useState(false);
 
   const fetchAccounts = async () => {
@@ -91,6 +97,9 @@ export default function SuperAdminAccounts() {
     setClearApiKey(false);
     setEditIsLifetime(acc.is_lifetime || false);
     setEditLifetimeHasAi(acc.lifetime_has_ai !== false);
+    setEditMarkupFixed(acc.woovi_markup_fixed ?? 0.50);
+    setEditMarkupPercent(acc.woovi_markup_percent ?? 1.00);
+    setEditMarkupPixKey(acc.woovi_markup_pix_key || '');
   };
 
   const handleSave = async () => {
@@ -112,6 +121,9 @@ export default function SuperAdminAccounts() {
           ai_api_url: editApiUrl || null,
           is_lifetime: editIsLifetime,
           lifetime_has_ai: editLifetimeHasAi,
+          woovi_markup_fixed: editMarkupFixed,
+          woovi_markup_percent: editMarkupPercent,
+          woovi_markup_pix_key: editMarkupPixKey || null,
         }),
       });
 
@@ -437,7 +449,7 @@ export default function SuperAdminAccounts() {
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
               <div className="space-y-1.5">
                 <Label htmlFor="plan" className="text-xs font-semibold text-muted-foreground uppercase">Plano</Label>
                 <select
@@ -602,6 +614,56 @@ export default function SuperAdminAccounts() {
                     />
                   </div>
                 )}
+              </div>
+
+              {/* Configuração de Markup Woovi (Taxas) - ponytail: Simple inputs to customize transaction fees */}
+              <div className="border-t border-border pt-4 mt-4 space-y-4">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <DollarSign className="h-4 w-4 text-primary" /> Taxas de Markup (Split Pix)
+                </h4>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="markupFixed" className="text-xs font-semibold text-muted-foreground uppercase font-mono">Taxa Fixa (R$)</Label>
+                    <Input
+                      id="markupFixed"
+                      type="number"
+                      step="0.01"
+                      placeholder="Ex: 0.50"
+                      value={editMarkupFixed}
+                      onChange={(e) => setEditMarkupFixed(Number(e.target.value))}
+                      className="bg-muted border-border text-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="markupPercent" className="text-xs font-semibold text-muted-foreground uppercase font-mono">Taxa Percentual (%)</Label>
+                    <Input
+                      id="markupPercent"
+                      type="number"
+                      step="0.1"
+                      placeholder="Ex: 1.0"
+                      value={editMarkupPercent}
+                      onChange={(e) => setEditMarkupPercent(Number(e.target.value))}
+                      className="bg-muted border-border text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="markupPixKey" className="text-xs font-semibold text-muted-foreground uppercase font-mono">Chave Pix Recebedora (Split)</Label>
+                  <Input
+                    id="markupPixKey"
+                    type="text"
+                    placeholder="Chave Pix (E-mail, CNPJ, Celular, etc.)"
+                    value={editMarkupPixKey}
+                    onChange={(e) => setEditMarkupPixKey(e.target.value)}
+                    className="bg-muted border-border text-sm"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Chave Pix da plataforma que receberá o comissionamento. Deixe vazio para usar a padrão.
+                  </p>
+                </div>
               </div>
 
               {editStatus === 'canceled' && (
