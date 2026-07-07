@@ -11,6 +11,20 @@ vi.mock('@/lib/automations/admin-client', () => {
   return {
     supabaseAdmin: () => ({
       from: (table: string) => {
+        if (table === 'orders') {
+          return {
+            select: () => ({
+              eq: () => ({
+                eq: () => ({
+                  lte: () => Promise.resolve({ data: [], error: null })
+                })
+              })
+            }),
+            update: () => ({
+              eq: () => Promise.resolve({ error: null })
+            })
+          }
+        }
         return {
           select: () => ({
             eq: (col: string, val: any) => ({
