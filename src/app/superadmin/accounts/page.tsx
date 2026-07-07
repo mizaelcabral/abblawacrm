@@ -65,6 +65,17 @@ export default function SuperAdminAccounts() {
   const [editMarkupPixKey, setEditMarkupPixKey] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Store requests (onboardings) states
+  const [activeTab, setActiveTab] = useState<'accounts' | 'onboardings'>('accounts');
+  const [onboardings, setOnboardings] = useState<any[]>([]);
+  const [onboardingsLoading, setOnboardingsLoading] = useState(false);
+  const [approvingOnboarding, setApprovingOnboarding] = useState<any | null>(null);
+  const [manualAppId, setManualAppId] = useState('');
+  const [manualSecretKey, setManualSecretKey] = useState('');
+  const [autoPixKey, setAutoPixKey] = useState('');
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [isAutoModalOpen, setIsAutoModalOpen] = useState(false);
+
   const fetchAccounts = async () => {
     try {
       const res = await fetch('/api/superadmin/accounts');
@@ -81,9 +92,33 @@ export default function SuperAdminAccounts() {
     }
   };
 
+  const fetchOnboardings = async () => {
+    try {
+      setOnboardingsLoading(true);
+      const res = await fetch('/api/superadmin/ecommerce/onboardings');
+      if (res.ok) {
+        const data = await res.json();
+        setOnboardings(data);
+      } else {
+        toast.error('Erro ao carregar solicitações de loja.');
+      }
+    } catch (err) {
+      toast.error('Erro de conexão ao carregar solicitações.');
+    } finally {
+      setOnboardingsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchAccounts();
+    fetchOnboardings();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'onboardings') {
+      fetchOnboardings();
+    }
+  }, [activeTab]);
 
   const handleEdit = (acc: Account) => {
     setEditingAccount(acc);
@@ -161,6 +196,100 @@ export default function SuperAdminAccounts() {
       }
     } catch (err) {
       toast.error('Erro de conexão ao deletar.');
+    }
+  };
+
+  const handleApproveAuto = async () => {
+    if (!approvingOnboarding) return;
+    try {
+      setSaving(true);
+      const res = await fetch('/api/superadmin/ecommerce/onboardings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId: approvingOnboarding.account_id,
+          action: 'approve',
+          pixKey: autoPixKey || undefined,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success('Solicitação aprovada automaticamente com sucesso!');
+        setIsAutoModalOpen(false);
+        setApprovingOnboarding(null);
+        setAutoPixKey('');
+        fetchOnboardings();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Falha ao aprovar solicitação.');
+      }
+    } catch (err) {
+      toast.error('Erro de conexão ao aprovar.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleApproveManual = async () => {
+    if (!approvingOnboarding) return;
+    if (!manualAppId.trim()) {
+      toast.error('O Woovi App ID é obrigatório.');
+      return;
+    }
+    try {
+      setSaving(true);
+      const res = await fetch('/api/superadmin/ecommerce/onboardings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId: approvingOnboarding.account_id,
+          action: 'approve',
+          appId: manualAppId.trim(),
+          secretKey: manualSecretKey.trim() || undefined,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success('Solicitação aprovada manualmente com sucesso!');
+        setIsManualModalOpen(false);
+        setApprovingOnboarding(null);
+        setManualAppId('');
+        setManualSecretKey('');
+        fetchOnboardings();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Falha ao aprovar solicitação.');
+      }
+    } catch (err) {
+      toast.error('Erro de conexão ao aprovar.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReject = async (onboarding: any) => {
+    if (!confirm(`Deseja realmente rejeitar a solicitação de loja para a conta "${onboarding.accounts?.name || 'Sem nome'}"?`)) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/superadmin/ecommerce/onboardings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId: onboarding.account_id,
+          action: 'reject',
+        }),
+      });
+
+      if (res.ok) {
+        toast.success('Solicitação rejeitada com sucesso.');
+        fetchOnboardings();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Falha ao rejeitar solicitação.');
+      }
+    } catch (err) {
+      toast.error('Erro de conexão ao rejeitar.');
     }
   };
 
@@ -250,191 +379,302 @@ export default function SuperAdminAccounts() {
           Lista e controle de todas as instâncias de inquilinos registradas no SaaS.
         </p>
       </div>
-
-      {/* ponytail: metric cards for AI consumption costs */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="border-border bg-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
-              Custo Estimado (Chave Geral)
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-emerald-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-extrabold text-foreground">
-              R$ {aiStats.totalCostGeneral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              Gasto com chaves compartilhadas da plataforma.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border bg-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
-              Mensagens da Chave Geral
-            </CardTitle>
-            <Cpu className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-extrabold text-foreground">
-              {aiStats.totalMessagesGeneral.toLocaleString('pt-BR')}
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              Total de interações sob a chave padrão.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border bg-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
-              Origem das API Keys
-            </CardTitle>
-            <Key className="h-4 w-4 text-purple-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-extrabold text-foreground flex items-baseline gap-2">
-              <span>{aiStats.accountsUsingOwn} <span className="text-xs text-muted-foreground font-normal">Própria</span></span>
-              <span className="text-muted-foreground text-sm">/</span>
-              <span>{aiStats.accountsUsingGeneral} <span className="text-xs text-muted-foreground font-normal">Geral</span></span>
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              Divisão de custos por inquilino.
-            </p>
-          </CardContent>
-        </Card>
+      {/* Tabs selector */}
+      <div className="flex border-b border-border gap-4">
+        <button
+          onClick={() => setActiveTab('accounts')}
+          className={`pb-3 text-sm font-medium transition-colors relative ${
+            activeTab === 'accounts'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Contas de Inquilinos
+        </button>
+        <button
+          onClick={() => setActiveTab('onboardings')}
+          className={`pb-3 text-sm font-medium transition-colors relative flex items-center gap-2 ${
+            activeTab === 'onboardings'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Solicitações de Loja
+          {onboardings.length > 0 && (
+            <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-primary text-primary-foreground">
+              {onboardings.length}
+            </span>
+          )}
+        </button>
       </div>
 
-      {/* Control bar */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por conta, proprietário ou e-mail..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 bg-card border-border"
-          />
-        </div>
-      </div>
+      {activeTab === 'accounts' && (
+        <>
+          {/* ponytail: metric cards for AI consumption costs */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="border-border bg-card">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
+                  Custo Estimado (Chave Geral)
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-emerald-400" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-extrabold text-foreground">
+                  R$ {aiStats.totalCostGeneral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Gasto com chaves compartilhadas da plataforma.
+                </p>
+              </CardContent>
+            </Card>
 
-      {/* Accounts List */}
-      <Card className="border-border bg-card">
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <Card className="border-border bg-card">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
+                  Mensagens da Chave Geral
+                </CardTitle>
+                <Cpu className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-extrabold text-foreground">
+                  {aiStats.totalMessagesGeneral.toLocaleString('pt-BR')}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Total de interações sob a chave padrão.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border bg-card">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase">
+                  Origem das API Keys
+                </CardTitle>
+                <Key className="h-4 w-4 text-purple-400" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-extrabold text-foreground flex items-baseline gap-2">
+                  <span>{aiStats.accountsUsingOwn} <span className="text-xs text-muted-foreground font-normal">Própria</span></span>
+                  <span className="text-muted-foreground text-sm">/</span>
+                  <span>{aiStats.accountsUsingGeneral} <span className="text-xs text-muted-foreground font-normal">Geral</span></span>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Divisão de custos por inquilino.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Control bar */}
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por conta, proprietário ou e-mail..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 bg-card border-border"
+              />
             </div>
-          ) : filteredAccounts.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              Nenhuma conta encontrada.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30 text-xs font-semibold text-muted-foreground uppercase">
-                    <th className="p-4">Conta</th>
-                    <th className="p-4">Proprietário</th>
-                    <th className="p-4">Plano</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4">WhatsApp</th>
-                    <th className="p-4">Uso de IA</th>
-                    <th className="p-4">Criado em</th>
-                    <th className="p-4 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAccounts.map((acc) => {
-                    const owner = acc.profiles.find((p) => p.account_role === 'owner' || p.user_id === acc.owner_user_id);
-                    const whatsappConnected = acc.whatsapp_config && !!acc.whatsapp_config.phone_number_id;
-                    return (
-                      <tr key={acc.id} className="border-b border-border hover:bg-muted/10 transition-colors">
-                        <td className="p-4 font-semibold text-foreground">{acc.name || 'Sem nome'}</td>
-                        <td className="p-4">
-                          <div className="flex flex-col">
-                            <span className="text-foreground font-medium">{owner?.full_name || 'Desconhecido'}</span>
-                            <span className="text-xs text-muted-foreground">{owner?.email || '-'}</span>
-                          </div>
-                        </td>
-                        <td className="p-4">{getPlanBadge(acc.subscription_plan)}</td>
-                        <td className="p-4">
-                          <div className="flex flex-col gap-1 items-start">
-                            {getStatusBadge(acc.is_lifetime ? 'active' : acc.subscription_status)}
-                            {acc.is_lifetime && (
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-primary/20 text-primary border border-primary/30 uppercase tracking-wider">
-                                Lifetime {acc.lifetime_has_ai ? '+ IA' : 'S/ IA'}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          {whatsappConnected ? (
-                            <span className="flex items-center gap-1 text-emerald-400 text-xs font-semibold">
-                              <CheckCircle className="h-3.5 w-3.5 animate-in fade-in" /> Conectado
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1 text-muted-foreground text-xs">
-                              <XCircle className="h-3.5 w-3.5 animate-in fade-in" /> Desconectado
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          <div className="flex flex-col gap-1 items-start text-xs">
-                            <span className="font-semibold text-foreground">
-                              {acc.ai_message_count} / {acc.ai_message_limit ?? 'Plano'}
-                            </span>
-                            {acc.has_ai_key ? (
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
-                                Chave Própria
-                              </span>
-                            ) : (
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-zinc-500/10 text-zinc-400 border border-zinc-500/20 uppercase tracking-wider">
-                                Chave Geral
-                              </span>
-                            )}
-                            <span className="text-[10px] text-muted-foreground font-medium">
-                              {acc.has_ai_key ? (
-                                'R$ 0,00'
+          </div>
+
+          {/* Accounts List */}
+          <Card className="border-border bg-card">
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : filteredAccounts.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  Nenhuma conta encontrada.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30 text-xs font-semibold text-muted-foreground uppercase">
+                        <th className="p-4">Conta</th>
+                        <th className="p-4">Proprietário</th>
+                        <th className="p-4">Plano</th>
+                        <th className="p-4">Status</th>
+                        <th className="p-4">WhatsApp</th>
+                        <th className="p-4">Uso de IA</th>
+                        <th className="p-4">Criado em</th>
+                        <th className="p-4 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredAccounts.map((acc) => {
+                        const owner = acc.profiles.find((p) => p.account_role === 'owner' || p.user_id === acc.owner_user_id);
+                        const whatsappConnected = acc.whatsapp_config && !!acc.whatsapp_config.phone_number_id;
+                        return (
+                          <tr key={acc.id} className="border-b border-border hover:bg-muted/10 transition-colors">
+                            <td className="p-4 font-semibold text-foreground">{acc.name || 'Sem nome'}</td>
+                            <td className="p-4">
+                              <div className="flex flex-col">
+                                <span className="text-foreground font-medium">{owner?.full_name || 'Desconhecido'}</span>
+                                <span className="text-xs text-muted-foreground">{owner?.email || '-'}</span>
+                              </div>
+                            </td>
+                            <td className="p-4">{getPlanBadge(acc.subscription_plan)}</td>
+                            <td className="p-4">
+                              <div className="flex flex-col gap-1 items-start">
+                                {getStatusBadge(acc.is_lifetime ? 'active' : acc.subscription_status)}
+                                {acc.is_lifetime && (
+                                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-primary/20 text-primary border border-primary/30 uppercase tracking-wider">
+                                    Lifetime {acc.lifetime_has_ai ? '+ IA' : 'S/ IA'}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              {whatsappConnected ? (
+                                <span className="flex items-center gap-1 text-emerald-400 text-xs font-semibold">
+                                  <CheckCircle className="h-3.5 w-3.5 animate-in fade-in" /> Conectado
+                                </span>
                               ) : (
-                                <>Est. <span className="text-red-400">R$ {calculateAICost(acc).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></>
+                                <span className="flex items-center gap-1 text-muted-foreground text-xs">
+                                  <XCircle className="h-3.5 w-3.5 animate-in fade-in" /> Desconectado
+                                </span>
                               )}
-                            </span>
-                          </div>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex flex-col gap-1 items-start text-xs">
+                                <span className="font-semibold text-foreground">
+                                  {acc.ai_message_count} / {acc.ai_message_limit ?? 'Plano'}
+                                </span>
+                                {acc.has_ai_key ? (
+                                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
+                                    Chave Própria
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-zinc-500/10 text-zinc-400 border border-zinc-500/20 uppercase tracking-wider">
+                                    Chave Geral
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-muted-foreground font-medium">
+                                  {acc.has_ai_key ? (
+                                    'R$ 0,00'
+                                  ) : (
+                                    <>Est. <span className="text-red-400">R$ {calculateAICost(acc).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></>
+                                  )}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-4 text-xs text-muted-foreground">
+                              {new Date(acc.created_at).toLocaleDateString('pt-BR')}
+                            </td>
+                            <td className="p-4 text-right space-x-2">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(acc)}
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(acc.id, acc.name)}
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {activeTab === 'onboardings' && (
+        <Card className="border-border bg-card">
+          <CardContent className="p-0">
+            {onboardingsLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : onboardings.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                Nenhuma solicitação de abertura de loja pendente.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30 text-xs font-semibold text-muted-foreground uppercase">
+                      <th className="p-4">Conta (Inquilino)</th>
+                      <th className="p-4">Criado em</th>
+                      <th className="p-4">Chave Pix Solicitada</th>
+                      <th className="p-4 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {onboardings.map((item) => (
+                      <tr key={item.id} className="border-b border-border hover:bg-muted/10 transition-colors">
+                        <td className="p-4 font-semibold text-foreground">
+                          {item.accounts?.name || 'Sem nome'}
                         </td>
                         <td className="p-4 text-xs text-muted-foreground">
-                          {new Date(acc.created_at).toLocaleDateString('pt-BR')}
+                          {new Date(item.created_at).toLocaleDateString('pt-BR')} às {new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="p-4 text-xs font-mono text-muted-foreground">
+                          {item.pix_key || item.requested_pix_key || item.accounts?.woovi_markup_pix_key || '-'}
                         </td>
                         <td className="p-4 text-right space-x-2">
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleEdit(acc)}
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted"
+                            title="Aprovação Automática (Woovi API)"
+                            onClick={() => {
+                              setApprovingOnboarding(item);
+                              setAutoPixKey(item.pix_key || item.requested_pix_key || item.accounts?.woovi_markup_pix_key || '');
+                              setIsAutoModalOpen(true);
+                            }}
+                            className="h-8 w-8 text-primary hover:bg-primary/10"
                           >
-                            <Edit2 className="h-4 w-4" />
+                            <Sparkles className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDelete(acc.id, acc.name)}
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            title="Aprovação Manual (Inserir credenciais)"
+                            onClick={() => {
+                              setApprovingOnboarding(item);
+                              setIsManualModalOpen(true);
+                            }}
+                            className="h-8 w-8 text-purple-400 hover:bg-purple-500/10"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Key className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Rejeitar Solicitação"
+                            onClick={() => handleReject(item)}
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                          >
+                            <XCircle className="h-4 w-4" />
                           </Button>
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
       {/* Edit modal */}
       {editingAccount && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in-0 duration-200">
@@ -684,6 +924,110 @@ export default function SuperAdminAccounts() {
               </Button>
               <Button onClick={handleSave} disabled={saving} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar Alterações'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto Approval Modal */}
+      {isAutoModalOpen && approvingOnboarding && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in-0 duration-200">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 border-b border-border pb-4 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Aprovação Automática (Woovi)</h3>
+                <p className="text-xs text-muted-foreground">{approvingOnboarding.accounts?.name || 'Sem nome'}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Isso criará uma subconta automaticamente na Woovi usando a API de parceiro.
+              </p>
+              <div className="space-y-1.5">
+                <Label htmlFor="autoPixKey" className="text-xs font-semibold text-muted-foreground uppercase">
+                  Chave Pix da Subconta (Opcional)
+                </Label>
+                <Input
+                  id="autoPixKey"
+                  placeholder="Ex: E-mail, Celular, CNPJ, Chave Aleatória"
+                  value={autoPixKey}
+                  onChange={(e) => setAutoPixKey(e.target.value)}
+                  className="bg-muted border-border"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Se não informada, a subconta será criada sem chave Pix vinculada inicialmente.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3 border-t border-border pt-4">
+              <Button variant="ghost" onClick={() => { setIsAutoModalOpen(false); setApprovingOnboarding(null); }} className="border-border">
+                Cancelar
+              </Button>
+              <Button onClick={handleApproveAuto} disabled={saving} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirmar Aprovação'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Approval Modal */}
+      {isManualModalOpen && approvingOnboarding && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in-0 duration-200">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 border-b border-border pb-4 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Key className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">Aprovação Manual</h3>
+                <p className="text-xs text-muted-foreground">{approvingOnboarding.accounts?.name || 'Sem nome'}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Insira as credenciais da Woovi fornecidas manualmente pelo cliente para ativar a loja.
+              </p>
+              <div className="space-y-1.5">
+                <Label htmlFor="manualAppId" className="text-xs font-semibold text-muted-foreground uppercase">
+                  Woovi App ID (Obrigatório)
+                </Label>
+                <Input
+                  id="manualAppId"
+                  placeholder="Ex: plugin_sb_abc123..."
+                  value={manualAppId}
+                  onChange={(e) => setManualAppId(e.target.value)}
+                  className="bg-muted border-border"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="manualSecretKey" className="text-xs font-semibold text-muted-foreground uppercase">
+                  Woovi Secret Key (Opcional)
+                </Label>
+                <Input
+                  id="manualSecretKey"
+                  type="password"
+                  placeholder="Digite a chave secreta"
+                  value={manualSecretKey}
+                  onChange={(e) => setManualSecretKey(e.target.value)}
+                  className="bg-muted border-border"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3 border-t border-border pt-4">
+              <Button variant="ghost" onClick={() => { setIsManualModalOpen(false); setApprovingOnboarding(null); }} className="border-border">
+                Cancelar
+              </Button>
+              <Button onClick={handleApproveManual} disabled={saving} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirmar Aprovação'}
               </Button>
             </div>
           </div>
