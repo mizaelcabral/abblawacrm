@@ -597,6 +597,7 @@ export interface WooviConfig {
   default_shipping_fee: number;
   store_description?: string | null;
   store_logo_url?: string | null;
+  requested_pix_key?: string | null;
   created_at: string;
   updated_at: string;
 }

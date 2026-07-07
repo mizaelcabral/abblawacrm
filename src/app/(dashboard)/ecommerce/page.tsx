@@ -55,6 +55,7 @@ export default function EcommerceOverviewPage() {
   const [storeDescription, setStoreDescription] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoUrl, setLogoUrl] = useState('');
+  const [requestedPixKey, setRequestedPixKey] = useState('');
 
   const loadData = useCallback(async () => {
     if (!accountId) return;
@@ -78,6 +79,7 @@ export default function EcommerceOverviewPage() {
         setDefaultShippingFee(Number(configData.default_shipping_fee || 0).toFixed(2));
         setStoreDescription(configData.store_description || '');
         setLogoUrl(configData.store_logo_url || '');
+        setRequestedPixKey(configData.requested_pix_key || '');
 
         // 2. Fetch Orders metrics only if approved
         if (configData.onboarding_status === 'approved') {
@@ -130,6 +132,7 @@ export default function EcommerceOverviewPage() {
         .upsert({
           account_id: accountId,
           onboarding_status: 'pending_approval',
+          requested_pix_key: requestedPixKey,
           default_shipping_fee: config?.default_shipping_fee ?? 0,
         }, { onConflict: 'account_id' })
         .select()
@@ -338,10 +341,26 @@ export default function EcommerceOverviewPage() {
             </div>
           </div>
 
+          <div className="space-y-2 text-left">
+            <Label htmlFor="pixKey" className="text-xs font-semibold text-muted-foreground uppercase">
+              Sua Chave Pix para Recebimento (Obrigatório)
+            </Label>
+            <Input
+              id="pixKey"
+              placeholder="Digite seu CPF, CNPJ, Celular ou E-mail da chave Pix"
+              value={requestedPixKey}
+              onChange={(e) => setRequestedPixKey(e.target.value)}
+              className="bg-muted border-border"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Esta chave Pix será utilizada para configurar o recebimento automático das suas vendas na Woovi.
+            </p>
+          </div>
+
           <Button
             className="w-full"
             onClick={handleRequestOnboarding}
-            disabled={submitting}
+            disabled={submitting || !requestedPixKey.trim()}
           >
             {submitting ? 'Enviando solicitação...' : 'Solicitar Abertura de Subconta Woovi'}
           </Button>
