@@ -124,13 +124,14 @@ export default function EcommerceOverviewPage() {
     if (!accountId) return;
     try {
       setSubmitting(true);
+      // ponytail: use upsert to prevent unique key conflict if account already has a config row
       const { data, error } = await supabase
         .from('woovi_config')
-        .insert({
+        .upsert({
           account_id: accountId,
           onboarding_status: 'pending_approval',
-          default_shipping_fee: 0,
-        })
+          default_shipping_fee: config?.default_shipping_fee ?? 0,
+        }, { onConflict: 'account_id' })
         .select()
         .single();
 
