@@ -971,8 +971,12 @@ async function findOrCreateContact(
   )
 
   if (existingContact) {
-    // Update name if it changed
-    if (name && name !== existingContact.name) {
+    // Update name if it changed, but only if the current name is a placeholder
+    // (empty, starts with '+' indicating a phone placeholder, or is the old 'WhatsApp Contact')
+    const currentName = existingContact.name || '';
+    const isPlaceholder = !currentName || currentName === 'WhatsApp Contact' || currentName.startsWith('+');
+    
+    if (name && name !== currentName && isPlaceholder && !name.startsWith('+')) {
       await supabaseAdmin()
         .from('contacts')
         .update({ name, updated_at: new Date().toISOString() })
