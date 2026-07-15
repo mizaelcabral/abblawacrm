@@ -444,3 +444,72 @@ Instruções críticas:
     action: isHandoff ? 'handoff' : 'reply'
   }
 }
+
+/**
+ * Transcribe audio using Gemini multimodal capabilities
+ */
+export async function transcribeAudioUsingGemini(
+  audioBase64: string,
+  accountId: string
+): Promise<string | null> {
+  try {
+    const config = await getAccountAIConfig(accountId)
+
+    if (config.provider !== 'gemini' || !config.apiKey) {
+      console.warn(`[transcribeAudioUsingGemini] Account ${accountId} does not use Gemini or lacks API key.`)
+      return null
+    }
+
+    // Treat base64 to remove URI prefix if present
+    let mimeType = 'audio/ogg' // Default mimeType if none provided in URI
+    let cleanBase64 = audioBase64.trim()
+
+    const mimeMatch = cleanBase64.match(/^data:([^;]+);base64,([\s\S]+)$/)
+    if (mimeMatch) {
+      mimeType = mimeMatch[1]
+      cleanBase64 = mimeMatch[2]
+    }
+
+    const modelName = config.model.startsWith('models/') ? config.model.replace('models/', '') : config.model
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${config.apiKey}`
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: cleanBase64
+                }
+              },
+              {
+                text: 'Transcreva este áudio de forma literal e limpa em português.'
+              }
+            ]
+          }
+        ]
+      })
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`[transcribeAudioUsingGemini] Gemini request failed: ${response.status} - ${errorText}`)
+      return null
+    }
+
+    const data = await response.json()
+    const transcription = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    return transcription.trim() || null
+  } catch (error) {
+    console.error('[transcribeAudioUsingGemini] Error during audio transcription:', error)
+    return null
+  }
+}
+
