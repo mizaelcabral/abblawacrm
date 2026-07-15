@@ -277,7 +277,7 @@ export function NotificationMenu() {
             </div>
           )}
 
-          {!isPastDue && trialDaysLeft !== null && (
+          {!isPastDue && trialDaysLeft !== null && !account?.is_lifetime && (
             <div className="flex items-start gap-2 p-2 bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-500 rounded-md">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <div className="space-y-1">
