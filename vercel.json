@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/whatsapp-web/resolve-names",
+      "schedule": "0 4 * * *"
+    }
+  ]
+}
