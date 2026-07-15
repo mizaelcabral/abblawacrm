@@ -6,6 +6,57 @@ import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
 import { generateAIResponse } from '@/lib/ai/service';
 import { verifyBillingAndUsage, incrementAIConsumption } from '@/lib/billing/guard';
 
+// ponytail: format phone number as a human-readable fallback name (no external deps)
+function formatPhoneAsName(phone: string): string {
+  // Brazilian numbers: +55 XX XXXXX-XXXX or +55 XX XXXX-XXXX
+  if (phone.startsWith('55') && phone.length >= 12) {
+    const country = phone.slice(0, 2);
+    const ddd = phone.slice(2, 4);
+    const rest = phone.slice(4);
+    if (rest.length === 9) {
+      return `+${country} ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
+    }
+    if (rest.length === 8) {
+      return `+${country} ${ddd} ${rest.slice(0, 4)}-${rest.slice(4)}`;
+    }
+  }
+  return `+${phone}`;
+}
+
+// ponytail: fetchProfile with 1-retry and 1s delay between attempts
+async function fetchProfileWithRetry(
+  apiUrl: string,
+  instanceName: string,
+  token: string,
+  remoteJid: string
+): Promise<{ name: string | null; picture: string | null; resolvedJid: string | null }> {
+  const doFetch = async (): Promise<{ name: string | null; picture: string | null; resolvedJid: string | null }> => {
+    const res = await fetch(`${apiUrl}/chat/fetchProfile/${instanceName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: token,
+      },
+      body: JSON.stringify({ number: remoteJid })
+    });
+    if (!res.ok) return { name: null, picture: null, resolvedJid: null };
+    const profileData = await res.json();
+    const jid = profileData.wuid || profileData.jid || profileData.id;
+    return {
+      name: profileData.name || null,
+      picture: profileData.picture || null,
+      resolvedJid: (jid && !jid.includes('@lid')) ? jid.split('@')[0].split(':')[0] : null,
+    };
+  };
+
+  const first = await doFetch();
+  if (first.name) return first;
+
+  // Retry once after 1s delay
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  return doFetch();
+}
+
 // Admin client helper
 let _adminClient: any = null;
 function supabaseAdmin() {
@@ -97,42 +148,31 @@ async function processIncomingMessage(config: any, messageData: any) {
   let profileName: string | null = null;
 
   // ponytail: only fetch profile if contact is new, has no avatar, has no real name, or is a LID JID
-  if (!existingContact || !existingContact.avatar_url || !existingContact.name || existingContact.name === 'WhatsApp Contact' || remoteJid.endsWith('@lid')) {
+  if (!existingContact || !existingContact.avatar_url || !existingContact.name || existingContact.name === 'WhatsApp Contact' || existingContact.name.startsWith('+') || remoteJid.endsWith('@lid')) {
     try {
       const token = decrypt(config.api_token);
-      const res = await fetch(`${config.api_url}/chat/fetchProfile/${config.instance_name}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: token,
-        },
-        body: JSON.stringify({ number: remoteJid })
-      });
-      if (res.ok) {
-        const profileData = await res.json();
-        const resolvedJid = profileData.wuid || profileData.jid || profileData.id;
-        if (resolvedJid && !resolvedJid.includes('@lid')) {
-          phone = resolvedJid.split('@')[0].split(':')[0];
+      const profile = await fetchProfileWithRetry(config.api_url, config.instance_name, token, remoteJid);
+      if (profile.resolvedJid) {
+        phone = profile.resolvedJid;
+      }
+      if (profile.name) {
+        profileName = profile.name;
+        if (existingContact && (!existingContact.name || existingContact.name === 'WhatsApp Contact' || existingContact.name.startsWith('+'))) {
+          await supabaseAdmin()
+            .from('contacts')
+            .update({ name: profileName })
+            .eq('id', existingContact.id);
+          existingContact.name = profileName;
         }
-        if (profileData.name) {
-          profileName = profileData.name;
-          if (existingContact && (!existingContact.name || existingContact.name === 'WhatsApp Contact')) {
-            await supabaseAdmin()
-              .from('contacts')
-              .update({ name: profileName })
-              .eq('id', existingContact.id);
-            existingContact.name = profileName;
-          }
-        }
-        if (profileData.picture) {
-          avatarUrl = profileData.picture;
-          if (existingContact && !existingContact.avatar_url) {
-            await supabaseAdmin()
-              .from('contacts')
-              .update({ avatar_url: avatarUrl })
-              .eq('id', existingContact.id);
-            existingContact.avatar_url = avatarUrl;
-          }
+      }
+      if (profile.picture) {
+        avatarUrl = profile.picture;
+        if (existingContact && !existingContact.avatar_url) {
+          await supabaseAdmin()
+            .from('contacts')
+            .update({ avatar_url: avatarUrl })
+            .eq('id', existingContact.id);
+          existingContact.avatar_url = avatarUrl;
         }
       }
     } catch (err) {
@@ -145,10 +185,10 @@ async function processIncomingMessage(config: any, messageData: any) {
 
   // 1) Find or create contact
   // ponytail: do not use agent's own pushName for contacts when syncing outgoing messages
-  const pushName = fromMe 
-    ? (profileName || 'WhatsApp Contact') 
-    : (messageData.pushName || profileName || 'WhatsApp Contact');
-  const contact = await findOrCreateContact(config.account_id, config.user_id, phone, pushName, avatarUrl);
+  const displayName = fromMe 
+    ? (profileName || formatPhoneAsName(phone)) 
+    : (messageData.pushName || profileName || formatPhoneAsName(phone));
+  const contact = await findOrCreateContact(config.account_id, config.user_id, phone, displayName, avatarUrl);
   if (!contact) return;
 
   // 2) Find or create conversation
@@ -379,7 +419,7 @@ async function findOrCreateContact(accountId: string, userId: string, phone: str
     // ponytail: update placeholder name or missing avatar if we have real profile data now
     let needsUpdate = false;
     const updatePayload: any = {};
-    if ((!existing.name || existing.name === 'WhatsApp Contact') && name && name !== 'WhatsApp Contact') {
+    if ((!existing.name || existing.name === 'WhatsApp Contact' || existing.name.startsWith('+')) && name && name !== 'WhatsApp Contact' && !name.startsWith('+')) {
       updatePayload.name = name;
       needsUpdate = true;
     }
