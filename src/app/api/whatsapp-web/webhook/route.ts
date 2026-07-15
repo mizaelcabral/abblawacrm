@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { normalizePhone } from '@/lib/whatsapp/phone-utils';
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
-import { generateAIResponse } from '@/lib/ai/service';
+import { generateAIResponse, transcribeAudioUsingGemini } from '@/lib/ai/service';
 import { verifyBillingAndUsage, incrementAIConsumption } from '@/lib/billing/guard';
 
 // ponytail: format phone number as a human-readable fallback name (no external deps)
@@ -281,6 +281,23 @@ async function processIncomingMessage(config: any, messageData: any) {
       mediaUrl = await uploadMediaFromBase64(config.account_id, cleanBase64, filename || 'media_file');
     } catch (err) {
       console.error('[WhatsApp Web Webhook] Failed to upload media:', err);
+    }
+  }
+
+  if (contentType === 'audio' && base64Data) {
+    try {
+      console.log('[WhatsApp Web Webhook] Transcribing incoming audio...');
+      const transcription = await transcribeAudioUsingGemini(base64Data, config.account_id);
+      if (transcription) {
+        console.log('[WhatsApp Web Webhook] Audio transcribed successfully:', transcription);
+        contentText = `🎙️ [Áudio Transcrito]: "${transcription}"`;
+      } else {
+        console.warn('[WhatsApp Web Webhook] Audio transcription returned empty response');
+        contentText = '[Mensagem de voz]';
+      }
+    } catch (err) {
+      console.error('[WhatsApp Web Webhook] Failed to transcribe audio:', err);
+      contentText = '[Mensagem de voz]';
     }
   }
 
