@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Abbla Hub — Relatório de Valuation</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+    
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      line-height: 1.6;
+      font-size: 15px;
+      margin: 0;
+      padding: 0;
+      background-color: #ffffff;
+    }
+
+    /* Print & PDF Settings */
+    @page {
+      size: A4;
+      margin: 20mm 20mm 20mm 20mm;
+      @bottom-right {
+        content: counter(page);
+      }
+    }
+
+    /* Cover Page */
+    .cover-page {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 40px 20px;
+      page-break-after: always;
+    }
+
+    .cover-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-mark {
+      width: 48px;
+      height: 48px;
+      background-color: #10b981;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: 24px;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+    }
+
+    .logo-text {
+      font-size: 24px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+    }
+
+    .cover-body {
+      margin-top: 100px;
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .cover-badge {
+      align-self: flex-start;
+      background-color: #ecfdf5;
+      color: #059669;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 20px;
+    }
+
+    .cover-title {
+      font-size: 42px;
+      font-weight: 800;
+      line-height: 1.15;
+      color: #0f172a;
+      margin: 0 0 10px 0;
+      letter-spacing: -1.5px;
+    }
+
+    .cover-subtitle {
+      font-size: 18px;
+      color: #64748b;
+      margin: 0;
+      max-width: 600px;
+      font-weight: 400;
+    }
+
+    .cover-footer {
+      border-top: 1px solid #e2e8f0;
+      padding-top: 30px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .meta-label {
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 4px;
+    }
+
+    /* Content Styling */
+    .content-wrapper {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    .main-title {
+      display: none; /* Hide since we have cover */
+    }
+
+    .section-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #0f172a;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 8px;
+      margin-top: 40px;
+      margin-bottom: 20px;
+      letter-spacing: -0.5px;
+      page-break-before: always;
+    }
+
+    /* Ensure specific sections dont break inside page */
+    .section-title:first-of-type {
+      page-break-before: avoid !important;
+    }
+
+    .subsection-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-top: 25px;
+      margin-bottom: 12px;
+    }
+
+    .paragraph {
+      margin-top: 0;
+      margin-bottom: 15px;
+      text-align: justify;
+      color: #334155;
+    }
+
+    .styled-list {
+      margin-top: 0;
+      margin-bottom: 20px;
+      padding-left: 20px;
+    }
+
+    .styled-list li {
+      margin-bottom: 8px;
+      color: #334155;
+    }
+
+    .styled-hr {
+      border: 0;
+      height: 1px;
+      background: #e2e8f0;
+      margin: 30px 0;
+    }
+
+    /* Table Styling */
+    .table-container {
+      margin: 20px 0;
+      overflow: hidden;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      page-break-inside: avoid;
+    }
+
+    .styled-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13.5px;
+    }
+
+    .styled-table th {
+      background-color: #f8fafc;
+      color: #475569;
+      font-weight: 700;
+      padding: 12px 16px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .styled-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #f1f5f9;
+      color: #334155;
+    }
+
+    .styled-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .styled-table tr:nth-child(even) {
+      background-color: #fafafa;
+    }
+
+    /* Callouts / Alerts */
+    .alert-box {
+      margin: 25px 0;
+      padding: 16px;
+      border-left: 4px solid #cbd5e1;
+      background-color: #f8fafc;
+      border-radius: 0 8px 8px 0;
+      page-break-inside: avoid;
+    }
+
+    .alert-title {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+      color: #64748b;
+    }
+
+    .alert-body {
+      font-size: 14px;
+      color: #334155;
+    }
+
+    .alert-note {
+      border-left-color: #3b82f6;
+      background-color: #eff6ff;
+    }
+    .alert-note .alert-title { color: #2563eb; }
+
+    .alert-tip {
+      border-left-color: #10b981;
+      background-color: #ecfdf5;
+    }
+    .alert-tip .alert-title { color: #059669; }
+
+    .alert-warning {
+      border-left-color: #f59e0b;
+      background-color: #fffbeb;
+    }
+    .alert-warning .alert-title { color: #d97706; }
+
+    /* Custom Premium Components */
+    .workflow-container {
+      margin: 25px 0;
+      page-break-inside: avoid;
+    }
+
+    .workflow-row {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .workflow-card {
+      flex: 1;
+      padding: 20px;
+      border-radius: 10px;
+      border: 1px solid #fee2e2;
+      background-color: #fef2f2;
+    }
+
+    .workflow-card.after {
+      border-color: #d1fae5;
+      background-color: #ecfdf5;
+    }
+
+    .card-tag {
+      font-size: 11px;
+      font-weight: 800;
+      color: #ef4444;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .card-tag.secure {
+      color: #10b981;
+    }
+
+    .card-item {
+      font-size: 13px;
+      margin-bottom: 8px;
+      color: #475569;
+    }
+
+    .card-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .workflow-arrow {
+      font-size: 24px;
+      color: #94a3b8;
+      font-weight: bold;
+    }
+
+    /* Progress/Bar Chart Components */
+    .chart-container {
+      margin: 25px 0;
+      padding: 24px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      background-color: #ffffff;
+      page-break-inside: avoid;
+    }
+
+    .chart-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .chart-bar-item {
+      margin-bottom: 16px;
+    }
+
+    .chart-bar-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .chart-bar-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .chart-label-name {
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .chart-label-pct {
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .chart-bar-track {
+      width: 100%;
+      height: 10px;
+      background-color: #f1f5f9;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+
+    .chart-bar-fill {
+      height: 100%;
+      border-radius: 5px;
+    }
+
+    /* Math Formula Block Styling */
+    .math-block {
+      text-align: center;
+      font-size: 16px;
+      margin: 15px 0;
+      font-weight: 600;
+      color: #0f172a;
+      background-color: #f8fafc;
+      padding: 12px;
+      border-radius: 6px;
+      font-family: Consolas, monospace;
+      border-left: 3px solid #10b981;
+    }
+
+    .math-inline {
+      font-weight: 600;
+      color: #0f172a;
+      background-color: #f8fafc;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: Consolas, monospace;
+      font-size: 14px;
+    }
+
+    .font-semibold {
+      font-weight: 600;
+      color: #0f172a;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Cover Page -->
+  <div class="cover-page">
+    <div class="cover-header">
+      <div class="logo-mark">A</div>
+      <div class="logo-text">Abbla</div>
+    </div>
+    
+    <div class="cover-body">
+      <div class="cover-badge">Investimento Pré-Seed</div>
+      <h1 class="cover-title">Relatório de Valuation</h1>
+      <p class="cover-subtitle">Fundamentos financeiros, análise de mercado e tese de captação de recursos para a rodada de investimento da Abbla Hub.</p>
+    </div>
+    
+    <div class="cover-footer">
+      <div>
+        <div class="meta-label">PREPARADO PARA:</div>
+        <div>Rodada de Captação 2026</div>
+      </div>
+      <div>
+        <div class="meta-label">DATA DE REFERÊNCIA:</div>
+        <div>Julho de 2026</div>
+      </div>
+      <div>
+        <div class="meta-label">CLASSIFICAÇÃO:</div>
+        <div style="color: #ef4444; font-weight: bold;">PRIVADO & CONFIDENCIAL</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report Content -->
+  <div class="content-wrapper">
+    <h1 class="main-title">Relatório de Valuation: Abbla Hub</h1>
+<p class="paragraph"><em>Documento de Suporte para Captação de Recursos (Rodada Pré-Seed)</em></p>
+<hr class="styled-hr" />
+<h2 id="1--sum-rio-executivo" class="section-title">1. Sumário Executivo</h2>
+<p class="paragraph">A <strong>Abbla Hub</strong> é uma plataforma SaaS (Software as a Service) de CRM multicanal e automação conversacional inteligente focada em acelerar vendas e otimizar o atendimento de pequenas e médias empresas (PMEs). A plataforma centraliza os canais de mensagens mais utilizados do mercado — <strong>WhatsApp Cloud API oficial, Instagram Direct, Facebook Messenger, Telegram, TikTok Direct Messages e e-mails</strong> — em uma caixa de entrada unificada colaborativa de alta performance.</p>
+<p class="paragraph">Os grandes diferenciais competitivos da Abbla Hub residem em duas frentes inovadoras:</p>
+<p class="paragraph">1. <strong>Conectividade de IA via MCP (Model Context Protocol)</strong>: Uma infraestrutura aberta que permite a desenvolvedores e empresas conectarem agentes e assistentes de IA externos (como Cursor, Claude Desktop e LLMs customizados) diretamente aos seus fluxos de mensagens corporativas.</p>
+<p class="paragraph">2. <strong>Fintech e E-commerce Conversacional (Abbla Pay)</strong>: Uma camada financeira nativa que permite aos agentes autônomos de IA e atendentes humanos gerarem links de pagamento dinâmicos (Pix, Boleto e Cartão de Crédito) e enviarem cobranças diretamente na janela de chat do cliente. A Abbla Hub monetiza não apenas com assinaturas SaaS, mas também através de um <strong>markup transacional</strong> (taxa sobre o volume financeiro processado pelas subcontas).</p>
+<p class="paragraph">Com uma arquitetura escalável, múltiplos canais de receita ativos e ampla multicanalidade integrada, a Abbla Hub está posicionada estrategicamente no cruzamento de CRM, Inteligência Artificial e Fintech na América Latina.</p>
+<hr class="styled-hr" />
+<h2 id="2--o-problema--a-solu--o-e-o-modelo-de-monetiza--o-h-brido" class="section-title">2. O Problema, a Solução e o Modelo de Monetização Híbrido</h2>
+
+            <div class="workflow-container">
+              <div class="workflow-row">
+                <div class="workflow-card before">
+                  <div class="card-tag">Cenário Fragmentado</div>
+                  <div class="card-item">❌ Canais Fragmentados (WA, Insta, FB, TikTok, E-mail)</div>
+                  <div class="card-item">❌ Atendimento Manual Lento & Churn Elevado</div>
+                  <div class="card-item">❌ Venda Interrompida na hora do pagamento</div>
+                </div>
+                <div class="workflow-arrow">➔</div>
+                <div class="workflow-card after">
+                  <div class="card-tag secure">Solução Abbla Hub</div>
+                  <div class="card-item font-semibold">✓ Caixa de Entrada Unificada Multicanal</div>
+                  <div class="card-item font-semibold">✓ Automações com Flow Builder & IA</div>
+                  <div class="card-item font-semibold">✓ Cobrança e Checkout Integrado (Abbla Pay)</div>
+                </div>
+              </div>
+            </div><h3 class="subsection-title">O Problema</h3>
+<p class="paragraph">1. <strong>Fragmentação de Canais</strong>: PMEs perdem vendas porque as interações com os clientes estão divididas entre WhatsApp, Instagram, Facebook, Telegram, TikTok e E-mail.</p>
+<p class="paragraph">2. <strong>Processo de Compra Interrompido</strong>: O cliente decide comprar na conversa, mas o atendente precisa direcioná-lo para um site externo ou gerar manualmente um Pix em outro app de banco, gerando atrito e queda de conversão de até 30%.</p>
+<p class="paragraph">3. <strong>Barreira para Monetização de Agentes de IA</strong>: Assistentes conversacionais inteligentes conseguem tirar dúvidas, mas falham em fechar a venda de ponta a ponta (inclusive a transação financeira).</p>
+<h3 class="subsection-title">A Solução</h3>
+<p class="paragraph">1. <strong>Caixa de Entrada Multicanal Unificada</strong>: Atendimento integrado em WhatsApp, Instagram, Facebook, Telegram, TikTok e E-mail.</p>
+<p class="paragraph">2. <strong>Abbla Pay</strong>: O agente de IA ou atendente cria e envia links de pagamento gerados automaticamente em tempo real durante a conversa. O cliente paga via Pix ou cartão sem sair do fluxo de atendimento.</p>
+<p class="paragraph">3. <strong>Monetização Híbrida (SaaS + Take Rate)</strong>: A Abbla Hub gera receita recorrente clássica (MRR) e captura uma taxa (take rate/markup) sobre cada transação financeira gerada nas subcontas de seus clientes.</p>
+<hr class="styled-hr" />
+<h2 id="3--diferencial-tecnol-gico---arquitetura" class="section-title">3. Diferencial Tecnológico & Arquitetura</h2>
+<p class="paragraph">A arquitetura de software da Abbla Hub garante escalabilidade horizontal massiva com baixíssimo custo operacional fixo (OPEX):</p>
+<ul class="styled-list">
+<li><strong>Front-end & Server-side</strong>: Construído em <strong>Next.js 16</strong> (React 19, App Router e Server Actions), garantindo uma SPA (Single Page Application) fluida, SEO otimizado e painel administrativo ágil.</li>
+<li><strong>Banco de Dados & RLS</strong>: <strong>Supabase (PostgreSQL)</strong> com <strong>Row Level Security (RLS)</strong> ativo em todas as tabelas. Contas de clientes e subcontas são isoladas por chave de segurança (<code class="inline-code">account_id</code>), eliminando qualquer risco de vazamento de informações.</li>
+<li><strong>Segurança e Criptografia</strong>: Chaves de API de terceiros (Meta, Telegram, TikTok, SMTP e APIs de Pagamento) são protegidas no banco com criptografia simétrica <strong>AES-256-GCM</strong>.</li>
+<li><strong>Engine de Integração</strong>: Gerenciamento de eventos assíncronos e processamento em tempo real de webhooks da Meta, Telegram, TikTok e gateways de pagamento fintech.</li>
+</ul>
+<hr class="styled-hr" />
+<h2 id="4--tamanho-de-mercado--tam--sam--som-" class="section-title">4. Tamanho de Mercado (TAM, SAM, SOM)</h2>
+<p class="paragraph">A adição do modelo de fintech (Abbla Pay) amplia drasticamente o mercado endereçável da startup, somando o mercado de software de CRM com o mercado de meios de pagamento e Pix transacional para PMEs.</p>
+<ul class="styled-list">
+<li><strong>TAM (Total Addressable Market)</strong>: <strong>R$ 8,5 bilhões</strong>. Composto pelo mercado de CRM conversacional para PMEs no Brasil somado ao mercado de taxas de adquirência (meios de pagamento) para micro e pequenos negócios digitais.</li>
+<li><strong>SAM (Serviceable Addressable Market)</strong>: <strong>R$ 1,8 bilhão</strong>. Foco em PMEs brasileiras que vendem ativamente pelo WhatsApp, Instagram, Telegram e TikTok e necessitam de soluções de checkout integrado no chat.</li>
+<li><strong>SOM (Serviceable Obtainable Market)</strong>: <strong>R$ 90 milhões</strong>. Meta de capturar <strong>5% do SAM</strong> em 5 anos, impulsionada pelo efeito viral do checkout conversacional e parcerias com desenvolvedores de IA.</li>
+</ul>
+<hr class="styled-hr" />
+<h2 id="5--metodologias-de-valuation" class="section-title">5. Metodologias de Valuation</h2>
+<p class="paragraph">Startups SaaS integradas com infraestrutura de pagamento (Fintech-enabled SaaS) possuem múltiplos de valuation superiores aos SaaS tradicionais, devido ao aumento expressivo do LTV do cliente e maior barreira de saída (switching costs).</p>
+<h3 class="subsection-title">A. Método Berkus (Adaptado com Abbla Pay, Telegram & TikTok)</h3>
+<p class="paragraph">O método Berkus avalia a mitigação de riscos estratégicos em startups pré-seed, atribuindo valores financeiros (até R$ 1.250.000 por pilar) a essa classe de ativos críticos:</p>
+<div class="table-container"><table class="styled-table">
+<thead>
+<tr>
+<th>Pilar de Avaliação</th>
+<th>Descrição do Status na Abbla Hub</th>
+<th>Valor Atribuído</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1. Valor da Ideia</strong></td>
+<td>CRM Conversacional + IA Autônoma + Conectividade MCP + Abbla Pay (Fintech transacional integrada com Pix/Cartão via IA e e-commerce interno).</td>
+<td><strong>R$ 1.250.000</strong></td>
+</tr>
+<tr>
+<td><strong>2. Protótipo / Tecnologia</strong></td>
+<td>Produto pronto e funcional com integrações ativas: WhatsApp, Instagram, Facebook, Telegram, TikTok, E-mail e barramento de Pagamento.</td>
+<td><strong>R$ 1.250.000</strong></td>
+</tr>
+<tr>
+<td><strong>3. Equipe de Execução</strong></td>
+<td>Capacidade técnica provada com ciclo diário de iteração de código, design premium UI/UX e arquitetura moderna.</td>
+<td><strong>R$ 1.000.000</strong></td>
+</tr>
+<tr>
+<td><strong>4. Alianças Estratégicas</strong></td>
+<td>Conexões oficiais homologadas (Meta Cloud API, Telegram APIs, TikTok APIs) e parceria com gateway de infraestrutura financeira (Abbla Pay).</td>
+<td><strong>R$ 1.000.000</strong></td>
+</tr>
+<tr>
+<td><strong>5. Tração / Clientes Piloto</strong></td>
+<td>Base de dados ativa processando milhares de mensagens de clientes reais e primeiras transações teste de pagamento.</td>
+<td><strong>R$ 750.000</strong></td>
+</tr>
+<tr>
+<td><strong>Valuation Berkus Total</strong></td>
+<td><strong>Soma dos pilares de mitigação de riscos</strong></td>
+<td><strong>R$ 5.250.000</strong></td>
+</tr>
+</tbody>
+</table></div>
+<h3 class="subsection-title">B. Custo de Reconstrução da Tecnologia (Cost to Recreate)</h3>
+<p class="paragraph">Esta abordagem quantifica o valor acumulado no código-fonte e na infraestrutura de integrações da plataforma:</p>
+<ul class="styled-list">
+<li><strong>Desenvolvimento Sênior (Full-stack & DevOps)</strong>: 1.400 horas de programação focada em CRM multicanal, filas de webhooks, autenticação e split de pagamento: <strong>R$ 210.000</strong>.</li>
+<li><strong>Integrações de APIs Complexas</strong>: Meta API, Telegram API, TikTok Messenger, E-mail SMTP/IMAP e APIs financeiras criptografadas: <strong>R$ 60.000</strong>.</li>
+<li><strong>Design de Interface (Flow Builder Visual & UX)</strong>: Construtor visual de automações no-code e telas administrativas: <strong>R$ 50.000</strong>.</li>
+<li><strong>Custo Regulatório & Segurança (LGPD & PCI Compliance básico)</strong>: Políticas de RLS, criptografia AES-256 e blindagem de dados: <strong>R$ 30.000</strong>.</li>
+<li><strong>Custo Base da Propriedade Intelectual (IP)</strong>: <strong>R$ 350.000</strong>.</li>
+</ul>
+
+      <div class="alert-box alert-tip">
+        <div class="alert-title">TIP</div>
+        <div class="alert-body">Aplicando um multiplicador de mercado de <strong>15x</strong> devido à inclusão do barramento financeiro integrado (Abbla Pay) e canais Telegram/TikTok/E-mail adicionais, o valuation estimado por essa metodologia é: <div class="math-block">\text{Valuation Estimado} = \text{IP} \times 15 = \text{R\$ 5.250.000}</div></div>
+      </div>
+<h3 class="subsection-title">C. Método Scorecard (Comparação com Benchmarks)</h3>
+<p class="paragraph">No ecossistema brasileiro de startups, SaaS com adquirência embarcada (fintech-enabled) captam rodadas pré-seed com valuations superiores devido ao modelo híbrido de receita.</p>
+<ul class="styled-list">
+<li><strong>Valuation Base de Startups Fintech-SaaS Pré-Seed no BR</strong>: R$ 5.000.000.</li>
+<li><strong>Ajustes de Comparação da Abbla Hub</strong>:</li>
+<li><strong>Diferencial de IA (MCP)</strong>: 125% (Pioneirismo em conexão aberta de agentes autônomos).</li>
+<li><strong>Tamanho de Mercado com Pagamentos</strong>: 120% (Aumento significativo do take rate).</li>
+<li><strong>Multicanalidade Integrada (TikTok/E-mail)</strong>: 110% (Solução all-in-one superior à concorrência).</li>
+<li><strong>Estágio de Produto</strong>: 110% (Software estável, em produção, pronto para escala).</li>
+</ul>
+<p class="paragraph"><div class="math-block">\text{Valuation Scorecard} = \text{R\<span class="math-inline"> 5.000.000} \times (1,25 \times 1,20 \times 1,10 \times 1,10) \approx \text{R\</span> 9.075.000}</div></p>
+<hr class="styled-hr" />
+<h2 id="6--valuation-final-sugerido" class="section-title">6. Valuation Final Sugerido</h2>
+<p class="paragraph">Adotando uma postura estrategicamente atraente para investidores pré-seed, ancorada na consistência matemática entre as metodologias de mitigação de risco e custo de engenharia:</p>
+<ul class="styled-list">
+<li><strong>Valuation Pre-Money Adotado</strong>: <strong>R$ 5.250.000</strong></li>
+<li><strong>Aporte (Tamanho da Rodada)</strong>: <strong>R$ 750.000</strong></li>
+<li><strong>Valuation Post-Money Proposto</strong>: <strong>R$ 6.000.000</strong></li>
+</ul>
+<hr class="styled-hr" />
+<h2 id="7--proposta-da-rodada-de-capta--o" class="section-title">7. Proposta da Rodada de Captação</h2>
+<p class="paragraph">A Abbla Hub está captando recursos para impulsionar a infraestrutura financeira da Abbla Pay, acelerar a contratação de programadores focados em tecnologia/fintech e expandir a base de clientes:</p>
+<ul class="styled-list">
+<li><strong>Tamanho da Rodada</strong>: <strong>R$ 750.000</strong></li>
+<li><strong>Participação Oferecida (Equity)</strong>: <strong>12,5%</strong> (calculado de forma exata sobre o Valuation Post-Money de R$ 6.000.000)</li>
+<li><strong>Instrumento Financeiro</strong>: MÚTUO CONVERSÍVEL EM PARTICIPAÇÃO SOCIETÁRIA.</li>
+</ul>
+<h3 class="subsection-title">Destinação dos Recursos (Use of Funds)</h3>
+
+            <div class="chart-container">
+              <div class="chart-title">Distribuição de Recursos — Rodada Pré-Seed</div>
+              
+              <div class="chart-bar-item">
+                <div class="chart-bar-labels">
+                  <span class="chart-label-name">Tecnologia & Infraestrutura Fintech</span>
+                  <span class="chart-label-pct">45% (R$ 337.500)</span>
+                </div>
+                <div class="chart-bar-track">
+                  <div class="chart-bar-fill" style="width: 45%; background-color: #10b981;"></div>
+                </div>
+              </div>
+
+              <div class="chart-bar-item">
+                <div class="chart-bar-labels">
+                  <span class="chart-label-name">Marketing, Vendas & Canais</span>
+                  <span class="chart-label-pct">35% (R$ 262.500)</span>
+                </div>
+                <div class="chart-bar-track">
+                  <div class="chart-bar-fill" style="width: 35%; background-color: #3b82f6;"></div>
+                </div>
+              </div>
+
+              <div class="chart-bar-item">
+                <div class="chart-bar-labels">
+                  <span class="chart-label-name">Operações & Liquidez Financeira</span>
+                  <span class="chart-label-pct">12% (R$ 90.000)</span>
+                </div>
+                <div class="chart-bar-track">
+                  <div class="chart-bar-fill" style="width: 12%; background-color: #f59e0b;"></div>
+                </div>
+              </div>
+
+              <div class="chart-bar-item">
+                <div class="chart-bar-labels">
+                  <span class="chart-label-name">Segurança, PCI & Jurídico</span>
+                  <span class="chart-label-pct">8% (R$ 60.000)</span>
+                </div>
+                <div class="chart-bar-track">
+                  <div class="chart-bar-fill" style="width: 8%; background-color: #64748b;"></div>
+                </div>
+              </div>
+            </div><p class="paragraph">1. <strong>Tecnologia & Infraestrutura Fintech / Contratação de Programadores (45%) - R$ 337.500</strong></p>
+<ul class="styled-list">
+<li><strong>Contratação de 2 Desenvolvedores Sêniores</strong> focados na criação da infraestrutura de e-commerce embarcada da Abbla (banco de dados de produtos, catálogo conversacional e checkout).</li>
+<li>Integração de gateways de liquidação instantânea (Pix Banco Central) e split de comissionamento automático para subcontas.</li>
+</ul>
+<p class="paragraph">2. <strong>Marketing, Vendas & Canais (35%) - R$ 262.500</strong></p>
+<ul class="styled-list">
+<li>Aquisição paga em canais focados em desenvolvedores (MCP) e varejistas que vendem via chat (WhatsApp/Telegram/TikTok).</li>
+<li>Programas de indicação e comissionamento de parceiros integradores.</li>
+</ul>
+<p class="paragraph">3. <strong>Operações & Liquidez Financeira (12%) - R$ 90.000</strong></p>
+<ul class="styled-list">
+<li>Servidores escaláveis Supabase Pro, Hostinger e gateways de pagamentos.</li>
+</ul>
+<p class="paragraph">4. <strong>Segurança, PCI & Jurídico (8%) - R$ 60.000</strong></p>
+<ul class="styled-list">
+<li>Adequação regulatória junto ao Banco Central (resoluções de subadquirência) e termos LGPD/PCI para transações financeiras seguras.</li>
+</ul>
+<hr class="styled-hr" />
+<h2 id="8--roadmap-de-tecnologia-e-produto--acelera--o-com-recursos-da-rodada-" class="section-title">8. Roadmap de Tecnologia e Produto (Aceleração com Recursos da Rodada)</h2>
+<p class="paragraph">A alocação de recursos da rodada nos permitirá expandir a equipe de desenvolvimento para tirar a Abbla Pay do papel e lançar o inovador recurso de e-commerce integrado:</p>
+<h3 class="subsection-title">Fases do Desenvolvimento do Produto:</h3>
+<ul class="styled-list">
+<li><strong>Mês 01 - Mês 03: Infraestrutura Transacional (Abbla Pay)</strong></li>
+<li>Integração técnica com subadquirentes e parceiros bancários para liquidação imediata de Pix e Cartão de Crédito.</li>
+<li>Desenvolvimento do split de pagamentos automático no banco de dados para garantir que a Abbla retenha o markup das transações.</li>
+<li><strong>Mês 04 - Mês 06: E-commerce Nativo (Cadastro de Produtos)</strong></li>
+<li><strong>Lançamento do painel de inventário</strong>: O cliente cadastra seus produtos, fotos, preços e estoque direto no painel do CRM.</li>
+<li>Desenvolvimento do fluxo visual que permite adicionar produtos e carrinho de compras no chat com o cliente final.</li>
+<li><strong>Mês 07 - Mês 12: Venda Conversacional por IA (Checkout no Chat)</strong></li>
+<li>Configuração dos agentes de IA (via MCP e RAG nativo) para lerem o inventário ativo de produtos.</li>
+<li>Capacitação dos robôs de IA para recomendarem produtos e dispararem a cobrança via Abbla Pay de forma autônoma na conversa quando o cliente manifestar intenção de compra.</li>
+</ul>
+<h3 class="subsection-title">Principais Indicadores Projetados (18 Meses)</h3>
+<ul class="styled-list">
+<li><strong>ARPU SaaS Médio</strong>: R$ 300,00/mês.</li>
+<li><strong>Volume Financeiro Transacionado Alvo (TPV)</strong>: R$ 5.000.000,00/mês gerado pelas subcontas em 18 meses.</li>
+<li><strong>Receita de Adquirência Relativa (Take Rate de 1,0%)</strong>: R$ 50.000,00/mês em markup transacional.</li>
+<li><strong>Meta de Faturamento Mensal (SaaS + Fintech)</strong>: <strong>R<span class="math-inline"> 150.000,00/mês</strong> em 18 meses (sendo R</span> 100.000 de assinaturas recorrentes + R$ 50.000 de comissões Abbla Pay).</li>
+<li><strong>LTV (Lifetime Value) Híbrido Estimado</strong>: <strong>R$ 5.400,00</strong> por cliente (aumento de 50% em relação ao modelo puramente SaaS devido ao fluxo transacional).</li>
+<li><strong>Proporção LTV/CAC Alvo</strong>: <span class="math-inline">\ge 6:1</span> (indicando eficiência mercadológica extremamente alta).</li>
+</ul>
+<hr class="styled-hr" />
+<p class="paragraph"><em>Este relatório de valuation expressa estimativas financeiras fundamentadas na qualidade do produto de software atual e premissas de mercado de CRM e IA no Brasil, devendo servir como documento base para discussões confidenciais com potenciais investidores.</em></p>
+
+  </div>
+
+</body>
+</html>

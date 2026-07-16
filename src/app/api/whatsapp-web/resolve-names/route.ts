@@ -137,12 +137,23 @@ export async function POST(req: Request) {
           remoteJid
         );
 
-        if (profile.name && profile.name !== 'WhatsApp Contact' && !profile.name.startsWith('+')) {
-          const updatePayload: any = { name: profile.name };
-          if (profile.picture && !contact.avatar_url) {
-            updatePayload.avatar_url = profile.picture;
-          }
+        // Update name if we got a valid new name (that is not a placeholder)
+        const hasNewName = profile.name && profile.name !== 'WhatsApp Contact' && !profile.name.startsWith('+');
+        const updatePayload: any = {};
+        let shouldUpdate = false;
 
+        if (hasNewName && profile.name !== contact.name) {
+          updatePayload.name = profile.name;
+          shouldUpdate = true;
+        }
+
+        // Always update the avatar URL if a new one is returned, to refresh expired links
+        if (profile.picture && profile.picture !== contact.avatar_url) {
+          updatePayload.avatar_url = profile.picture;
+          shouldUpdate = true;
+        }
+
+        if (shouldUpdate) {
           const { error: updateError } = await admin
             .from('contacts')
             .update(updatePayload)
@@ -156,12 +167,13 @@ export async function POST(req: Request) {
           details.push({
             phone: contact.phone,
             status: 'resolved',
-            newName: profile.name
+            newName: updatePayload.name || contact.name,
+            newAvatar: !!updatePayload.avatar_url
           });
         } else {
           details.push({
             phone: contact.phone,
-            status: 'no_name_returned'
+            status: 'no_changes_needed'
           });
         }
       } catch (err: any) {

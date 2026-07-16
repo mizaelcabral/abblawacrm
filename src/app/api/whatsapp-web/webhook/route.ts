@@ -167,7 +167,7 @@ async function processIncomingMessage(config: any, messageData: any) {
       }
       if (profile.picture) {
         avatarUrl = profile.picture;
-        if (existingContact && !existingContact.avatar_url) {
+        if (existingContact && existingContact.avatar_url !== avatarUrl) {
           await supabaseAdmin()
             .from('contacts')
             .update({ avatar_url: avatarUrl })
@@ -440,7 +440,7 @@ async function findOrCreateContact(accountId: string, userId: string, phone: str
       updatePayload.name = name;
       needsUpdate = true;
     }
-    if (!existing.avatar_url && avatarUrl) {
+    if (avatarUrl && existing.avatar_url !== avatarUrl) {
       updatePayload.avatar_url = avatarUrl;
       needsUpdate = true;
     }

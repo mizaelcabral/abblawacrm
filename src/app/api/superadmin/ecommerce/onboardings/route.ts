@@ -1,54 +1,56 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/automations/admin-client';
-import fs from 'fs';
-import path from 'path';
+import { parseEnvLocal } from '@/lib/env-local';
 
-// Force load .env.local manually as fallback for Next.js Turbopack env parsing bugs
-function loadEnvLocal() {
-  if (process.env.NODE_ENV === 'test') return;
-  try {
-    let currentDir = process.cwd();
-    let foundPath = '';
-    
-    // Search up to 5 levels up from process.cwd() for .env.local
-    for (let i = 0; i < 5; i++) {
-      const checkPath = path.resolve(currentDir, '.env.local');
-      if (fs.existsSync(checkPath)) {
-        foundPath = checkPath;
-        break;
-      }
-      const parentDir = path.dirname(currentDir);
-      if (parentDir === currentDir) break;
-      currentDir = parentDir;
-    }
-
-    if (foundPath) {
-      const envContent = fs.readFileSync(foundPath, 'utf-8');
-      envContent.split('\n').forEach((line) => {
-        const trimmed = line.trim();
-        if (trimmed && !trimmed.startsWith('#')) {
-          const firstEquals = trimmed.indexOf('=');
-          if (firstEquals !== -1) {
-            const key = trimmed.substring(0, firstEquals).trim();
-            const val = trimmed.substring(firstEquals + 1).trim();
-            if (key && val) {
-              process.env[key] = val;
-            }
-          }
-        }
-      });
-    } else {
-      console.error('[superadmin/ecommerce/onboardings] loadEnvLocal: Could not locate .env.local starting from', process.cwd());
-    }
-  } catch (err) {
-    console.error('Failed to manually parse .env.local:', err);
+// Reads WOOVI_MASTER_APP_ID from super_admin_config in Supabase.
+// Uses direct HTTP REST fetch (not SDK) to avoid Turbopack env-freeze bugs.
+// Credentials are read fresh from disk via parseEnvLocal().
+async function getWooviMasterAppId(): Promise<string | null> {
+  if (process.env.NODE_ENV === 'test') {
+    return process.env.WOOVI_MASTER_APP_ID || null;
   }
+
+  // Read credentials fresh from disk — never frozen by bundler
+  const env = parseEnvLocal();
+  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+  if (supabaseUrl && serviceRoleKey) {
+    try {
+      // Direct REST query — no SDK, no process.env dependency at call time
+      const res = await fetch(
+        `${supabaseUrl}/rest/v1/super_admin_config?key=eq.woovi_master_app_id&select=value&limit=1`,
+        {
+          headers: {
+            'apikey': serviceRoleKey,
+            'Authorization': `Bearer ${serviceRoleKey}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (res.ok) {
+        const rows: Array<{ value: string }> = await res.json();
+        if (rows.length > 0 && rows[0].value) {
+          return rows[0].value;
+        }
+      } else {
+        console.error('[getWooviMasterAppId] REST query failed:', res.status, await res.text());
+      }
+    } catch (err) {
+      console.error('[getWooviMasterAppId] Exception:', err);
+    }
+  } else {
+    console.error('[getWooviMasterAppId] Missing Supabase credentials in env');
+  }
+
+  // Fallback: read WOOVI_MASTER_APP_ID from .env.local directly or process.env
+  return env.WOOVI_MASTER_APP_ID || process.env.WOOVI_MASTER_APP_ID || null;
 }
 
 export async function GET() {
   try {
-    loadEnvLocal();
     const supabase = await createClient();
     const {
       data: { user },
@@ -95,7 +97,6 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    loadEnvLocal();
     const supabase = await createClient();
     const {
       data: { user },
@@ -170,11 +171,13 @@ export async function POST(request: Request) {
 
       return NextResponse.json({ success: true, data });
     } else {
-      // Modo automático: chamar a Woovi
-      console.log('DEBUG: process.env.WOOVI_MASTER_APP_ID =', process.env.WOOVI_MASTER_APP_ID);
-      const masterAppId = process.env.WOOVI_MASTER_APP_ID;
+      // Modo automático: ler Master App ID do banco e chamar a Woovi
+      const masterAppId = await getWooviMasterAppId();
       if (!masterAppId) {
-        return NextResponse.json({ error: 'WOOVI_MASTER_APP_ID is not configured.' }, { status: 400 });
+        return NextResponse.json(
+          { error: 'Woovi Master App ID não configurado. Configure-o em Painel Super Admin > Configurações.' },
+          { status: 400 }
+        );
       }
 
       // Obter o nome da conta do banco de dados
@@ -193,36 +196,51 @@ export async function POST(request: Request) {
         ? 'https://api.woovi-sandbox.com/api/v1/subaccount'
         : 'https://api.woovi.com/api/v1/subaccount';
 
+      const wooviPayload = {
+        name: account.name,
+        pixKey: pixKey || '',
+      };
+
+      console.log(`[superadmin/ecommerce/onboardings] Creating subaccount at ${wooviUrl}`, wooviPayload);
+
       const response = await fetch(wooviUrl, {
         method: 'POST',
         headers: {
           'Authorization': masterAppId,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name: account.name,
-          pixKey: pixKey || '',
-        }),
+        body: JSON.stringify(wooviPayload),
       });
 
+      const resText = await response.text();
+      console.log(`[superadmin/ecommerce/onboardings] Woovi response ${response.status}:`, resText);
+
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[superadmin/ecommerce/onboardings] POST automatic woovi request error:', response.status, errorText);
-        return NextResponse.json({ error: `Woovi subaccount creation failed: ${response.status} - ${errorText}` }, { status: 400 });
+        return NextResponse.json(
+          { error: `Woovi subaccount creation failed: ${response.status} - ${resText}` },
+          { status: 400 }
+        );
       }
 
-      const resData = await response.json();
-      const subAppId = resData.subaccount?.apiKey || resData.apiKey;
-
-      if (!subAppId) {
-        console.error('[superadmin/ecommerce/onboardings] POST automatic woovi response missing apiKey:', resData);
-        return NextResponse.json({ error: 'Woovi subaccount creation returned invalid response (missing apiKey)' }, { status: 500 });
+      let resData: any;
+      try {
+        resData = JSON.parse(resText);
+      } catch {
+        return NextResponse.json(
+          { error: `Woovi returned invalid JSON: ${resText}` },
+          { status: 500 }
+        );
       }
 
+      const subAccount = resData.subAccount || resData.subaccount;
+      const subAccountPixKey = subAccount?.pixKey || pixKey || '';
+
+      // Save: app_id = master app id (used to call woovi), secret_key = pix key of subconta
       const { data, error } = await admin
         .from('woovi_config')
         .update({
-          app_id: subAppId,
+          app_id: masterAppId,
+          secret_key: subAccountPixKey,
           onboarding_status: 'approved',
           updated_at: new Date().toISOString(),
         })
@@ -232,7 +250,7 @@ export async function POST(request: Request) {
 
       if (error) {
         console.error('[superadmin/ecommerce/onboardings] POST automatic db update error:', error);
-        return NextResponse.json({ error: 'Failed to update database with approved status and app_id' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to update database with approved status' }, { status: 500 });
       }
 
       return NextResponse.json({ success: true, data });

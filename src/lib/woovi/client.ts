@@ -12,6 +12,7 @@ export interface WooviChargePayload {
     phone: string;
   };
   splits?: WooviSplitRule[];
+  subaccount?: string; // Pix key of the subaccount
 }
 
 export interface WooviChargeResponse {
