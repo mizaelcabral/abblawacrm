@@ -155,15 +155,14 @@ export default function StorefrontPage() {
       {/* Cabeçalho Fixo */}
       <header className="sticky top-0 z-30 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto max-w-5xl flex h-16 items-center justify-between px-4">
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center">
             {config.store_logo_url ? (
-              <img src={config.store_logo_url} alt="Logo" className="h-9 w-9 rounded-lg object-cover border border-border" />
+              <img src={config.store_logo_url} alt="Logo" className="h-10 w-10 rounded-xl object-cover border border-border" />
             ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Store className="h-5 w-5" />
               </div>
             )}
-            <span className="font-bold text-lg tracking-tight">Vitrine Virtual</span>
           </div>
 
           <Button
@@ -183,11 +182,8 @@ export default function StorefrontPage() {
       </header>
 
       {/* Hero / Apresentação da Loja */}
-      <div className="bg-background border-b border-border py-8 px-4 text-center">
-        <div className="mx-auto max-w-xl space-y-3">
-          {config.store_logo_url && (
-            <img src={config.store_logo_url} alt="Logo" className="mx-auto h-20 w-20 rounded-2xl object-cover border border-border shadow-sm mb-4" />
-          )}
+      <div className="bg-gradient-to-b from-background to-muted/40 border-b border-border py-12 px-4 text-center">
+        <div className="mx-auto max-w-xl space-y-4">
           <h1 className="text-3xl font-extrabold tracking-tight">
             {config.store_description ? 'Bem-vindo à nossa Loja!' : 'Catálogo de Produtos'}
           </h1>
@@ -196,22 +192,24 @@ export default function StorefrontPage() {
               {config.store_description}
             </p>
           )}
+
+          <div className="relative max-w-md mx-auto pt-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Pesquisar na vitrine..."
+                className="pl-9 bg-background h-11 shadow-sm"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
       <main className="mx-auto max-w-5xl px-4 mt-8 space-y-6">
-        {/* Barra de Busca e Categorias */}
+        {/* Categorias */}
         <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Pesquisar na vitrine..."
-              className="pl-9 bg-background h-11"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
           {/* Abas de Categoria */}
           <div className="flex border-b border-border overflow-x-auto pb-px scrollbar-none">
             <div className="flex space-x-2 min-w-max pb-1">
