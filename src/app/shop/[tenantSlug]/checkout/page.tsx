@@ -775,9 +775,22 @@ export default function CheckoutPage() {
                   <span className="text-primary text-base font-extrabold">R$ {orderTotal.toFixed(2)}</span>
                 </div>
               </div>
+
+              {/* Link voltar ao carrinho — só no step de formulário */}
+              {step === 'form' && (
+                <button
+                  type="button"
+                  onClick={() => router.push(`/shop/${tenantSlug}`)}
+                  className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors pt-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                  Voltar e editar carrinho
+                </button>
+              )}
             </CardContent>
           </Card>
         </div>
+
 
       </main>
     </div>
