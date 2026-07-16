@@ -41,6 +41,7 @@ export default function ProductDetailPage() {
   // Selected states
   const [selectedVariation, setSelectedVariation] = useState<ProductVariation | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [relatedProducts, setRelatedProducts] = useState<ExtendedProduct[]>([]);
 
   // Password protection state
   const [passwordInput, setPasswordInput] = useState('');
@@ -97,6 +98,23 @@ export default function ProductDetailPage() {
         // Pre-select first variation
         if (extendedProd.variations && extendedProd.variations.length > 0) {
           setSelectedVariation(extendedProd.variations[0]);
+        }
+
+        // Fetch related products (excluding current product)
+        const { data: relatedData } = await supabase
+          .from('products')
+          .select(`
+            *,
+            category:product_categories(*),
+            variations:product_variations(*)
+          `)
+          .eq('account_id', configData.account_id)
+          .eq('active', true)
+          .neq('id', extendedProd.id)
+          .limit(4);
+
+        if (relatedData) {
+          setRelatedProducts(relatedData as ExtendedProduct[]);
         }
       }
     } catch (err) {
@@ -241,14 +259,23 @@ export default function ProductDetailPage() {
       {/* Cabeçalho Fixo */}
       <header className="sticky top-0 z-30 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto max-w-5xl flex h-16 items-center justify-between px-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push(`/shop/${tenantSlug}`)}
-            className="-ml-2 text-xs font-semibold"
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
-          </Button>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/shop/${tenantSlug}`)}
+              className="-ml-2 text-xs font-semibold"
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
+            </Button>
+            {config.store_logo_url ? (
+              <img src={config.store_logo_url} alt="Logo" className="h-8 w-auto max-w-[120px] object-contain" />
+            ) : (
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Store className="h-4 w-4" />
+              </div>
+            )}
+          </div>
 
           <Button
             variant="outline"
@@ -418,6 +445,57 @@ export default function ProductDetailPage() {
             <h2 className="text-lg font-bold text-foreground">Descrição do Produto</h2>
             <div className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
               {product.description}
+            </div>
+          </div>
+        )}
+
+        {/* Produtos Relacionados */}
+        {relatedProducts.length > 0 && (
+          <div className="mt-16 border-t border-border pt-10 space-y-6">
+            <h2 className="text-xl font-bold text-foreground">Produtos Relacionados</h2>
+            <div className="grid gap-6 grid-cols-2 sm:grid-cols-4">
+              {relatedProducts.map((p) => {
+                const firstVar = p.variations?.[0];
+                const displayPrice = firstVar ? firstVar.price : 0;
+
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => router.push(`/shop/${tenantSlug}/product/${p.slug}`)}
+                    className="group cursor-pointer space-y-3 rounded-2xl border border-border bg-card p-3 transition-all hover:shadow-md"
+                  >
+                    <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-muted">
+                      {p.images && p.images.length > 0 ? (
+                        <img
+                          src={p.images[0]}
+                          alt={p.name}
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-muted-foreground/40">
+                          <ShoppingBag className="h-8 w-8" />
+                        </div>
+                      )}
+                      {p.product_type === 'digital' && (
+                        <span className="absolute top-2 right-2 rounded-md bg-primary/95 px-2 py-0.5 text-[9px] font-bold text-primary-foreground">
+                          Digital
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <h3 className="font-semibold text-xs text-foreground line-clamp-2 min-h-[32px] group-hover:text-primary transition-colors">
+                        {p.name}
+                      </h3>
+                      <div className="flex flex-wrap items-baseline gap-1.5">
+                        <span className="text-sm font-extrabold text-foreground">
+                          R$ {Number(displayPrice).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
