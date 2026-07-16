@@ -140,16 +140,43 @@ export default function EcommerceProductsPage() {
     if (!confirm) return;
 
     try {
+      // 1. Buscar variações do produto
+      const { data: variations } = await supabase
+        .from('product_variations')
+        .select('id')
+        .eq('product_id', id);
+
+      if (variations && variations.length > 0) {
+        const variationIds = variations.map((v) => v.id);
+
+        // 2. Remover itens de pedidos vinculados às variações
+        await supabase
+          .from('order_items')
+          .delete()
+          .in('product_variation_id', variationIds);
+
+        // 3. Remover as variações
+        const { error: varError } = await supabase
+          .from('product_variations')
+          .delete()
+          .eq('product_id', id);
+
+        if (varError) throw varError;
+      }
+
+      // 4. Remover o produto
       const { error } = await supabase
         .from('products')
         .delete()
         .eq('id', id);
+
       if (error) throw error;
+
       setProducts(products.filter((p) => p.id !== id));
       toast.success('Produto removido.');
     } catch (err: any) {
       console.error(err);
-      toast.error('Erro ao deletar produto.');
+      toast.error(`Erro ao deletar produto: ${err.message || 'tente novamente.'}`);
     }
   };
 
