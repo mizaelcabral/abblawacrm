@@ -16,6 +16,7 @@ import {
   ShoppingCart,
   Plus,
   ArrowRight,
+  Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -26,7 +27,7 @@ type ExtendedProduct = Product & {
 
 export default function StorefrontPage() {
   const params = useParams();
-  const tenantSlug = params.tenantSlug as string; // account_id
+  const tenantSlug = params.tenantSlug as string; // account_id or slug
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
@@ -35,6 +36,11 @@ export default function StorefrontPage() {
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Password protection state
+  const [passwordInput, setPasswordInput] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
 
   // Cart state
   const [cartItems, setCartItems] = useState<{ variationId: string; quantity: number }[]>([]);
@@ -47,24 +53,27 @@ export default function StorefrontPage() {
       setLoading(true);
 
       // 1. Fetch Woovi Config for branding
-      const { data: configData, error: configError } = await supabase
-        .from('woovi_config')
-        .select('*')
-        .eq('account_id', tenantSlug)
-        .maybeSingle();
+      const res = await fetch(`/api/shop/config?tenantSlug=${tenantSlug}`);
+      if (!res.ok) {
+        throw new Error('Erro ao carregar configurações da loja');
+      }
+      const configData = await res.json();
+      
+      const mappedConfig: WooviConfig = {
+        ...configData,
+        app_id: configData.has_app_id ? 'configured' : null
+      };
+      setConfig(mappedConfig);
 
-      if (configError) throw configError;
-      setConfig(configData);
-
-      // 2. Fetch categories
+      // 2. Fetch categories using resolved account_id
       const { data: catData } = await supabase
         .from('product_categories')
         .select('*')
-        .eq('account_id', tenantSlug)
+        .eq('account_id', configData.account_id)
         .order('name');
       if (catData) setCategories(catData);
 
-      // 3. Fetch active products with variations
+      // 3. Fetch active products with variations using resolved account_id
       const { data: prodData, error: prodError } = await supabase
         .from('products')
         .select(`
@@ -72,7 +81,7 @@ export default function StorefrontPage() {
           category:product_categories(*),
           variations:product_variations(*)
         `)
-        .eq('account_id', tenantSlug)
+        .eq('account_id', configData.account_id)
         .eq('active', true)
         .order('created_at', { ascending: false });
 
@@ -89,9 +98,17 @@ export default function StorefrontPage() {
 
   useEffect(() => {
     loadStoreData();
+  }, [loadStoreData]);
 
-    // Load cart from LocalStorage
-    const savedCart = localStorage.getItem(`cart_${tenantSlug}`);
+  // Load cart from LocalStorage using resolved account_id
+  useEffect(() => {
+    if (!config?.account_id) return;
+    
+    // Check authentication for password protected stores
+    const hasAuth = sessionStorage.getItem("auth_shop_" + config.account_id) === 'true';
+    setAuthenticated(hasAuth);
+
+    const savedCart = localStorage.getItem(`cart_${config.account_id}`);
     if (savedCart) {
       try {
         setCartItems(JSON.parse(savedCart));
@@ -99,11 +116,40 @@ export default function StorefrontPage() {
         console.error(e);
       }
     }
-  }, [loadStoreData, tenantSlug]);
+  }, [config?.account_id]);
 
   const updateCart = (items: { variationId: string; quantity: number }[]) => {
     setCartItems(items);
-    localStorage.setItem(`cart_${tenantSlug}`, JSON.stringify(items));
+    if (config?.account_id) {
+      localStorage.setItem(`cart_${config.account_id}`, JSON.stringify(items));
+    }
+  };
+
+  const handleVerifyPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVerifying(true);
+    try {
+      const res = await fetch('/api/shop/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantSlug, password: passwordInput })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (config?.account_id) {
+          sessionStorage.setItem("auth_shop_" + config.account_id, 'true');
+        }
+        setAuthenticated(true);
+        toast.success('Acesso liberado!');
+      } else {
+        toast.error(data.error || 'Senha incorreta.');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao verificar a senha.');
+    } finally {
+      setVerifying(false);
+    }
   };
 
   const handleAddToCart = (variationId: string) => {
@@ -146,6 +192,37 @@ export default function StorefrontPage() {
         <p className="text-sm text-muted-foreground max-w-sm mt-1">
           Esta loja ainda não concluiu a configuração de pagamentos Pix. Por favor, tente novamente mais tarde.
         </p>
+      </div>
+    );
+  }
+
+  // Tela de Senha
+  if (config.password_protected && !authenticated) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-center selection:bg-primary selection:text-primary-foreground">
+        <div className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-6 shadow-lg">
+          <div className="flex justify-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Lock className="h-6 w-6" />
+            </div>
+          </div>
+          <h2 className="text-xl font-bold">Loja Protegida por Senha</h2>
+          <p className="text-sm text-muted-foreground">
+            Digite a senha de acesso fornecida pelo lojista para continuar.
+          </p>
+          <form onSubmit={handleVerifyPassword} className="space-y-4">
+            <Input
+              type="password"
+              placeholder="Senha de acesso"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              required
+            />
+            <Button type="submit" disabled={verifying} className="w-full">
+              {verifying ? 'Verificando...' : 'Acessar Loja'}
+            </Button>
+          </form>
+        </div>
       </div>
     );
   }

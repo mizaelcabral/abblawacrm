@@ -21,6 +21,7 @@ import {
   MessageSquare,
   AlertCircle,
   Building,
+  Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -44,7 +45,7 @@ interface HydratedCartItem {
 export default function CheckoutPage() {
   const params = useParams();
   const router = useRouter();
-  const tenantSlug = params.tenantSlug as string; // account_id
+  const tenantSlug = params.tenantSlug as string; // account_id or slug
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
@@ -55,6 +56,11 @@ export default function CheckoutPage() {
   // Checkout steps
   const [step, setStep] = useState<'form' | 'payment' | 'success'>('form');
   const [createdOrder, setCreatedOrder] = useState<any>(null);
+
+  // Password protection state
+  const [passwordInput, setPasswordInput] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
 
   // Form states
   const [customerInfo, setCustomerInfo] = useState({ name: '', phone: '', email: '' });
@@ -84,15 +90,24 @@ export default function CheckoutPage() {
       setLoading(true);
 
       // 1. Fetch Woovi Config
-      const { data: configData } = await supabase
-        .from('woovi_config')
-        .select('*')
-        .eq('account_id', tenantSlug)
-        .maybeSingle();
-      setConfig(configData);
+      const res = await fetch(`/api/shop/config?tenantSlug=${tenantSlug}`);
+      if (!res.ok) {
+        throw new Error('Erro ao carregar configurações da loja');
+      }
+      const configData = await res.json();
+      
+      const mappedConfig: WooviConfig = {
+        ...configData,
+        app_id: configData.has_app_id ? 'configured' : null
+      };
+      setConfig(mappedConfig);
 
-      // 2. Read cart from LocalStorage
-      const savedCart = localStorage.getItem(`cart_${tenantSlug}`);
+      // Check authentication for password protected stores
+      const hasAuth = sessionStorage.getItem("auth_shop_" + configData.account_id) === 'true';
+      setAuthenticated(hasAuth);
+
+      // 2. Read cart from LocalStorage using resolved account_id
+      const savedCart = localStorage.getItem(`cart_${configData.account_id}`);
       if (savedCart) {
         const parsed = JSON.parse(savedCart) as CartItemInput[];
         setCartItems(parsed);
@@ -140,12 +155,12 @@ export default function CheckoutPage() {
   // Lookup saved addresses when phone changes
   useEffect(() => {
     const phoneDigits = customerInfo.phone.replace(/\D/g, '');
-    if (phoneDigits.length >= 10) {
+    if (phoneDigits.length >= 10 && config?.account_id) {
       const controller = new AbortController();
       const fetchSavedAddresses = async () => {
         try {
           const res = await fetch(
-            `/api/ecommerce/addresses?phone=${encodeURIComponent(phoneDigits)}&accountId=${tenantSlug}`,
+            `/api/ecommerce/addresses?phone=${encodeURIComponent(phoneDigits)}&accountId=${config.account_id}`,
             { signal: controller.signal }
           );
           if (res.ok) {
@@ -180,11 +195,11 @@ export default function CheckoutPage() {
     } else {
       setSavedAddresses([]);
     }
-  }, [customerInfo.phone, tenantSlug]);
+  }, [customerInfo.phone, config?.account_id]);
 
   // Realtime subscription for payment confirmation
   useEffect(() => {
-    if (step === 'payment' && createdOrder?.id) {
+    if (step === 'payment' && createdOrder?.id && config?.account_id) {
       const channel = supabase
         .channel(`public-order-status-${createdOrder.id}`)
         .on(
@@ -199,7 +214,7 @@ export default function CheckoutPage() {
             if (payload.new && payload.new.status === 'paid') {
               setStep('success');
               // Limpar carrinho
-              localStorage.removeItem(`cart_${tenantSlug}`);
+              localStorage.removeItem(`cart_${config.account_id}`);
               toast.success('Pagamento confirmado via Pix com sucesso!');
             }
           }
@@ -222,7 +237,7 @@ export default function CheckoutPage() {
         clearInterval(interval);
       };
     }
-  }, [step, createdOrder, supabase, tenantSlug]);
+  }, [step, createdOrder, supabase, config?.account_id]);
 
   // Calculate totals
   const itemsSubtotal = hydratedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -242,6 +257,33 @@ export default function CheckoutPage() {
     : 0;
 
   const orderTotal = itemsSubtotal + shippingFeeTotal;
+
+  const handleVerifyPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVerifying(true);
+    try {
+      const res = await fetch('/api/shop/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantSlug, password: passwordInput })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (config?.account_id) {
+          sessionStorage.setItem("auth_shop_" + config.account_id, 'true');
+        }
+        setAuthenticated(true);
+        toast.success('Acesso liberado!');
+      } else {
+        toast.error(data.error || 'Senha incorreta.');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao verificar a senha.');
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   // Submit checkout
   const handleSubmitCheckout = async (e: React.FormEvent) => {
@@ -263,7 +305,7 @@ export default function CheckoutPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          accountId: tenantSlug,
+          accountId: config?.account_id,
           customerInfo,
           cartItems: cartItems.map((c) => ({
             variationId: c.variationId,
@@ -306,6 +348,37 @@ export default function CheckoutPage() {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  // Tela de Senha
+  if (config?.password_protected && !authenticated) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-center selection:bg-primary selection:text-primary-foreground">
+        <div className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-6 shadow-lg">
+          <div className="flex justify-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Lock className="h-6 w-6" />
+            </div>
+          </div>
+          <h2 className="text-xl font-bold">Loja Protegida por Senha</h2>
+          <p className="text-sm text-muted-foreground">
+            Digite a senha de acesso fornecida pelo lojista para continuar.
+          </p>
+          <form onSubmit={handleVerifyPassword} className="space-y-4">
+            <Input
+              type="password"
+              placeholder="Senha de acesso"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              required
+            />
+            <Button type="submit" disabled={verifying} className="w-full">
+              {verifying ? 'Verificando...' : 'Acessar Loja'}
+            </Button>
+          </form>
+        </div>
       </div>
     );
   }
