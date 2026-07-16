@@ -225,7 +225,7 @@ export default function EcommerceOverviewPage() {
                 <Sparkles className="h-4 w-4 text-primary" /> Recursos Habilitados
               </CardTitle>
               <CardDescription className="text-xs">
-                O que você poderá fazer com a sua loja ativada no Abbla:
+                O que você poderá fazer com o seu e-commerce ativado no Abbla:
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3.5 text-xs text-muted-foreground">
@@ -319,7 +319,7 @@ export default function EcommerceOverviewPage() {
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
             <ShoppingBag className="h-6 w-6" />
           </div>
-          <CardTitle className="mt-4 text-2xl">Ative sua Loja no Abbla</CardTitle>
+          <CardTitle className="mt-4 text-2xl">Ative seu E-commerce no Abbla</CardTitle>
           <CardDescription className="text-muted-foreground mt-2">
             Venda e-books, mentorias, serviços ou produtos físicos diretamente pelo chat do WhatsApp e tenha uma página de checkout Pix integrada.
           </CardDescription>
@@ -337,7 +337,7 @@ export default function EcommerceOverviewPage() {
             </div>
             <div className="flex gap-3">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">3</span>
-              <span>Você insere suas chaves aqui, configura sua loja e ativa os pagamentos e envios Pix automatizados.</span>
+              <span>Você insere suas chaves aqui, configura seu e-commerce e ativa os pagamentos e envios Pix automatizados.</span>
             </div>
           </div>
 
@@ -404,7 +404,7 @@ export default function EcommerceOverviewPage() {
         <CardHeader>
           <div className="flex items-center space-x-2">
             <Building className="h-5 w-5 text-primary" />
-            <CardTitle>Credenciais e Configuração da Loja</CardTitle>
+            <CardTitle>Credenciais e Configuração do E-commerce</CardTitle>
           </div>
           <CardDescription>
             Insira as chaves de API obtidas na sua subconta da Woovi para iniciar as vendas.
@@ -412,10 +412,10 @@ export default function EcommerceOverviewPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSaveConfig} className="space-y-6">
-            {/* Logo e Nome da Loja */}
+            {/* Logo e Nome do E-commerce */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Logotipo da Loja</Label>
+                <Label>Logotipo do E-commerce</Label>
                 <div className="flex items-center space-x-4">
                   {logoUrl ? (
                     <img src={logoUrl} alt="Logo" className="h-14 w-14 rounded-lg object-cover border border-border" />
@@ -447,12 +447,12 @@ export default function EcommerceOverviewPage() {
                   value={defaultShippingFee}
                   onChange={(e) => setDefaultShippingFee(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">Taxa aplicada em produtos físicos caso não haja frete customizado.</p>
+                <p className="text-xs text-muted-foreground">Taxa aplicada em produtos físicos do e-commerce caso não haja frete customizado.</p>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="storeDesc">Descrição / Apresentação da Loja</Label>
+              <Label htmlFor="storeDesc">Descrição / Apresentação do E-commerce</Label>
               <Textarea
                 id="storeDesc"
                 placeholder="Escreva sobre sua marca, nicho, horário de suporte..."
@@ -496,7 +496,7 @@ export default function EcommerceOverviewPage() {
             </div>
 
             <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? 'Salvando...' : 'Salvar e Habilitar Loja'}
+              {submitting ? 'Salvando...' : 'Salvar e Habilitar E-commerce'}
             </Button>
           </form>
         </CardContent>
@@ -559,7 +559,7 @@ export default function EcommerceOverviewPage() {
         <Card className="lg:col-span-2 border-border">
           <CardHeader>
             <CardTitle>Pedidos Recentes</CardTitle>
-            <CardDescription>Lista dos últimos pedidos gerados pela loja ou chat.</CardDescription>
+            <CardDescription>Lista dos últimos pedidos gerados pelo e-commerce ou chat.</CardDescription>
           </CardHeader>
           <CardContent>
             {orders.length === 0 ? (
@@ -616,11 +616,11 @@ export default function EcommerceOverviewPage() {
           </CardContent>
         </Card>
 
-        {/* Informações da Loja & Atalhos */}
+        {/* Informações do E-commerce & Atalhos */}
         <div className="space-y-6">
           <Card className="border-border">
             <CardHeader>
-              <CardTitle>Sua Loja Ativa</CardTitle>
+              <CardTitle>Seu E-commerce Ativo</CardTitle>
               <CardDescription>Informações públicas do e-commerce.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -633,7 +633,7 @@ export default function EcommerceOverviewPage() {
                   </div>
                 )}
                 <div>
-                  <div className="font-semibold text-foreground">Link de Acesso da Loja</div>
+                  <div className="font-semibold text-foreground">Link de Acesso do E-commerce</div>
                   <a
                     href={`/shop/${accountId}`}
                     target="_blank"
@@ -668,7 +668,7 @@ export default function EcommerceOverviewPage() {
                   setConfig({ ...config, app_id: null, secret_key: null } as any);
                 }}
               >
-                Editar Informações da Loja
+                Editar Informações do E-commerce
               </Button>
             </CardContent>
           </Card>

@@ -102,7 +102,7 @@ const navItems: NavItem[] = [
   { href: "/flows", label: "Fluxos", icon: Workflow, beta: true },
   { href: "/tasks", label: "Tarefas", icon: CheckSquare },
   { href: "/knowledge-base", label: "Base de Conhecimento", icon: BookOpen },
-  { href: "/ecommerce", label: "Loja", icon: ShoppingBag },
+  { href: "/ecommerce", label: "Ecommerce", icon: ShoppingBag },
   { href: "/settings?tab=plans", label: "Planos", icon: CreditCard },
 ];
 

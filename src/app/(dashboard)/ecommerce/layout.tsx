@@ -35,7 +35,7 @@ export default function EcommerceLayout({
       <div className="flex flex-col space-y-2 border-b border-border pb-5 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            Gestão da Loja & E-commerce
+            Gestão de E-commerce
           </h1>
           <p className="text-sm text-muted-foreground">
             Administre seus produtos físicos ou digitais, configure formas de entrega, upsells e gerencie seus pagamentos Woovi.
