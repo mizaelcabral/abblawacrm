@@ -712,7 +712,7 @@ export default function EcommerceOverviewPage() {
             <CardContent className="space-y-4">
               <div className="flex items-center space-x-3">
                 {config.store_logo_url ? (
-                  <img src={config.store_logo_url} alt="Logo" className="h-12 w-12 rounded-lg object-cover border border-border" />
+                  <img src={config.store_logo_url} alt="Logo" className="h-12 w-auto max-w-[120px] object-contain" />
                 ) : (
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <ShoppingBag className="h-6 w-6" />

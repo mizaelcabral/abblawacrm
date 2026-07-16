@@ -234,7 +234,7 @@ export default function StorefrontPage() {
         <div className="mx-auto max-w-5xl flex h-16 items-center justify-between px-4">
           <div className="flex items-center">
             {config.store_logo_url ? (
-              <img src={config.store_logo_url} alt="Logo" className="h-10 w-10 rounded-xl object-cover border border-border" />
+              <img src={config.store_logo_url} alt="Logo" className="h-10 w-auto max-w-[160px] object-contain" />
             ) : (
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Store className="h-5 w-5" />
