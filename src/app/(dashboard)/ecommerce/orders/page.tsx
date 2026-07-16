@@ -235,43 +235,56 @@ export default function EcommerceOrdersPage() {
 
       {/* Slide-over de Detalhes do Pedido */}
       <Sheet open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto border-l border-border bg-card">
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto border-l border-border bg-background p-0">
           {selectedOrder && (
             <>
-              <SheetHeader className="pb-4 border-b border-border">
-                <SheetTitle className="text-lg font-bold">
-                  Detalhes do Pedido
-                </SheetTitle>
-                <p className="text-xs text-muted-foreground break-all">ID: {selectedOrder.id}</p>
-              </SheetHeader>
+              {/* Header */}
+              <div className="sticky top-0 z-10 bg-background border-b border-border px-5 py-4">
+                <SheetHeader className="space-y-0.5">
+                  <SheetTitle className="text-base font-bold text-foreground">
+                    Detalhes do Pedido
+                  </SheetTitle>
+                  <p className="text-[11px] text-muted-foreground font-mono truncate">#{selectedOrder.id.slice(0, 8).toUpperCase()}</p>
+                </SheetHeader>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {new Date(selectedOrder.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                  {' às '}
+                  {new Date(selectedOrder.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
 
               {detailsLoading ? (
                 <div className="flex h-48 items-center justify-center">
                   <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                 </div>
               ) : (
-                <div className="space-y-6 pt-4">
+                <div className="px-5 py-5 space-y-5">
+
                   {/* Status Banner */}
-                  <div className="flex items-center justify-between rounded-lg border border-border p-4 bg-muted/40">
-                    <div>
-                      <div className="text-xs text-muted-foreground">Status do Pagamento</div>
-                      <div className="flex items-center gap-1.5 mt-1 font-semibold text-sm">
-                        {selectedOrder.status === 'paid' ? (
-                          <>
-                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                            <span className="text-emerald-500">Pago via Pix</span>
-                          </>
-                        ) : selectedOrder.status === 'cancelled' ? (
-                          <>
-                            <XCircle className="h-4 w-4 text-rose-500" />
-                            <span className="text-rose-500">Cancelado</span>
-                          </>
-                        ) : (
-                          <>
-                            <AlertCircle className="h-4 w-4 text-amber-500" />
-                            <span className="text-amber-500">Pendente de Pix</span>
-                          </>
-                        )}
+                  <div className={`flex items-center justify-between rounded-xl p-4 ${
+                    selectedOrder.status === 'paid'
+                      ? 'bg-emerald-500/10 border border-emerald-500/20'
+                      : selectedOrder.status === 'cancelled'
+                      ? 'bg-rose-500/10 border border-rose-500/20'
+                      : 'bg-amber-500/10 border border-amber-500/20'
+                  }`}>
+                    <div className="flex items-center gap-2.5">
+                      {selectedOrder.status === 'paid' ? (
+                        <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+                      ) : selectedOrder.status === 'cancelled' ? (
+                        <XCircle className="h-5 w-5 text-rose-500 shrink-0" />
+                      ) : (
+                        <AlertCircle className="h-5 w-5 text-amber-500 shrink-0" />
+                      )}
+                      <div>
+                        <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Status</div>
+                        <div className={`font-bold text-sm ${
+                          selectedOrder.status === 'paid' ? 'text-emerald-500'
+                          : selectedOrder.status === 'cancelled' ? 'text-rose-500'
+                          : 'text-amber-500'
+                        }`}>
+                          {selectedOrder.status === 'paid' ? 'Pago via Pix' : selectedOrder.status === 'cancelled' ? 'Cancelado' : 'Aguardando Pix'}
+                        </div>
                       </div>
                     </div>
 
@@ -280,17 +293,17 @@ export default function EcommerceOrdersPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-xs border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/10"
+                          className="text-xs h-7 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500/50"
                           onClick={() => handleUpdateStatus(selectedOrder.id, 'paid')}
                         >
-                          Marcar Pago
+                          ✓ Pago
                         </Button>
                       )}
                       {selectedOrder.status !== 'cancelled' && (
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-xs border-rose-500/20 text-rose-500 hover:bg-rose-500/10"
+                          className="text-xs h-7 border-rose-500/30 text-rose-600 hover:bg-rose-500/10 hover:border-rose-500/50"
                           onClick={() => handleUpdateStatus(selectedOrder.id, 'cancelled')}
                         >
                           Cancelar
@@ -299,86 +312,115 @@ export default function EcommerceOrdersPage() {
                     </div>
                   </div>
 
-                  {/* Dados do Cliente */}
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
-                      <User className="h-4 w-4 text-primary" />
-                      Dados do Cliente
-                    </h3>
-                    <div className="rounded-lg border border-border p-3 text-sm space-y-1.5 bg-muted/20">
-                      <div><span className="text-muted-foreground">Nome: </span>{(selectedOrder.customer_info as any).name}</div>
-                      <div><span className="text-muted-foreground">WhatsApp: </span>{(selectedOrder.customer_info as any).phone}</div>
-                      <div><span className="text-muted-foreground">E-mail: </span>{(selectedOrder.customer_info as any).email}</div>
-                      {selectedOrder.contact && (
-                        <div className="pt-1.5 border-t border-border mt-1.5 flex gap-2">
-                          <a
-                            href={`/inbox`} // redireciona para a inbox para chat rápido
-                            className="inline-flex items-center text-xs text-primary hover:underline"
-                          >
-                            <MessageSquare className="h-3.5 w-3.5 mr-1" /> Conversar no Inbox
-                          </a>
-                        </div>
+                  {/* QR Code Pix (se pendente e disponível) */}
+                  {selectedOrder.status === 'pending' && selectedOrder.woovi_qrcode_image && (
+                    <div className="rounded-xl border border-border bg-card p-4 flex flex-col items-center gap-3">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">QR Code Pix</p>
+                      <img
+                        src={selectedOrder.woovi_qrcode_image}
+                        alt="QR Code Pix"
+                        className="w-36 h-36 rounded-lg"
+                      />
+                      {selectedOrder.woovi_brcode && (
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedOrder.woovi_brcode!);
+                            toast.success('Código Pix copiado!');
+                          }}
+                          className="text-xs text-primary hover:underline flex items-center gap-1"
+                        >
+                          <ExternalLink className="h-3 w-3" /> Copiar Pix Copia e Cola
+                        </button>
                       )}
-                    </div>
-                  </div>
-
-                  {/* Endereço de Entrega se não for 100% digital */}
-                  {selectedOrder.shipping_amount > 0 || (selectedOrder.customer_info as any).address ? (
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
-                        <Truck className="h-4 w-4 text-primary" />
-                        Endereço de Entrega
-                      </h3>
-                      <div className="rounded-lg border border-border p-3 text-sm space-y-1 bg-muted/20">
-                        {(() => {
-                          const addr = (selectedOrder.customer_info as any).address;
-                          if (!addr) return <span className="text-muted-foreground">Nenhum endereço fornecido.</span>;
-                          return (
-                            <>
-                              <div>{addr.street}, {addr.number} {addr.complement && `- ${addr.complement}`}</div>
-                              <div>{addr.neighborhood} - CEP: {addr.postal_code}</div>
-                              <div>{addr.city} / {addr.state}</div>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-border bg-muted/10 p-3 text-xs text-muted-foreground flex items-center gap-1.5">
-                      <ShoppingBag className="h-4 w-4 text-primary shrink-0" />
-                      <span>Pedido digital ou de serviço. Sem necessidade de entrega física.</span>
                     </div>
                   )}
 
+                  {/* Dados do Cliente */}
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5" /> Cliente
+                    </h3>
+                    <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-semibold text-foreground text-sm">
+                            {(selectedOrder.customer_info as any).name}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {(selectedOrder.customer_info as any).email}
+                          </div>
+                        </div>
+                        {(selectedOrder.customer_info as any).phone && (
+                          <a
+                            href={`https://wa.me/${(selectedOrder.customer_info as any).phone?.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 px-2.5 py-1 rounded-full font-medium shrink-0 transition-colors"
+                          >
+                            <MessageSquare className="h-3 w-3" />
+                            WhatsApp
+                          </a>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground border-t border-border pt-2.5">
+                        📱 {(selectedOrder.customer_info as any).phone}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Endereço de Entrega */}
+                  {(() => {
+                    const addr = (selectedOrder.customer_info as any).address;
+                    if (!addr?.street) return null;
+                    return (
+                      <div className="space-y-2">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                          <Truck className="h-3.5 w-3.5" /> Entrega
+                        </h3>
+                        <div className="rounded-xl border border-border bg-card p-4 text-sm space-y-0.5">
+                          <div className="font-medium text-foreground">
+                            {addr.street}, {addr.number}{addr.complement ? ` - ${addr.complement}` : ''}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{addr.neighborhood}</div>
+                          <div className="text-xs text-muted-foreground">{addr.city} / {addr.state} — CEP: {addr.postal_code}</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Itens do Pedido */}
                   <div className="space-y-2">
-                    <h3 className="text-sm font-semibold flex items-center gap-1.5 text-foreground">
-                      <ShoppingBag className="h-4 w-4 text-primary" />
-                      Produtos Comprados
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <ShoppingBag className="h-3.5 w-3.5" /> Produtos
                     </h3>
-                    <div className="border border-border rounded-lg overflow-hidden">
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
                       {selectedOrder.items?.map((item, idx) => {
                         const prod = item.variation?.product;
                         const attrs = item.variation?.attributes || {};
-                        const attrString = Object.entries(attrs)
+                        // Only show attributes that have non-empty values
+                        const validAttrs = Object.entries(attrs)
+                          .filter(([, v]) => v && String(v).trim() !== '')
                           .map(([k, v]) => `${k}: ${v}`)
-                          .join(', ');
+                          .join(' · ');
 
                         return (
-                          <div key={item.id} className={`p-3 text-sm flex justify-between items-center ${idx > 0 && 'border-t border-border'}`}>
-                            <div>
-                              <div className="font-semibold text-foreground flex items-center gap-1.5">
+                          <div key={item.id} className={`p-4 flex justify-between items-start gap-3 ${idx > 0 ? 'border-t border-border' : ''}`}>
+                            <div className="min-w-0">
+                              <div className="font-semibold text-foreground text-sm flex items-center gap-1.5 flex-wrap">
                                 {prod?.name || 'Produto Removido'}
-                                {item.is_upsell && <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">Upsell</Badge>}
+                                {item.is_upsell && <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 shrink-0">Upsell</Badge>}
                               </div>
-                              <div className="text-xs text-muted-foreground">
-                                {prod?.product_type === 'digital' ? 'Digital' : 'Físico'} {attrString && `| ${attrString}`}
+                              <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${prod?.product_type === 'digital' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                                  {prod?.product_type === 'digital' ? 'Digital' : 'Físico'}
+                                </span>
+                                {validAttrs && <span>{validAttrs}</span>}
                               </div>
-                              <div className="text-xs text-muted-foreground mt-0.5">
-                                Qtd: {item.quantity} x R$ {Number(item.unit_price).toFixed(2)}
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {item.quantity}x · R$ {Number(item.unit_price).toFixed(2)} cada
                               </div>
                             </div>
-                            <div className="font-bold text-foreground">
+                            <div className="font-bold text-foreground text-sm shrink-0">
                               R$ {Number(item.quantity * item.unit_price).toFixed(2)}
                             </div>
                           </div>
@@ -387,37 +429,22 @@ export default function EcommerceOrdersPage() {
                     </div>
                   </div>
 
-                  {/* Pix Details */}
-                  {(selectedOrder.woovi_brcode || selectedOrder.woovi_correlation_id) && (
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-semibold text-foreground">Dados Pix Woovi</h3>
-                      <div className="rounded-lg border border-border p-3 text-xs text-muted-foreground space-y-1.5 bg-muted/20 break-all">
-                        <div><span className="font-medium text-foreground">CorrelationID:</span> {selectedOrder.woovi_correlation_id}</div>
-                        {selectedOrder.woovi_brcode && (
-                          <div className="max-h-16 overflow-y-auto font-mono text-[10px] border-t border-border mt-1.5 pt-1.5">
-                            <span className="font-medium text-foreground block mb-0.5">Chave Pix:</span>
-                            {selectedOrder.woovi_brcode}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Resumo Financeiro */}
-                  <div className="border-t border-border pt-4 text-sm space-y-1.5">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Subtotal dos itens:</span>
-                      <span className="font-medium">R$ {Number(selectedOrder.items_amount).toFixed(2)}</span>
+                  <div className="rounded-xl border border-border bg-card p-4 space-y-2 text-sm">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Subtotal</span>
+                      <span>R$ {Number(selectedOrder.items_amount).toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Frete:</span>
-                      <span className="font-medium">R$ {Number(selectedOrder.shipping_amount).toFixed(2)}</span>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Frete</span>
+                      <span>{Number(selectedOrder.shipping_amount) > 0 ? `R$ ${Number(selectedOrder.shipping_amount).toFixed(2)}` : 'Grátis'}</span>
                     </div>
-                    <div className="flex justify-between text-base font-bold border-t border-border pt-2">
-                      <span>Total Geral:</span>
+                    <div className="flex justify-between text-base font-bold border-t border-border pt-2.5 mt-1">
+                      <span>Total</span>
                       <span className="text-primary">R$ {Number(selectedOrder.total_amount).toFixed(2)}</span>
                     </div>
                   </div>
+
                 </div>
               )}
             </>
@@ -427,3 +454,4 @@ export default function EcommerceOrdersPage() {
     </div>
   );
 }
+
