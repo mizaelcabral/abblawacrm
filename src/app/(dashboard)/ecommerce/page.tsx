@@ -213,6 +213,8 @@ export default function EcommerceOverviewPage() {
           store_slug: sanitizedSlug || null,
           password_protected: passwordProtected,
           store_password: passwordProtected ? storePassword : '',
+          // Auto-aprova quando app_id é preenchido
+          ...(appId ? { onboarding_status: 'approved' } : {}),
           updated_at: new Date().toISOString(),
         })
         .eq('account_id', accountId)
@@ -419,8 +421,8 @@ export default function EcommerceOverviewPage() {
     );
   }
 
-  // FASE 3: Aprovado, mas chaves ainda não preenchidas
-  const hasCredentials = !!config.app_id && !!config.secret_key;
+  // FASE 3: Aprovado, mas App ID ainda não preenchido (secret_key é opcional)
+  const hasCredentials = !!config.app_id;
   if (!hasCredentials) {
     return renderOnboardingLayout(
       <Card className="border-border">
