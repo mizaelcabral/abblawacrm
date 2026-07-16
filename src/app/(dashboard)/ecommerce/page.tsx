@@ -32,6 +32,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Switch } from '@/components/ui/switch';
 
 export default function EcommerceOverviewPage() {
   const { accountId } = useAuth();
@@ -56,6 +57,10 @@ export default function EcommerceOverviewPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoUrl, setLogoUrl] = useState('');
   const [requestedPixKey, setRequestedPixKey] = useState('');
+  const [storeName, setStoreName] = useState('');
+  const [storeSlug, setStoreSlug] = useState('');
+  const [passwordProtected, setPasswordProtected] = useState(false);
+  const [storePassword, setStorePassword] = useState('');
 
   const loadData = useCallback(async () => {
     if (!accountId) return;
@@ -80,6 +85,10 @@ export default function EcommerceOverviewPage() {
         setStoreDescription(configData.store_description || '');
         setLogoUrl(configData.store_logo_url || '');
         setRequestedPixKey(configData.requested_pix_key || '');
+        setStoreName(configData.store_name || '');
+        setStoreSlug(configData.store_slug || '');
+        setPasswordProtected(!!configData.password_protected);
+        setStorePassword(configData.store_password || '');
 
         // 2. Fetch Orders metrics only if approved
         if (configData.onboarding_status === 'approved') {
@@ -182,6 +191,16 @@ export default function EcommerceOverviewPage() {
         setLogoFile(null);
       }
 
+      const sanitizedSlug = storeSlug
+        ? storeSlug
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9-]/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '')
+        : '';
+
       const { data, error } = await supabase
         .from('woovi_config')
         .update({
@@ -190,6 +209,10 @@ export default function EcommerceOverviewPage() {
           default_shipping_fee: parseFloat(defaultShippingFee) || 0,
           store_description: storeDescription,
           store_logo_url: finalLogoUrl,
+          store_name: storeName,
+          store_slug: sanitizedSlug || null,
+          password_protected: passwordProtected,
+          store_password: passwordProtected ? storePassword : '',
           updated_at: new Date().toISOString(),
         })
         .eq('account_id', accountId)
@@ -451,6 +474,37 @@ export default function EcommerceOverviewPage() {
               </div>
             </div>
 
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="storeName">Nome da Loja</Label>
+                <Input
+                  id="storeName"
+                  type="text"
+                  placeholder="Nome do seu e-commerce"
+                  value={storeName}
+                  onChange={(e) => setStoreName(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="storeSlug">Link Personalizado (Slug)</Label>
+                <div className="flex items-center">
+                  <span className="inline-flex h-10 items-center rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground select-none">
+                    /shop/
+                  </span>
+                  <Input
+                    id="storeSlug"
+                    type="text"
+                    placeholder="minha-loja"
+                    value={storeSlug}
+                    onChange={(e) => setStoreSlug(e.target.value)}
+                    className="rounded-l-none"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">O endereço final será amigável (ex: /shop/minha-loja).</p>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="storeDesc">Descrição / Apresentação do E-commerce</Label>
               <Textarea
@@ -460,6 +514,38 @@ export default function EcommerceOverviewPage() {
                 onChange={(e) => setStoreDescription(e.target.value)}
                 rows={3}
               />
+            </div>
+
+            {/* Proteção por Senha */}
+            <div className="space-y-4 border-t border-border pt-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-semibold flex items-center gap-1.5">
+                    <Lock className="h-4 w-4 text-primary" /> Proteção por Senha
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Exigir uma senha de acesso para que os clientes visualizem sua loja.
+                  </p>
+                </div>
+                <Switch
+                  checked={passwordProtected}
+                  onCheckedChange={setPasswordProtected}
+                />
+              </div>
+
+              {passwordProtected && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <Label htmlFor="storePassword">Senha da Loja</Label>
+                  <Input
+                    id="storePassword"
+                    type="password"
+                    placeholder="Digite a senha de acesso"
+                    value={storePassword}
+                    onChange={(e) => setStorePassword(e.target.value)}
+                    required={passwordProtected}
+                  />
+                </div>
+              )}
             </div>
 
             <hr className="border-border" />
@@ -633,15 +719,33 @@ export default function EcommerceOverviewPage() {
                   </div>
                 )}
                 <div>
-                  <div className="font-semibold text-foreground">Link de Acesso do E-commerce</div>
-                  <a
-                    href={`/shop/${accountId}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs text-primary hover:underline break-all"
-                  >
-                    /shop/{accountId}
-                  </a>
+                  <div className="font-semibold text-foreground mb-1">
+                    {config.store_name || 'Link de Acesso do E-commerce'}
+                  </div>
+                  {config.store_slug ? (
+                    <div className="flex flex-col gap-1">
+                      <a
+                        href={`/shop/${config.store_slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-primary hover:underline break-all font-medium"
+                      >
+                        /shop/{config.store_slug}
+                      </a>
+                      <span className="text-[10px] text-muted-foreground">
+                        Fallback: <a href={`/shop/${accountId}`} target="_blank" rel="noreferrer" className="hover:underline">/shop/{accountId}</a>
+                      </span>
+                    </div>
+                  ) : (
+                    <a
+                      href={`/shop/${accountId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-primary hover:underline break-all font-medium"
+                    >
+                      /shop/{accountId}
+                    </a>
+                  )}
                 </div>
               </div>
 

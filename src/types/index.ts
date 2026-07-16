@@ -598,6 +598,10 @@ export interface WooviConfig {
   store_description?: string | null;
   store_logo_url?: string | null;
   requested_pix_key?: string | null;
+  store_name?: string | null;
+  store_slug?: string | null;
+  password_protected?: boolean | null;
+  store_password?: string | null;
   created_at: string;
   updated_at: string;
 }
