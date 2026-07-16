@@ -79,6 +79,10 @@ export default function CheckoutPage() {
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
+  // Store branding
+  const [storeName, setStoreName] = useState<string>('');
+  const [storeLogoUrl, setStoreLogoUrl] = useState<string | null>(null);
+
   // Timer countdown
   const [timeLeft, setTimeLeft] = useState(900); // 15:00 minutes
 
@@ -101,6 +105,8 @@ export default function CheckoutPage() {
         app_id: configData.has_app_id ? 'configured' : null
       };
       setConfig(mappedConfig);
+      setStoreName(configData.store_name || '');
+      setStoreLogoUrl(configData.store_logo_url || null);
 
       // Check authentication for password protected stores
       const hasAuth = sessionStorage.getItem("auth_shop_" + configData.account_id) === 'true';
@@ -397,6 +403,30 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-muted/20 pb-16 pt-8 text-foreground selection:bg-primary selection:text-primary-foreground">
+      {/* Logo / Header do Tenant */}
+      <header className="mb-8">
+        <div className="mx-auto max-w-4xl px-4">
+          <button
+            onClick={() => router.push(`/shop/${tenantSlug}`)}
+            className="flex items-center gap-3 focus:outline-none"
+            aria-label="Voltar para a loja"
+          >
+            {storeLogoUrl ? (
+              <img
+                src={storeLogoUrl}
+                alt={storeName || 'Logo da loja'}
+                className="h-10 max-w-[160px] object-contain"
+              />
+            ) : (
+              <div className="flex items-center gap-2 text-foreground">
+                <ShoppingBag className="h-6 w-6 text-primary" />
+                {storeName && <span className="font-bold text-lg">{storeName}</span>}
+              </div>
+            )}
+          </button>
+        </div>
+      </header>
+
       <main className="mx-auto max-w-4xl px-4 grid gap-8 md:grid-cols-5">
         
         {/* Lado Esquerdo: Formulário / Pagamento (Cols 3) */}
