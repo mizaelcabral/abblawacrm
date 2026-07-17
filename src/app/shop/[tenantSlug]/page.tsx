@@ -231,58 +231,59 @@ export default function StorefrontPage() {
     <div className="min-h-screen bg-muted/20 pb-16 text-foreground antialiased selection:bg-primary selection:text-primary-foreground">
       {/* Cabeçalho Fixo */}
       <header className="sticky top-0 z-30 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto max-w-5xl flex h-16 items-center justify-between px-4">
-          <div className="flex items-center">
+        <div className="mx-auto max-w-5xl flex h-16 items-center justify-between gap-4 px-4">
+          <div className="flex items-center gap-4 flex-1">
             {config.store_logo_url ? (
-              <img src={config.store_logo_url} alt="Logo" className="h-10 w-auto max-w-[160px] object-contain" />
+              <img src={config.store_logo_url} alt="Logo" className="h-10 w-auto max-w-[160px] object-contain shrink-0" />
             ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
                 <Store className="h-5 w-5" />
               </div>
             )}
-          </div>
 
-          <Button
-            variant="outline"
-            size="icon"
-            className="relative"
-            onClick={() => setCartOpen(true)}
-          >
-            <ShoppingCart className="h-5 w-5" />
-            {cartCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground animate-in zoom-in">
-                {cartCount}
-              </span>
-            )}
-          </Button>
-        </div>
-      </header>
-
-      {/* Hero / Apresentação da Loja */}
-      <div className="bg-gradient-to-b from-background to-muted/40 border-b border-border py-12 px-4 text-center">
-        <div className="mx-auto max-w-xl space-y-4">
-          <h1 className="text-3xl font-extrabold tracking-tight">
-            {config.store_description ? 'Bem-vindo à nossa Loja!' : 'Catálogo de Produtos'}
-          </h1>
-          {config.store_description && (
-            <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-              {config.store_description}
-            </p>
-          )}
-
-          <div className="relative max-w-md mx-auto pt-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+            {/* Barra de Pesquisa no Header */}
+            <div className="relative max-w-xs w-full hidden sm:block">
+              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Pesquisar na vitrine..."
-                className="pl-9 bg-background h-11 shadow-sm"
+                className="pl-8.5 bg-muted/40 hover:bg-muted/60 focus:bg-background h-9 text-xs transition-colors"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
           </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="relative"
+              onClick={() => setCartOpen(true)}
+            >
+              <ShoppingCart className="h-5 w-5" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground animate-in zoom-in">
+                  {cartCount}
+                </span>
+              )}
+            </Button>
+          </div>
         </div>
-      </div>
+
+        {/* Barra de Pesquisa Móvel (Visível apenas em telas menores) */}
+        <div className="border-t border-border px-4 py-2 bg-background sm:hidden">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Pesquisar na vitrine..."
+              className="pl-8.5 bg-muted/40 h-9 text-xs"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+      </header>
+
 
       <main className="mx-auto max-w-5xl px-4 mt-8 space-y-6">
         {/* Categorias */}
