@@ -15,7 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import {
   Package,
@@ -52,6 +52,7 @@ export default function EcommerceProductsPage() {
   // Form states
   const [editingProduct, setEditingProduct] = useState<ExtendedProduct | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const loadProductsAndCategories = useCallback(async () => {
     if (!accountId) return;
@@ -136,9 +137,6 @@ export default function EcommerceProductsPage() {
 
   // Delete product
   const handleDeleteProduct = async (id: string) => {
-    const confirm = window.confirm('Deseja realmente remover este produto do catálogo?');
-    if (!confirm) return;
-
     try {
       // 1. Buscar variações do produto
       const { data: variations } = await supabase
@@ -173,9 +171,11 @@ export default function EcommerceProductsPage() {
       if (error) throw error;
 
       setProducts(products.filter((p) => p.id !== id));
+      setDeleteConfirmId(null);
       toast.success('Produto removido.');
     } catch (err: any) {
       console.error(err);
+      setDeleteConfirmId(null);
       toast.error(`Erro ao deletar produto: ${err.message || 'tente novamente.'}`);
     }
   };
@@ -404,7 +404,7 @@ export default function EcommerceProductsPage() {
                       variant="outline"
                       size="sm"
                       className="text-rose-500 hover:text-rose-600 border-rose-500/20 hover:bg-rose-500/10"
-                      onClick={() => handleDeleteProduct(p.id)}
+                      onClick={() => setDeleteConfirmId(p.id)}
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
@@ -415,6 +415,30 @@ export default function EcommerceProductsPage() {
           })}
         </div>
       )}
+
+      {/* Dialog de Confirmação de Delete */}
+      <Dialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remover produto?</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground pt-1">
+              Esta ação é irreversível. O produto e todas as suas variações serão permanentemente removidos do catálogo.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)} className="flex-1">
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteConfirmId && handleDeleteProduct(deleteConfirmId)}
+              className="flex-1"
+            >
+              Sim, remover
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -260,14 +260,6 @@ export default function ProductDetailPage() {
       <header className="sticky top-0 z-30 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto max-w-5xl flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push(`/shop/${tenantSlug}`)}
-              className="-ml-2 text-xs font-semibold"
-            >
-              <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
-            </Button>
             {config.store_logo_url ? (
               <img src={config.store_logo_url} alt="Logo" className="h-8 w-auto max-w-[120px] object-contain" />
             ) : (
@@ -293,7 +285,25 @@ export default function ProductDetailPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 mt-8">
+      <main className="mx-auto max-w-4xl px-4 mt-6">
+        {/* Breadcrumb / Retorno contextual */}
+        <nav className="mb-6 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <button 
+            onClick={() => router.push(`/shop/${tenantSlug}`)} 
+            className="hover:text-foreground transition-colors font-medium"
+          >
+            Início
+          </button>
+          <span>/</span>
+          {product.category && (
+            <>
+              <span className="max-w-[120px] truncate">{product.category.name}</span>
+              <span>/</span>
+            </>
+          )}
+          <span className="text-foreground font-semibold max-w-[200px] truncate">{product.name}</span>
+        </nav>
+
         <div className="grid gap-8 md:grid-cols-2">
           {/* Lado Esquerdo: Galeria */}
           <div className="space-y-4">
