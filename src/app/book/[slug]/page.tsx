@@ -368,27 +368,33 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
                 <p className="text-sm text-zinc-400 mt-1">Selecione o atendimento que deseja realizar.</p>
               </div>
               <div className="space-y-4">
-                {services.map((svc) => (
-                  <div 
-                    key={svc.id} 
-                    onClick={() => setSelectedService(svc)}
-                    className="flex justify-between items-center p-5 rounded-2xl border border-zinc-800 bg-zinc-900/20 hover:bg-zinc-900/50 hover:border-primary/40 transition-all duration-300 cursor-pointer group shadow-lg hover:shadow-primary/5"
-                  >
-                    <div className="space-y-2">
-                      <h4 className="font-bold text-white group-hover:text-primary transition duration-300 text-lg">{svc.name}</h4>
-                      <p className="text-sm text-zinc-400">{svc.description || 'Atendimento personalizado com profissional qualificado.'}</p>
-                      <div className="flex items-center gap-2 text-xs text-zinc-500 pt-1">
-                        <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {svc.duration_minutes} min</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className="font-bold text-base text-zinc-200">R$ {Number(svc.price).toFixed(2)}</span>
-                      <div className="h-8 w-8 rounded-lg bg-zinc-800/80 group-hover:bg-primary/20 flex items-center justify-center transition duration-300">
-                        <ChevronRight className="h-4 w-4 text-zinc-400 group-hover:text-primary transition duration-300" />
-                      </div>
-                    </div>
+                {services.length === 0 ? (
+                  <div className="border border-dashed border-zinc-800 rounded-3xl py-12 text-center bg-zinc-900/5">
+                    <p className="text-sm text-zinc-500 italic">Nenhum serviço ativo cadastrado para este profissional.</p>
                   </div>
-                ))}
+                ) : (
+                  services.map((svc) => (
+                    <div 
+                      key={svc.id} 
+                      onClick={() => setSelectedService(svc)}
+                      className="flex justify-between items-center p-5 rounded-2xl border border-zinc-800 bg-zinc-900/20 hover:bg-zinc-900/50 hover:border-primary/40 transition-all duration-300 cursor-pointer group shadow-lg hover:shadow-primary/5"
+                    >
+                      <div className="space-y-2">
+                        <h4 className="font-bold text-white group-hover:text-primary transition duration-300 text-lg">{svc.name}</h4>
+                        <p className="text-sm text-zinc-400">{svc.description || 'Atendimento personalizado com profissional qualificado.'}</p>
+                        <div className="flex items-center gap-2 text-xs text-zinc-500 pt-1">
+                          <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {svc.duration_minutes} min</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="font-bold text-base text-zinc-200">R$ {Number(svc.price).toFixed(2)}</span>
+                        <div className="h-8 w-8 rounded-lg bg-zinc-800/80 group-hover:bg-primary/20 flex items-center justify-center transition duration-300">
+                          <ChevronRight className="h-4 w-4 text-zinc-400 group-hover:text-primary transition duration-300" />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
