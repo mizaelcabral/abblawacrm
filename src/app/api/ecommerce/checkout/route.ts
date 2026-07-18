@@ -319,17 +319,36 @@ export async function POST(request: Request) {
     const masterAppId = getWooviMasterAppId();
     const isSubaccount = masterAppId && wooviConfig.app_id === masterAppId;
 
-    const chargeResponse = await wooviClient.createCharge({
-      correlationID: order.id,
-      value: valueCents,
-      customer: {
-        name: customerInfo.name,
-        email: customerInfo.email,
-        phone: customerInfo.phone,
-      },
-      ...(splits.length > 0 ? { splits } : {}),
-      ...(isSubaccount && wooviConfig.secret_key ? { subaccount: wooviConfig.secret_key } : {}),
-    });
+    let chargeResponse;
+    try {
+      chargeResponse = await wooviClient.createCharge({
+        correlationID: order.id,
+        value: valueCents,
+        customer: {
+          name: customerInfo.name,
+          email: customerInfo.email,
+          phone: customerInfo.phone,
+        },
+        ...(splits.length > 0 ? { splits } : {}),
+        ...(isSubaccount && wooviConfig.secret_key ? { subaccount: wooviConfig.secret_key } : {}),
+      });
+    } catch (err: any) {
+      if (splits.length > 0 && (err.message.includes('split') || err.message.includes('virtual') || err.message.includes('400') || err.message.includes('pixKey'))) {
+        console.warn('[ecommerce/checkout] Split charge failed. Retrying without splits:', err.message);
+        chargeResponse = await wooviClient.createCharge({
+          correlationID: order.id,
+          value: valueCents,
+          customer: {
+            name: customerInfo.name,
+            email: customerInfo.email,
+            phone: customerInfo.phone,
+          },
+          ...(isSubaccount && wooviConfig.secret_key ? { subaccount: wooviConfig.secret_key } : {}),
+        });
+      } else {
+        throw err;
+      }
+    }
 
     // 9. Atualizar Pedido com os dados Pix da Woovi
     const { data: updatedOrder, error: updateError } = await supabase
