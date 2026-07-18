@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { parseISO, addMinutes } from 'date-fns'
+import { WooviClient } from '@/lib/woovi/client'
 
 // GET /api/appointments - List appointments for the logged-in user's account
 export async function GET(request: Request) {
@@ -56,10 +57,10 @@ export async function POST(request: Request) {
 
   const accountId = staffProfile.account_id
 
-  // Retrieve service duration
+  // Retrieve service duration and payment requirements
   const { data: service, error: serviceError } = await supabase
     .from('services')
-    .select('duration_minutes')
+    .select('name, duration_minutes, price, payment_required')
     .eq('id', service_id)
     .single()
 
@@ -72,7 +73,6 @@ export async function POST(request: Request) {
   const endTime = addMinutes(startTime, duration)
 
   // 1. Find or create contact
-  // Check if contact already exists by phone under this user/account
   let contactId = null
   const { data: existingContact } = await supabase
     .from('contacts')
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
       .from('contacts')
       .insert({
         account_id: accountId,
-        user_id: staffProfile.user_id, // Assign to the staff member's user_id
+        user_id: staffProfile.user_id,
         name: client.name,
         phone: client.phone,
         email: client.email || null
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     contactId = newContact.id
   }
 
-  // 2. Double-check overlap just before booking (concurrency protection)
+  // 2. Double-check overlap just before booking
   const { data: overlaps } = await supabase
     .from('appointments')
     .select('id')
@@ -117,6 +117,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'This slot was already booked by someone else.' }, { status: 409 })
   }
 
+  // Determine initial status based on payment requirement
+  const paymentRequired = service.payment_required || false
+  const initialStatus = paymentRequired ? 'pending' : 'confirmed'
+
   // 3. Insert appointment
   const { data: appointment, error: apptError } = await supabase
     .from('appointments')
@@ -127,14 +131,96 @@ export async function POST(request: Request) {
       contact_id: contactId,
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
-      status: 'confirmed',
+      status: initialStatus,
       notes: notes || null
     })
     .select('*, service:services(name), profile:profiles(full_name), contact:contacts(name)')
     .single()
 
-  if (apptError) {
-    return NextResponse.json({ error: apptError.message }, { status: 500 })
+  if (apptError || !appointment) {
+    return NextResponse.json({ error: apptError?.message || 'Failed to create appointment' }, { status: 500 })
+  }
+
+  // 4. Handle Woovi Pix payment generation if required
+  if (paymentRequired) {
+    const { data: wooviConfig } = await supabase
+      .from('woovi_config')
+      .select('*')
+      .eq('account_id', accountId)
+      .maybeSingle()
+
+    if (!wooviConfig || !wooviConfig.app_id) {
+      // rollback appointment creation if payment is required but not configured
+      await supabase.from('appointments').delete().eq('id', appointment.id)
+      return NextResponse.json({ error: 'Esta conta de atendimento não está configurada para receber pagamentos Pix no momento.' }, { status: 400 })
+    }
+
+    const isSandbox =
+      wooviConfig.app_id.includes('sandbox') ||
+      wooviConfig.app_id.startsWith('plugin_sb') ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('localhost')
+
+    const wooviClient = new WooviClient(wooviConfig.app_id, isSandbox)
+    const valueCents = Math.round(Number(service.price) * 100)
+
+    try {
+      const chargeResponse = await wooviClient.createCharge({
+        correlationID: appointment.id, // appointment uuid
+        value: valueCents,
+        customer: {
+          name: client.name,
+          email: client.email || 'cliente@crm.com',
+          phone: client.phone,
+        }
+      })
+
+      return NextResponse.json({
+        ...appointment,
+        woovi_qrcode_image: chargeResponse.charge.qrCodeImage,
+        woovi_brcode: chargeResponse.charge.brCode
+      }, { status: 201 })
+    } catch (wooviError: any) {
+      // rollback appointment
+      await supabase.from('appointments').delete().eq('id', appointment.id)
+      return NextResponse.json({ error: `Erro na Woovi: ${wooviError.message}` }, { status: 500 })
+    }
+  }
+
+  // 5. Auto-Pipeline Integration (only for direct/free bookings since webhook handles paid ones)
+  try {
+    const { data: firstPipeline } = await supabase
+      .from('pipelines')
+      .select('id')
+      .eq('account_id', accountId)
+      .limit(1)
+      .maybeSingle()
+
+    if (firstPipeline) {
+      const { data: firstStage } = await supabase
+        .from('pipeline_stages')
+        .select('id')
+        .eq('pipeline_id', firstPipeline.id)
+        .order('position', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      if (firstStage) {
+        await supabase
+          .from('deals')
+          .insert({
+            account_id: accountId,
+            user_id: staffProfile.user_id,
+            pipeline_id: firstPipeline.id,
+            stage_id: firstStage.id,
+            contact_id: contactId,
+            title: `Agendamento: ${service.name}`,
+            value: Number(service.price) || 0,
+            status: 'active'
+          })
+      }
+    }
+  } catch (pipelineErr) {
+    console.error('Failed to auto-create deal in pipeline:', pipelineErr)
   }
 
   return NextResponse.json(appointment, { status: 201 })

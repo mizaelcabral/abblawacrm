@@ -33,8 +33,78 @@ export async function POST(request: Request) {
       .eq('id', correlationID)
       .maybeSingle();
 
-    if (orderError || !order) {
-      return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
+    if (orderError) {
+      return NextResponse.json({ error: 'Erro ao buscar pedido.' }, { status: 500 });
+    }
+
+    if (!order) {
+      const { data: appointment, error: apptError } = await supabase
+        .from('appointments')
+        .select('*, service:services(name, price), profile:profiles(user_id)')
+        .eq('id', correlationID)
+        .maybeSingle();
+
+      if (apptError) {
+        return NextResponse.json({ error: 'Erro ao buscar agendamento.' }, { status: 500 });
+      }
+
+      if (appointment) {
+        if (appointment.status === 'confirmed') {
+          return NextResponse.json({ message: 'Agendamento já confirmado.' }, { status: 200 });
+        }
+
+        const { error: updateApptError } = await supabase
+          .from('appointments')
+          .update({
+            status: 'confirmed',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', correlationID);
+
+        if (updateApptError) {
+          return NextResponse.json({ error: 'Erro ao confirmar agendamento.' }, { status: 500 });
+        }
+
+        try {
+          const { data: firstPipeline } = await supabase
+            .from('pipelines')
+            .select('id')
+            .eq('account_id', appointment.account_id)
+            .limit(1)
+            .maybeSingle();
+
+          if (firstPipeline) {
+            const { data: firstStage } = await supabase
+              .from('pipeline_stages')
+              .select('id')
+              .eq('pipeline_id', firstPipeline.id)
+              .order('position', { ascending: true })
+              .limit(1)
+              .maybeSingle();
+
+            if (firstStage) {
+              await supabase
+                .from('deals')
+                .insert({
+                  account_id: appointment.account_id,
+                  user_id: appointment.profile?.user_id,
+                  pipeline_id: firstPipeline.id,
+                  stage_id: firstStage.id,
+                  contact_id: appointment.contact_id,
+                  title: `Agendamento: ${appointment.service?.name || 'Serviço'}`,
+                  value: Number(appointment.service?.price) || 0,
+                  status: 'active'
+                });
+            }
+          }
+        } catch (pipelineErr) {
+          console.error('Failed to auto-create deal in pipeline for paid appointment:', pipelineErr);
+        }
+
+        return NextResponse.json({ message: 'Agendamento pago e confirmado com sucesso!' }, { status: 200 });
+      }
+
+      return NextResponse.json({ error: 'Transação não identificada (nem pedido, nem agendamento).' }, { status: 404 });
     }
 
     // Se o pedido já estiver marcado como pago, retorna sucesso antecipadamente (Idempotência)

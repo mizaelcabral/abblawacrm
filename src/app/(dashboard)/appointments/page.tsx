@@ -20,6 +20,7 @@ interface Service {
   duration_minutes: number
   price: number
   is_active: boolean
+  payment_required?: boolean
 }
 
 interface Appointment {
@@ -28,6 +29,7 @@ interface Appointment {
   end_time: string
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed'
   notes: string | null
+  contact_id: string
   service: { name: string; duration_minutes: number }
   profile: { full_name: string; avatar_url: string | null }
   contact: { name: string; phone: string; email: string | null }
@@ -66,6 +68,14 @@ export default function AppointmentsPage() {
   const [serviceDescription, setServiceDescription] = useState('')
   const [serviceDuration, setServiceDuration] = useState(30)
   const [servicePrice, setServicePrice] = useState(0)
+  const [servicePaymentRequired, setServicePaymentRequired] = useState(false)
+
+  // Task form states
+  const [showTaskForm, setShowTaskForm] = useState(false)
+  const [taskAppt, setTaskAppt] = useState<Appointment | null>(null)
+  const [taskTitle, setTaskTitle] = useState('')
+  const [taskDueDate, setTaskDueDate] = useState('')
+
 
   // Load Data
   const loadData = async () => {
@@ -122,8 +132,8 @@ export default function AppointmentsPage() {
       const url = editingService ? '/api/services' : '/api/services'
       const method = editingService ? 'PUT' : 'POST'
       const body = editingService 
-        ? { id: editingService.id, name: serviceName, description: serviceDescription, duration_minutes: serviceDuration, price: servicePrice }
-        : { name: serviceName, description: serviceDescription, duration_minutes: serviceDuration, price: servicePrice }
+        ? { id: editingService.id, name: serviceName, description: serviceDescription, duration_minutes: serviceDuration, price: servicePrice, payment_required: servicePaymentRequired }
+        : { name: serviceName, description: serviceDescription, duration_minutes: serviceDuration, price: servicePrice, payment_required: servicePaymentRequired }
 
       const res = await fetch(url, {
         method,
@@ -139,6 +149,7 @@ export default function AppointmentsPage() {
         setServiceDescription('')
         setServiceDuration(30)
         setServicePrice(0)
+        setServicePaymentRequired(false)
         loadData()
       } else {
         toast.error('Erro ao salvar serviço')
@@ -200,6 +211,34 @@ export default function AppointmentsPage() {
       }
     } catch (error) {
       toast.error('Erro ao cancelar agendamento')
+    }
+  }
+
+  // Save Task associated with the appointment
+  const handleSaveTask = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!taskTitle || !taskAppt) return
+
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: taskTitle,
+          due_at: taskDueDate ? `${taskDueDate}T23:59:59.999Z` : null,
+          contact_id: taskAppt.contact_id || null
+        })
+      })
+
+      if (res.ok) {
+        toast.success('Tarefa associada criada com sucesso!')
+        setShowTaskForm(false)
+        setTaskAppt(null)
+      } else {
+        toast.error('Erro ao criar tarefa')
+      }
+    } catch (error) {
+      toast.error('Erro ao criar tarefa')
     }
   }
 
@@ -293,6 +332,19 @@ export default function AppointmentsPage() {
                       {appt.status === 'confirmed' && (
                         <div className="flex items-center gap-2">
                           <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="flex items-center gap-1 border-zinc-700 hover:bg-zinc-800 text-zinc-300"
+                            onClick={() => {
+                              setTaskAppt(appt)
+                              setTaskTitle(`Retornar para o cliente: ${appt.contact?.name}`)
+                              setTaskDueDate(appt.start_time.split('T')[0])
+                              setShowTaskForm(true)
+                            }}
+                          >
+                            <Plus className="h-4 w-4" /> Criar Tarefa
+                          </Button>
+                          <Button 
                             variant="destructive" 
                             size="sm"
                             className="flex items-center gap-1"
@@ -320,6 +372,7 @@ export default function AppointmentsPage() {
               setServiceDescription('')
               setServiceDuration(30)
               setServicePrice(0)
+              setServicePaymentRequired(false)
               setShowServiceForm(true)
             }} className="flex items-center gap-2">
               <Plus className="h-4 w-4" /> Novo Serviço
@@ -376,6 +429,14 @@ export default function AppointmentsPage() {
                       />
                     </div>
                   </div>
+                  <div className="flex items-center gap-2 py-2">
+                    <Switch
+                      id="payment_required"
+                      checked={servicePaymentRequired}
+                      onCheckedChange={setServicePaymentRequired}
+                    />
+                    <Label htmlFor="payment_required" className="cursor-pointer">Exigir pagamento via Pix (Woovi) antes de confirmar o agendamento</Label>
+                  </div>
                   <div className="flex gap-2 justify-end">
                     <Button type="button" variant="outline" onClick={() => setShowServiceForm(false)}>Cancelar</Button>
                     <Button type="submit">Salvar Serviço</Button>
@@ -390,7 +451,14 @@ export default function AppointmentsPage() {
               <Card key={svc.id} className="border-border">
                 <CardHeader className="pb-2">
                   <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg">{svc.name}</CardTitle>
+                    <div className="space-y-1">
+                      <CardTitle className="text-lg">{svc.name}</CardTitle>
+                      {svc.payment_required && (
+                        <span className="inline-block text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                          Pix Obrigatório
+                        </span>
+                      )}
+                    </div>
                     <span className="font-semibold text-primary">R$ {Number(svc.price).toFixed(2)}</span>
                   </div>
                   <CardDescription>{svc.description || 'Sem descrição.'}</CardDescription>
@@ -407,6 +475,7 @@ export default function AppointmentsPage() {
                         setServiceDescription(svc.description || '')
                         setServiceDuration(svc.duration_minutes)
                         setServicePrice(svc.price)
+                        setServicePaymentRequired(svc.payment_required || false)
                         setShowServiceForm(true)
                       }}
                     >
@@ -477,6 +546,49 @@ export default function AppointmentsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Task Creation Dialog */}
+      {showTaskForm && taskAppt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <Card className="w-full max-w-md border-border bg-card shadow-2xl">
+            <CardHeader>
+              <CardTitle>Criar Tarefa para o Cliente</CardTitle>
+              <CardDescription>Agende um retorno ou tarefa associada a este compromisso.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSaveTask} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="taskTitle">Título da Tarefa</Label>
+                  <Input
+                    id="taskTitle"
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                    placeholder="Ex: Enviar proposta pós-reunião"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="taskDueDate">Data de Vencimento</Label>
+                  <Input
+                    id="taskDueDate"
+                    type="date"
+                    value={taskDueDate}
+                    onChange={(e) => setTaskDueDate(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="flex gap-2 justify-end pt-2">
+                  <Button type="button" variant="outline" onClick={() => {
+                    setShowTaskForm(false)
+                    setTaskAppt(null)
+                  }}>Cancelar</Button>
+                  <Button type="submit">Criar Tarefa</Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

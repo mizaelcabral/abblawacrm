@@ -49,8 +49,32 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
 
   const [bookingSuccess, setBookingSuccess] = useState(false)
   const [bookingData, setBookingData] = useState<any>(null)
+  const [waitingPayment, setWaitingPayment] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const supabase = createClient()
+
+  useEffect(() => {
+    if (!waitingPayment || !bookingData?.id) return
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/appointments/status?id=${bookingData.id}`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.status === 'confirmed') {
+            setBookingSuccess(true)
+            setWaitingPayment(false)
+            toast.success('Pagamento confirmado e agendamento concluído!')
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao verificar status de pagamento:', err)
+      }
+    }, 4000)
+
+    return () => clearInterval(interval)
+  }, [waitingPayment, bookingData?.id])
 
   // Load Profile and Services
   useEffect(() => {
@@ -157,8 +181,13 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
       if (res.ok) {
         const data = await res.json()
         setBookingData(data)
-        setBookingSuccess(true)
-        toast.success('Agendamento confirmado com sucesso!')
+        if (data.status === 'pending') {
+          setWaitingPayment(true)
+          toast.info('Agendamento pré-reservado. Realize o pagamento via Pix para confirmar!')
+        } else {
+          setBookingSuccess(true)
+          toast.success('Agendamento confirmado com sucesso!')
+        }
       } else {
         const err = await res.json()
         toast.error(err.error || 'Erro ao realizar agendamento')
@@ -186,6 +215,65 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
           <h1 className="text-2xl font-bold text-red-500">Link Inválido</h1>
           <p className="text-zinc-400">O profissional requisitado não foi localizado no sistema.</p>
         </div>
+      </div>
+    )
+  }
+
+  if (waitingPayment && bookingData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#09090b] text-white p-4">
+        <Card className="w-full max-w-md border-zinc-800 bg-zinc-950/80 backdrop-blur-xl">
+          <CardContent className="pt-6 text-center space-y-6">
+            <div className="flex justify-center">
+              <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold text-white">Aguardando Pagamento Pix</h2>
+              <p className="text-zinc-400 text-sm">Realize o pagamento para confirmar o agendamento do serviço.</p>
+            </div>
+
+            {bookingData.woovi_qrcode_image && (
+              <div className="flex justify-center border-4 border-white p-2 rounded-xl bg-white max-w-[220px] mx-auto">
+                <img src={bookingData.woovi_qrcode_image} alt="QR Code Pix" className="w-full h-auto" />
+              </div>
+            )}
+
+            {bookingData.woovi_brcode && (
+              <div className="space-y-2">
+                <p className="text-xs text-zinc-400 font-medium">Pix Copia e Cola:</p>
+                <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg p-2 max-w-sm mx-auto">
+                  <input
+                    type="text"
+                    readOnly
+                    value={bookingData.woovi_brcode}
+                    className="bg-transparent text-xs text-zinc-300 flex-1 outline-none truncate"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs px-3 border-zinc-700 hover:bg-zinc-800 text-zinc-300"
+                    onClick={() => {
+                      navigator.clipboard.writeText(bookingData.woovi_brcode)
+                      setCopied(true)
+                      toast.success('Código copiado!')
+                      setTimeout(() => setCopied(false), 2000)
+                    }}
+                  >
+                    {copied ? 'Copiado' : 'Copiar'}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="border border-zinc-800 rounded-lg p-4 bg-zinc-900/50 text-left space-y-3">
+              <p className="text-sm text-zinc-400"><strong>Serviço:</strong> <span className="text-white">{bookingData?.service?.name || selectedService?.name}</span></p>
+              <p className="text-sm text-zinc-400"><strong>Data:</strong> <span className="text-white">{format(parseISO(bookingData?.start_time), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span></p>
+              <p className="text-sm text-zinc-400"><strong>Horário:</strong> <span className="text-white">{format(parseISO(bookingData?.start_time), 'HH:mm')}</span></p>
+            </div>
+
+            <p className="text-xs text-zinc-500 animate-pulse">Detectando pagamento Pix automaticamente...</p>
+          </CardContent>
+        </Card>
       </div>
     )
   }

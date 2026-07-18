@@ -61,7 +61,8 @@ export async function POST(request: Request) {
       description: body.description || null,
       duration_minutes: body.duration_minutes || 30,
       price: body.price || 0.00,
-      is_active: body.is_active !== undefined ? body.is_active : true
+      is_active: body.is_active !== undefined ? body.is_active : true,
+      payment_required: body.payment_required !== undefined ? body.payment_required : false
     })
     .select('*')
     .single()
@@ -90,7 +91,8 @@ export async function PUT(request: Request) {
       description: body.description,
       duration_minutes: body.duration_minutes,
       price: body.price,
-      is_active: body.is_active
+      is_active: body.is_active,
+      payment_required: body.payment_required
     })
     .eq('id', body.id)
     .select('*')
