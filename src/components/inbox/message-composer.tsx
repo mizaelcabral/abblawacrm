@@ -21,6 +21,7 @@ import {
   Sparkles,
   BookMarked,
   ShoppingBag,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GatedButton } from "@/components/ui/gated-button";
@@ -148,6 +149,46 @@ export function MessageComposer({
   const [selectedProd, setSelectedProd] = useState<(Product & { variations: ProductVariation[] }) | null>(null);
   const [selectedVar, setSelectedVar] = useState<ProductVariation | null>(null);
   const [generatingPix, setGeneratingPix] = useState(false);
+
+  // Service Direct Link States
+  const [services, setServices] = useState<any[]>([]);
+  const [servicesDialogOpen, setServicesDialogOpen] = useState(false);
+  const [profileSlug, setProfileSlug] = useState<string>("");
+
+  useEffect(() => {
+    async function loadServicesAndProfile() {
+      if (!accountId) return;
+      try {
+        // Load current user profile slug
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('slug')
+            .eq('user_id', user.id)
+            .maybeSingle();
+          if (prof?.slug) {
+            setProfileSlug(prof.slug);
+          }
+        }
+
+        // Load services
+        const { data: svcs } = await supabase
+          .from('services')
+          .select('*')
+          .eq('account_id', accountId)
+          .eq('is_active', true);
+        
+        if (svcs) {
+          setServices(svcs);
+        }
+      } catch (err) {
+        console.error("Failed to load services for composer shortcut:", err);
+      }
+    }
+
+    loadServicesAndProfile();
+  }, [accountId]);
 
   const handleOpenStoreDialog = useCallback(async () => {
     if (!accountId) return;
@@ -804,6 +845,19 @@ export function MessageComposer({
             <ShoppingBag className="h-4 w-4" />
           </GatedButton>
 
+          <GatedButton
+            variant="ghost"
+            size="sm"
+            canAct={!readOnly}
+            gateReason="enviar mensagens"
+            title={readOnly ? undefined : "Serviços & Links de Agendamento"}
+            className="h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+            onClick={() => setServicesDialogOpen(true)}
+            disabled={inputsDisabled}
+          >
+            <Calendar className="h-4 w-4" />
+          </GatedButton>
+
           <textarea
             ref={textareaRef}
             value={text}
@@ -938,6 +992,51 @@ export function MessageComposer({
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={servicesDialogOpen} onOpenChange={setServicesDialogOpen}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogHeader>
+            <DialogTitle>Serviços & Links de Agendamento</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Selecione um serviço ativo para inserir o link direto de agendamento na conversa.
+            </p>
+            
+            {services.length === 0 ? (
+              <p className="text-sm text-center py-6 text-muted-foreground italic">
+                Nenhum serviço cadastrado ou ativo encontrado.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                {services.map((svc) => (
+                  <div
+                    key={svc.id}
+                    onClick={() => {
+                      const baseUrl = window.location.origin;
+                      const slugPart = profileSlug || svc.account_id;
+                      const bookingUrl = `${baseUrl}/book/${slugPart}`;
+                      const msg = `Olá! Você pode realizar o agendamento de "${svc.name}" pelo link: ${bookingUrl}`;
+                      setText((prev) => (prev ? `${prev}\n${msg}` : msg));
+                      setServicesDialogOpen(false);
+                      toast.success("Link do serviço inserido!");
+                    }}
+                    className="flex justify-between items-center p-3 rounded-xl border border-border bg-muted/40 hover:bg-muted/80 cursor-pointer transition-colors"
+                  >
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground">{svc.name}</p>
+                      <p className="text-xs text-muted-foreground">{svc.duration_minutes} min</p>
+                    </div>
+                    <span className="text-xs font-semibold text-primary">
+                      R$ {Number(svc.price).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
