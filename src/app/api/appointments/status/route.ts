@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/automations/admin-client'
 
 // GET /api/appointments/status?id=...
 // Public route to poll payment status of a pending appointment
@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing appointment ID' }, { status: 400 })
   }
 
-  const supabase = await createClient()
+  const supabase = supabaseAdmin()
   const { data, error } = await supabase
     .from('appointments')
     .select('status, service:services(name), start_time')
