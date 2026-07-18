@@ -39,6 +39,7 @@ interface Profile {
   terms_accepted_at: string | null;
   privacy_accepted_at: string | null;
   consent_version: string | null;
+  slug?: string | null;
 }
 
 interface AccountSummary {
@@ -148,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // missing account collapses to null rather than a half-
           // populated row (shouldn't happen post-017 NOT NULL, but
           // belt-and-braces against forks running older schemas).
-          "id, full_name, email, avatar_url, role, beta_features, account_id, account_role, terms_accepted, privacy_accepted, terms_accepted_at, privacy_accepted_at, consent_version, account:accounts!inner(id, name, default_currency, subscription_status, subscription_plan, subscription_expires_at, ai_message_count, ai_message_limit, is_lifetime, lifetime_has_ai)",
+          "id, full_name, email, avatar_url, role, beta_features, account_id, account_role, terms_accepted, privacy_accepted, terms_accepted_at, privacy_accepted_at, consent_version, slug, account:accounts!inner(id, name, default_currency, subscription_status, subscription_plan, subscription_expires_at, ai_message_count, ai_message_limit, is_lifetime, lifetime_has_ai)",
         )
         .eq("user_id", userId)
         .maybeSingle();

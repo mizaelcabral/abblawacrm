@@ -215,7 +215,7 @@ export default function AppointmentsPage() {
             className="flex items-center gap-2"
             onClick={() => {
               // Copy booking link to clipboard
-              const bookingUrl = `${window.location.origin}/book/${profile.id}`
+              const bookingUrl = `${window.location.origin}/book/${profile.slug || profile.id}`
               navigator.clipboard.writeText(bookingUrl)
               toast.success('Link de agendamento copiado para o clipboard!')
             }}

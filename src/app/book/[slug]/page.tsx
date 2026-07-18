@@ -57,12 +57,20 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
     async function loadProfileAndServices() {
       try {
         setLoading(true)
-        // Fetch Profile
-        const { data: prof, error: profError } = await supabase
+        // Fetch Profile - supports both ID (UUID) and slug (text)
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(profileId)
+        
+        let query = supabase
           .from('profiles')
           .select('id, full_name, avatar_url, account_id')
-          .eq('id', profileId)
-          .single()
+
+        if (isUuid) {
+          query = query.eq('id', profileId)
+        } else {
+          query = query.eq('slug', profileId)
+        }
+
+        const { data: prof, error: profError } = await query.single()
 
         if (profError || !prof) {
           toast.error('Profissional não encontrado')
@@ -96,13 +104,14 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
 
   // Fetch Slots when Date or Service changes
   useEffect(() => {
-    if (!selectedService || !selectedDate) return
+    if (!selectedService || !selectedDate || !profile?.id) return
+    const currentProfileId = profile.id
 
     async function fetchSlots() {
       try {
         setLoadingSlots(true)
         setSelectedSlot(null)
-        const res = await fetch(`/api/appointments/availability?profile_id=${profileId}&date=${selectedDate}&service_id=${selectedService?.id}`)
+        const res = await fetch(`/api/appointments/availability?profile_id=${currentProfileId}&date=${selectedDate}&service_id=${selectedService?.id}`)
         if (res.ok) {
           const data = await res.json()
           setAvailableSlots(data.slots || [])
@@ -117,12 +126,12 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
     }
 
     fetchSlots()
-  }, [selectedService, selectedDate, profileId])
+  }, [selectedService, selectedDate, profile?.id])
 
   // Confirm booking
   const handleConfirmBooking = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedService || !selectedDate || !selectedSlot || !clientName || !clientPhone) {
+    if (!selectedService || !selectedDate || !selectedSlot || !clientName || !clientPhone || !profile?.id) {
       toast.error('Por favor, preencha todos os campos obrigatórios.')
       return
     }
@@ -134,7 +143,7 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           service_id: selectedService.id,
-          profile_id: profileId,
+          profile_id: profile.id,
           start_time: startTime,
           notes: clientNotes,
           client: {
