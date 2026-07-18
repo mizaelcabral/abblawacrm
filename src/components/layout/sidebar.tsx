@@ -27,6 +27,7 @@ import {
   ChevronLeft,
   BookOpen,
   ShoppingBag,
+  Calendar,
 } from "lucide-react";
 import type { AccountRole } from "@/lib/auth/roles";
 import { Logo } from "./logo";
@@ -101,6 +102,7 @@ const navItems: NavItem[] = [
   { href: "/automations", label: "Automações", icon: Zap },
   { href: "/flows", label: "Fluxos", icon: Workflow, beta: true },
   { href: "/tasks", label: "Tarefas", icon: CheckSquare },
+  { href: "/appointments", label: "Agenda", icon: Calendar },
   { href: "/knowledge-base", label: "Base de Conhecimento", icon: BookOpen },
   { href: "/ecommerce", label: "Ecommerce", icon: ShoppingBag },
   { href: "/settings?tab=plans", label: "Planos", icon: CreditCard },
