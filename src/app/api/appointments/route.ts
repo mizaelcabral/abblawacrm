@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { parseISO, addMinutes } from 'date-fns'
 import { WooviClient } from '@/lib/woovi/client'
+import { supabaseAdmin } from '@/lib/automations/admin-client'
 
 // GET /api/appointments - List appointments for the logged-in user's account
 export async function GET(request: Request) {
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
 
 // POST /api/appointments - Book an appointment (Can be public or admin-created)
 export async function POST(request: Request) {
-  const supabase = await createClient()
+  const supabase = supabaseAdmin()
   const body = await request.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
