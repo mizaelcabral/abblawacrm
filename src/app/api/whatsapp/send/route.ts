@@ -84,9 +84,9 @@ export async function POST(request: Request) {
       )
     }
 
-    // Media kinds (image/video/document/audio) are sent to Meta via a
+    // Media kinds (image/video/document/audio/sticker) are sent to Meta via a
     // public URL the composer already uploaded to the chat-media bucket.
-    const MEDIA_KINDS = ['image', 'video', 'document', 'audio'] as const
+    const MEDIA_KINDS = ['image', 'video', 'document', 'audio', 'sticker'] as const
     const isMediaKind = (MEDIA_KINDS as readonly string[]).includes(message_type)
 
     // Reject anything outside the known set up front rather than letting
@@ -121,10 +121,11 @@ export async function POST(request: Request) {
     }
 
     // Meta caps media captions at 1024 chars; reject before the upload is
-    // wasted at the Meta call. (Audio carries no caption — see meta-api.)
+    // wasted at the Meta call. (Audio and stickers carry no caption — see meta-api.)
     if (
       isMediaKind &&
       message_type !== 'audio' &&
+      message_type !== 'sticker' &&
       typeof content_text === 'string' &&
       content_text.length > 1024
     ) {
@@ -344,7 +345,10 @@ export async function POST(request: Request) {
           to: recipientId,
           text: content_text || undefined,
           mediaUrl: media_url || undefined,
-          mediaType: isMediaKind ? (message_type as MediaKind) : undefined,
+          mediaType:
+            isMediaKind && message_type !== 'sticker'
+              ? (message_type as 'image' | 'video' | 'document' | 'audio')
+              : undefined,
         })
         metaMessageId = result.messageId
       } catch (err) {

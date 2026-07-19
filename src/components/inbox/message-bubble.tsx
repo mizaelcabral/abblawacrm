@@ -57,7 +57,7 @@ function MediaUnavailable({ label }: { label: string }) {
   );
 }
 
-function MediaImage({ url, alt }: { url: string; alt: string }) {
+function MediaImage({ url, alt, className }: { url: string; alt: string; className?: string }) {
   const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -117,7 +117,7 @@ function MediaImage({ url, alt }: { url: string; alt: string }) {
         <img
           src={src ?? ""}
           alt={alt}
-          className="max-h-64 max-w-60 rounded-lg object-cover"
+          className={className || "max-h-64 max-w-60 rounded-lg object-cover"}
           onError={() => setError(true)}
         />
       </div>
@@ -180,6 +180,21 @@ function MessageContent({ message }: { message: Message }) {
             <p className="mt-1 whitespace-pre-wrap break-words text-sm">
               {message.content_text}
             </p>
+          )}
+        </div>
+      );
+
+    case "sticker":
+      return (
+        <div className="flex justify-center p-0.5 bg-transparent">
+          {message.media_url ? (
+            <MediaImage
+              url={message.media_url}
+              alt="Shared sticker"
+              className="max-h-32 max-w-32 object-contain select-none"
+            />
+          ) : (
+            <MediaUnavailable label="Sticker" />
           )}
         </div>
       );
@@ -306,9 +321,11 @@ export function MessageBubble({
       <div
         className={cn(
           "relative rounded-2xl px-3 py-2",
-          isAgent
-            ? "rounded-br-md bg-primary text-primary-foreground"
-            : "rounded-bl-md bg-muted text-foreground",
+          message.content_type === "sticker"
+            ? "bg-transparent text-foreground shadow-none"
+            : isAgent
+              ? "rounded-br-md bg-primary text-primary-foreground"
+              : "rounded-bl-md bg-muted text-foreground",
         )}
       >
         {reply && (
@@ -332,7 +349,9 @@ export function MessageBubble({
               // timestamp must read against that (not the neutral
               // foreground) — otherwise it goes low-contrast in light
               // mode. Inbound bubbles use the muted surface.
-              isAgent ? "text-primary-foreground/70" : "text-muted-foreground",
+              isAgent && message.content_type !== "sticker"
+                ? "text-primary-foreground/70"
+                : "text-muted-foreground",
             )}
           >
             {time}

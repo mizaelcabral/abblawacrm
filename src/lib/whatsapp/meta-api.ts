@@ -259,7 +259,7 @@ export async function sendTextMessage(
   return { messageId: data.messages[0].id }
 }
 
-export type MediaKind = 'image' | 'video' | 'document' | 'audio'
+export type MediaKind = 'image' | 'video' | 'document' | 'audio' | 'sticker'
 
 export interface SendMediaMessageArgs {
   phoneNumberId: string
@@ -268,24 +268,22 @@ export interface SendMediaMessageArgs {
   kind: MediaKind
   /** Public URL Meta fetches at send time. */
   link: string
-  /** Optional caption — Meta caps at 1024 chars. Documents + images + videos accept it; audio does NOT. */
+  /** Optional caption — Meta caps at 1024 chars. Documents + images + videos accept it; audio/stickers do NOT. */
   caption?: string
-  /** Document-only. Shown in the recipient's chat as the file name. Ignored for image/video/audio. */
+  /** Document-only. Shown in the recipient's chat as the file name. Ignored for image/video/audio/sticker. */
   filename?: string
   contextMessageId?: string
 }
 
 /**
- * Send an image, video, document, or audio (voice note) via a public URL.
+ * Send an image, video, document, audio, or sticker via a public URL.
  *
  * Used by the Flows engine's `send_media` node and the inbox composer's
  * agent-initiated media sends. Mirrors `sendTextMessage` — single fetch,
  * throws on non-2xx, returns Meta's message id.
  *
- * Audio is special-cased: Meta rejects `caption` and `filename` on audio
- * messages, so we send `{ link }` only. WhatsApp auto-renders an
- * OGG/Opus file as a playable voice note (waveform) rather than a file
- * attachment.
+ * Audio and stickers are special-cased: Meta rejects `caption` and `filename` on audio
+ * and sticker messages, so we send `{ link }` only.
  */
 export async function sendMediaMessage(
   args: SendMediaMessageArgs,
@@ -294,11 +292,11 @@ export async function sendMediaMessage(
   if (!link) throw new Error('sendMediaMessage requires a link.')
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
 
-  // Audio accepts neither caption nor filename per Meta's spec — adding
+  // Audio/sticker accept neither caption nor filename per Meta's spec — adding
   // either yields a 400. image/video/document accept a caption; only
   // document accepts a filename.
   const media: Record<string, unknown> = { link }
-  if (caption && kind !== 'audio') media.caption = caption
+  if (caption && kind !== 'audio' && kind !== 'sticker') media.caption = caption
   if (kind === 'document' && filename) media.filename = filename
 
   const body: Record<string, unknown> = {

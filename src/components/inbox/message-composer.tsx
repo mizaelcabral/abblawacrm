@@ -23,6 +23,7 @@ import {
   ShoppingBag,
   Calendar,
   PenTool,
+  Smile,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GatedButton } from "@/components/ui/gated-button";
@@ -32,6 +33,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -54,7 +60,7 @@ import { KBSearchPanel } from "@/components/knowledge-base/kb-search-panel";
 import { ZapSignDialog } from "./zapsign-dialog";
 
 /** Media content types an agent can send from the composer. */
-export type ComposerMediaKind = "image" | "video" | "document" | "audio";
+export type ComposerMediaKind = "image" | "video" | "document" | "audio" | "sticker";
 
 /** Supabase Storage bucket holding agent-sent chat attachments (migration 023). */
 export const CHAT_MEDIA_BUCKET = "chat-media";
@@ -87,12 +93,35 @@ interface ReplyDraft {
 }
 
 // ponytail: use generic image/* and video/* to ensure maximum compatibility with user operating systems and browsers
-const PICKER_ACCEPT: Record<"image" | "video" | "document", string> = {
+const PICKER_ACCEPT: Record<"image" | "video" | "document" | "sticker", string> = {
   image: "image/*",
   video: "video/*",
   document:
     "application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain",
+  sticker: "image/webp",
 };
+
+const COMPOSER_EMOJIS = [
+  "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇",
+  "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚",
+  "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩",
+  "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣",
+  "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬",
+  "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗",
+  "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯",
+  "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐",
+  "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈",
+  "👿", "👹", "👺", "🤡", "💩", "👻", "💀", "☠️", "👽", "👾",
+  "🤖", "🎃", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿",
+  "😾", "👋", "🤚", "🖐️", "✋", "🖖", "👌", "🤌", "🤏", "✌️",
+  "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️",
+  "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌", "👐", "🤲",
+  "🤝", "🙏", "✍️", "💅", "🤳", "💪", "🦾", "🦿", "🦵", "🦶",
+  "👂", "🦻", "👃", "🧠", "🫀", "🫁", "🦷", "🦴", "👀", "👁️",
+  "👅", "👄", "💋", "🩸", "❤️", "🧡", "💛", "💚", "💙", "💜",
+  "🖤", "🤍", "🤎", "💔", "❤️‍🔥", "❤️‍🩹", "❣️", "💕", "💞", "💓",
+  "💗", "💖", "💘", "💝", "💟"
+];
 
 interface MediaDraft {
   kind: ComposerMediaKind;
@@ -307,6 +336,7 @@ export function MessageComposer({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
+  const stickerInputRef = useRef<HTMLInputElement>(null);
   // Mirror of `draft` for the unmount cleanup, which can't read render
   // state. Kept in sync below so navigating away with a staged-but-unsent
   // attachment GCs the orphaned object.
@@ -434,11 +464,9 @@ export function MessageComposer({
       // would then refuse at send.
       const max = MEDIA_MAX_BYTES_BY_KIND[kind];
       if (file.size > max) {
-        const translatedKind = kind === 'image' ? 'imagem' : kind === 'video' ? 'vídeo' : kind === 'document' ? 'documento' : 'áudio';
+        const translatedKind = kind === 'image' ? 'imagem' : kind === 'video' ? 'vídeo' : kind === 'document' ? 'documento' : kind === 'sticker' ? 'figurinha' : 'áudio';
         toast.error(
-          `O arquivo tem ${(file.size / 1024 / 1024).toFixed(1)} MB — o limite para ${translatedKind} é ${Math.round(
-            max / 1024 / 1024,
-          )} MB.`,
+          `O arquivo tem ${(file.size / 1024 / 1024).toFixed(1)} MB — o limite para ${translatedKind} é ${(max / 1024 / 1024).toFixed(2)} MB.`,
         );
         return;
       }
@@ -458,7 +486,7 @@ export function MessageComposer({
   );
 
   const handlePicked = useCallback(
-    (kind: "image" | "video" | "document", file: File | undefined) => {
+    (kind: "image" | "video" | "document" | "sticker", file: File | undefined) => {
       if (file) void stageUpload(kind, file);
     },
     [stageUpload],
@@ -698,6 +726,16 @@ export function MessageComposer({
           e.target.value = "";
         }}
       />
+      <input
+        ref={stickerInputRef}
+        type="file"
+        accept={PICKER_ACCEPT.sticker}
+        className="hidden"
+        onChange={(e) => {
+          handlePicked("sticker", e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
 
       {draft ? (
         <MediaDraftPreview
@@ -750,7 +788,7 @@ export function MessageComposer({
               }, 50);
             }}
           />
-          {/* Attach menu — photo / video / document / voice. */}
+          {/* Attach menu — photo / video / document / voice / sticker. */}
           <DropdownMenu>
             <DropdownMenuTrigger
               disabled={inputsDisabled || busy}
@@ -781,6 +819,10 @@ export function MessageComposer({
               <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
                 <FileText className="mr-2 h-4 w-4" />
                 Documento
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => stickerInputRef.current?.click()}>
+                <Smile className="mr-2 h-4 w-4" />
+                Figurinha (Sticker)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => void startRecording()}>
                 <Mic className="mr-2 h-4 w-4" />
@@ -873,6 +915,40 @@ export function MessageComposer({
           >
             <PenTool className="h-4 w-4" />
           </GatedButton>
+
+          {/* Emoji Picker */}
+          <Popover>
+            <PopoverTrigger
+              title={readOnly ? "Apenas visualização — seu papel não pode enviar mensagens" : "Inserir emoji"}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md p-0 text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={inputsDisabled || readOnly}
+            >
+              <Smile className="h-4 w-4" />
+            </PopoverTrigger>
+            <PopoverContent
+              side="top"
+              align="start"
+              className="w-72 p-2 bg-popover border border-border rounded-xl shadow-lg"
+            >
+              <div className="grid grid-cols-8 gap-1 max-h-48 overflow-y-auto pr-1">
+                {COMPOSER_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => {
+                      setText((prev) => prev + emoji);
+                      if (textareaRef.current) {
+                        textareaRef.current.focus();
+                      }
+                    }}
+                    className="flex h-7 w-7 items-center justify-center rounded text-base hover:bg-muted active:scale-95 transition-all"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
 
           <textarea
             ref={textareaRef}
@@ -1099,6 +1175,14 @@ function MediaDraftPreview({
               className="max-h-40 rounded-lg object-cover"
             />
           )}
+          {draft.kind === "sticker" && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={draft.mediaUrl}
+              alt={draft.filename}
+              className="max-h-32 max-w-32 rounded-lg object-contain bg-transparent border border-dashed border-border p-1"
+            />
+          )}
           {draft.kind === "video" && (
             <video src={draft.mediaUrl} controls className="max-h-40 rounded-lg" />
           )}
@@ -1123,7 +1207,7 @@ function MediaDraftPreview({
       </div>
 
       <div className="mt-2 flex items-end gap-2">
-        {draft.kind !== "audio" && (
+        {draft.kind !== "audio" && draft.kind !== "sticker" && (
           <input
             value={draft.caption}
             maxLength={MEDIA_CAPTION_MAX}
@@ -1146,7 +1230,7 @@ function MediaDraftPreview({
           onClick={onSend}
           className={cn(
             "h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40",
-            draft.kind === "audio" && "ml-auto",
+            (draft.kind === "audio" || draft.kind === "sticker") && "ml-auto",
           )}
         >
           <Send className="h-4 w-4" />

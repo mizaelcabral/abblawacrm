@@ -579,13 +579,11 @@ async function processMessage(
   // allowed value so the INSERT doesn't fail with a constraint error.
   const ALLOWED_CONTENT_TYPES = new Set([
     'text', 'image', 'document', 'audio', 'video',
-    'location', 'template', 'interactive',
+    'location', 'template', 'interactive', 'sticker',
   ])
   const contentType = ALLOWED_CONTENT_TYPES.has(message.type)
     ? message.type
-    : message.type === 'sticker'
-      ? 'image'   // stickers are images
-      : 'text'    // reaction, unknown → text fallback
+    : 'text'    // reaction, unknown → text fallback
 
   // Determine whether this is the contact's very first inbound message
   // BEFORE we insert, so the count is accurate. Covers the case where
