@@ -28,6 +28,7 @@ import {
   BookOpen,
   ShoppingBag,
   Calendar,
+  PenTool,
 } from "lucide-react";
 import type { AccountRole } from "@/lib/auth/roles";
 import { Logo } from "./logo";
@@ -102,6 +103,7 @@ const navItems: NavItem[] = [
   { href: "/automations", label: "Automações", icon: Zap },
   { href: "/flows", label: "Fluxos", icon: Workflow, beta: true },
   { href: "/tasks", label: "Tarefas", icon: CheckSquare },
+  { href: "/signatures", label: "Assinaturas", icon: PenTool },
   { href: "/appointments", label: "Agenda", icon: Calendar },
   { href: "/knowledge-base", label: "Base de Conhecimento", icon: BookOpen },
   { href: "/ecommerce", label: "Ecommerce", icon: ShoppingBag },

@@ -15,6 +15,7 @@ import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { MetaConfig } from '@/components/settings/meta-config';
 import { TelegramConfig } from '@/components/settings/telegram-config';
 import { TikTokConfig } from '@/components/settings/tiktok-config';
+import { ZapSignConfig } from '@/components/settings/zapsign-config';
 import { TemplateManager } from '@/components/settings/template-manager';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
 import { DealsSettings } from '@/components/settings/deals-settings';
@@ -86,6 +87,7 @@ function SettingsPageContent() {
     meta: <MetaConfig />,
     telegram: <TelegramConfig />,
     tiktok: <TikTokConfig />,
+    zapsign: <ZapSignConfig />,
     templates: <TemplateManager />,
     fields: <FieldsAndTagsPanel />,
     deals: <DealsSettings />,

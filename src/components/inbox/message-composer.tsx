@@ -22,6 +22,7 @@ import {
   BookMarked,
   ShoppingBag,
   Calendar,
+  PenTool,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GatedButton } from "@/components/ui/gated-button";
@@ -50,6 +51,7 @@ import {
 } from "@/lib/storage/upload-media";
 import { ReplyQuote } from "./reply-quote";
 import { KBSearchPanel } from "@/components/knowledge-base/kb-search-panel";
+import { ZapSignDialog } from "./zapsign-dialog";
 
 /** Media content types an agent can send from the composer. */
 export type ComposerMediaKind = "image" | "video" | "document" | "audio";
@@ -154,6 +156,7 @@ export function MessageComposer({
   const [services, setServices] = useState<any[]>([]);
   const [servicesDialogOpen, setServicesDialogOpen] = useState(false);
   const [profileSlug, setProfileSlug] = useState<string>("");
+  const [zapsignDialogOpen, setZapsignDialogOpen] = useState(false);
 
   useEffect(() => {
     async function loadServicesAndProfile() {
@@ -858,6 +861,19 @@ export function MessageComposer({
             <Calendar className="h-4 w-4" />
           </GatedButton>
 
+          <GatedButton
+            variant="ghost"
+            size="sm"
+            canAct={!readOnly}
+            gateReason="enviar mensagens"
+            title={readOnly ? undefined : "Criar & Enviar Assinatura (ZapSign)"}
+            className="h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-foreground"
+            onClick={() => setZapsignDialogOpen(true)}
+            disabled={inputsDisabled}
+          >
+            <PenTool className="h-4 w-4" />
+          </GatedButton>
+
           <textarea
             ref={textareaRef}
             value={text}
@@ -1039,6 +1055,13 @@ export function MessageComposer({
           </div>
         </DialogContent>
       </Dialog>
+
+      <ZapSignDialog
+        open={zapsignDialogOpen}
+        onClose={() => setZapsignDialogOpen(false)}
+        conversationId={conversationId}
+        onSendMsg={(text) => onSend(text)}
+      />
     </div>
   );
 }
