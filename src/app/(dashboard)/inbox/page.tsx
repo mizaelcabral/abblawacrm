@@ -45,6 +45,9 @@ function InboxPageContent() {
   // back to the deep-linked conversation if they've already clicked
   // elsewhere.
   const autoSelectedForDeepLinkRef = useRef<string | null>(null);
+  // Keep track of the last URL conversation ID we processed/saw,
+  // to prevent race conditions during async Next.js router transitions.
+  const lastUrlConvIdRef = useRef<string | null>(null);
 
   // Tracks conversations whose hydrate fetch is currently in flight. The
   // conv-INSERT and the first-message-INSERT events both call into
@@ -448,26 +451,32 @@ function InboxPageContent() {
     // Clearing the ref lets the deep-link auto-selector fire again if
     // the user later visits /inbox?c=<same-id> — desirable UX.
     autoSelectedForDeepLinkRef.current = null;
+    lastUrlConvIdRef.current = null;
     router.replace("/inbox", { scroll: false });
   }, [router]);
 
   // If the deep-link conversation id in the URL changes, select it.
   useEffect(() => {
     if (deepLinkConvId && conversations.length > 0) {
-      const match = conversations.find((c) => c.id === deepLinkConvId);
-      if (match && activeConversation?.id !== deepLinkConvId) {
-        setActiveConversation(match);
-        setActiveContact(match.contact ?? null);
-        setMessages([]);
-        autoSelectedForDeepLinkRef.current = deepLinkConvId;
-        if (match.unread_count > 0) {
-          setConversations((prev) =>
-            prev.map((c) =>
-              c.id === match.id ? { ...c, unread_count: 0 } : c
-            )
-          );
+      if (deepLinkConvId !== lastUrlConvIdRef.current) {
+        lastUrlConvIdRef.current = deepLinkConvId;
+        const match = conversations.find((c) => c.id === deepLinkConvId);
+        if (match && activeConversation?.id !== deepLinkConvId) {
+          setActiveConversation(match);
+          setActiveContact(match.contact ?? null);
+          setMessages([]);
+          autoSelectedForDeepLinkRef.current = deepLinkConvId;
+          if (match.unread_count > 0) {
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.id === match.id ? { ...c, unread_count: 0 } : c
+              )
+            );
+          }
         }
       }
+    } else if (!deepLinkConvId) {
+      lastUrlConvIdRef.current = null;
     }
   }, [deepLinkConvId, conversations, activeConversation?.id]);
 
