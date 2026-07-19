@@ -107,7 +107,6 @@ const navItems: NavItem[] = [
   { href: "/appointments", label: "Agenda", icon: Calendar },
   { href: "/knowledge-base", label: "Base de Conhecimento", icon: BookOpen },
   { href: "/ecommerce", label: "Ecommerce", icon: ShoppingBag },
-  { href: "/settings?tab=plans", label: "Planos", icon: CreditCard },
 ];
 
 const bottomNavItems = [
