@@ -161,7 +161,7 @@ export function NotificationMenu() {
                   conversations.map((c) => (
                     <Link
                       key={c.id}
-                      href={`/inbox?conversation_id=${c.id}`}
+                      href={`/inbox?c=${c.id}`}
                       className="block p-2 rounded-md hover:bg-muted/70 transition-colors border border-transparent hover:border-border"
                     >
                       <div className="flex items-center justify-between mb-1">

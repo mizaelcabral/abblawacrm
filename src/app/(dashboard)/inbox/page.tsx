@@ -451,6 +451,26 @@ function InboxPageContent() {
     router.replace("/inbox", { scroll: false });
   }, [router]);
 
+  // If the deep-link conversation id in the URL changes, select it.
+  useEffect(() => {
+    if (deepLinkConvId && conversations.length > 0) {
+      const match = conversations.find((c) => c.id === deepLinkConvId);
+      if (match && activeConversation?.id !== deepLinkConvId) {
+        setActiveConversation(match);
+        setActiveContact(match.contact ?? null);
+        setMessages([]);
+        autoSelectedForDeepLinkRef.current = deepLinkConvId;
+        if (match.unread_count > 0) {
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === match.id ? { ...c, unread_count: 0 } : c
+            )
+          );
+        }
+      }
+    }
+  }, [deepLinkConvId, conversations, activeConversation?.id]);
+
 
   const handleMessagesLoaded = useCallback((loaded: Message[]) => {
     setMessages(loaded);
