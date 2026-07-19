@@ -282,6 +282,7 @@ function DraggableDealCard({
       ref={setNodeRef}
       {...listeners}
       {...attributes}
+      className="cursor-grab active:cursor-grabbing"
       style={{ opacity: isDragging ? 0.3 : 1, touchAction: "none" }}
     >
       <DealCard deal={deal} stage={stage} onEdit={onEdit} />
