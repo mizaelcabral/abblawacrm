@@ -471,19 +471,28 @@ export async function POST(request: Request) {
           // ponytail: derive mimetype based on message type and extension to guarantee delivery by Evolution API
           const ext = (media_url.split('.').pop() || '').toLowerCase().split('?')[0];
           let mimetype = 'application/octet-stream';
+          let defaultExt = 'bin';
+
           if (message_type === 'image') {
             mimetype = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+            defaultExt = ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : 'jpeg';
           } else if (message_type === 'sticker') {
             mimetype = 'image/webp';
+            defaultExt = 'webp';
           } else if (message_type === 'video') {
             mimetype = 'video/mp4';
+            defaultExt = 'mp4';
           } else if (message_type === 'audio') {
             mimetype = 'audio/ogg';
+            defaultExt = 'ogg';
           } else if (message_type === 'document') {
+            defaultExt = ext || 'pdf';
             if (ext === 'pdf') mimetype = 'application/pdf';
             else if (ext === 'doc' || ext === 'docx') mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
             else if (ext === 'xls' || ext === 'xlsx') mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
           }
+
+          const derivedFileName = filename || `file.${defaultExt}`;
 
           const res = await fetch(`${webConfig.api_url}/message/sendMedia/${webConfig.instance_name}`, {
             method: 'POST',
@@ -497,7 +506,7 @@ export async function POST(request: Request) {
               mediatype: message_type,
               mimetype,
               caption: content_text || '',
-              fileName: filename || 'file',
+              fileName: derivedFileName,
             }),
           });
 
