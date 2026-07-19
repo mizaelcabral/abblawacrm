@@ -211,6 +211,10 @@ async function processIncomingMessage(config: any, messageData: any) {
   } else if (msgBody.imageMessage) {
     contentType = 'image';
     contentText = msgBody.imageMessage.caption || '[Imagem]';
+  } else if (msgBody.stickerMessage) {
+    contentType = 'sticker';
+    contentText = '[Figurinha]';
+    filename = 'sticker';
   } else if (msgBody.videoMessage) {
     contentType = 'video';
     contentText = msgBody.videoMessage.caption || '[Vídeo]';
@@ -227,7 +231,7 @@ async function processIncomingMessage(config: any, messageData: any) {
   // In Evolution API, if base64 is in the messageData, we upload it.
   // Otherwise, we fetch it asynchronously from the Evolution API's getBase64FromMediaMessage endpoint.
   let base64Data = messageData.base64 || messageData.message?.base64;
-  if (!base64Data && (contentType === 'image' || contentType === 'video' || contentType === 'audio' || contentType === 'document')) {
+  if (!base64Data && (contentType === 'image' || contentType === 'video' || contentType === 'audio' || contentType === 'document' || contentType === 'sticker')) {
     try {
       console.log('[WhatsApp Web Webhook] Base64 missing from payload. Fetching from getBase64FromMediaMessage...');
       const token = decrypt(config.api_token);
@@ -274,6 +278,7 @@ async function processIncomingMessage(config: any, messageData: any) {
         else if (contentType === 'video') detectedMime = 'video/mp4';
         else if (contentType === 'audio') detectedMime = 'audio/ogg';
         else if (contentType === 'document') detectedMime = 'application/pdf';
+        else if (contentType === 'sticker') detectedMime = 'image/webp';
         
         cleanBase64 = `data:${detectedMime};base64,${cleanBase64}`;
       }

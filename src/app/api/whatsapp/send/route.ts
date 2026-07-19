@@ -473,6 +473,8 @@ export async function POST(request: Request) {
           let mimetype = 'application/octet-stream';
           if (message_type === 'image') {
             mimetype = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+          } else if (message_type === 'sticker') {
+            mimetype = 'image/webp';
           } else if (message_type === 'video') {
             mimetype = 'video/mp4';
           } else if (message_type === 'audio') {
