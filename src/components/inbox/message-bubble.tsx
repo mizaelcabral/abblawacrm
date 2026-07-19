@@ -123,16 +123,16 @@ function MediaImage({ url, alt, className }: { url: string; alt: string; classNa
       </div>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-4xl w-auto max-h-[90vh] bg-background/95 backdrop-blur-md border border-border p-4 flex flex-col items-center justify-between gap-4">
+        <DialogContent className="max-w-[95vw] sm:max-w-4xl md:max-w-5xl w-full max-h-[95vh] bg-background/95 backdrop-blur-md border border-border p-4 flex flex-col items-center justify-between gap-4">
           <DialogHeader className="w-full flex flex-row items-center justify-between border-b pb-2">
             <DialogTitle className="text-foreground font-semibold">Visualizar Imagem</DialogTitle>
           </DialogHeader>
 
-          <div className="flex-1 flex items-center justify-center overflow-hidden max-h-[70vh]">
+          <div className="flex-1 flex items-center justify-center overflow-hidden w-full max-h-[80vh]">
             <img
               src={src ?? ""}
               alt={alt}
-              className="max-w-full max-h-[65vh] object-contain rounded-lg shadow-lg"
+              className="max-w-full max-h-[78vh] object-contain rounded-lg shadow-lg"
             />
           </div>
 
