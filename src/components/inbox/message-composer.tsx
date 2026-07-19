@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   KeyboardEvent,
+  ClipboardEvent,
 } from "react";
 import {
   Send,
@@ -492,6 +493,25 @@ export function MessageComposer({
     [stageUpload],
   );
 
+  const handlePaste = useCallback(
+    (e: ClipboardEvent<HTMLTextAreaElement>) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            void stageUpload("image", file);
+            break;
+          }
+        }
+      }
+    },
+    [stageUpload]
+  );
+
   // ---- Voice recording (client-side Ogg/Opus, no server transcode) ---
 
   // The encoded Ogg/Opus file from opus-recorder → upload as an audio
@@ -955,6 +975,7 @@ export function MessageComposer({
             value={text}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder={
               readOnly
                 ? "Apenas visualização — visualizadores podem navegar, mas não responder"
