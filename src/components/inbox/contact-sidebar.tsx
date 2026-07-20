@@ -41,6 +41,11 @@ interface ContactSidebarProps {
 export function ContactSidebar({ contact }: ContactSidebarProps) {
   const { accountId } = useAuth();
   const [copied, setCopied] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [contact?.id]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [notes, setNotes] = useState<ContactNote[]>([]);
   const [tags, setTags] = useState<(Tag & { contact_tag_id: string })[]>([]);
@@ -366,15 +371,16 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
         <div className="p-4">
           {/* Contact Info */}
           <div className="flex flex-col items-center text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-foreground">
-              {contact.avatar_url ? (
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-foreground select-none">
+              {contact.avatar_url && !imgError ? (
                 <img
                   src={contact.avatar_url}
                   alt={displayName}
+                  onError={() => setImgError(true)}
                   className="h-16 w-16 rounded-full object-cover"
                 />
               ) : (
-                initials
+                <User className="h-8 w-8 text-muted-foreground" />
               )}
             </div>
             <h3 className="mt-3 text-sm font-semibold text-foreground">

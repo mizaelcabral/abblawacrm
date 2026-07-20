@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus } from "@/types";
-import { Search, ChevronDown } from "lucide-react";
+import { Search, ChevronDown, User } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
@@ -270,7 +270,7 @@ function ConversationItem({
 }: ConversationItemProps) {
   const contact = conversation.contact;
   const displayName = contact?.name || contact?.phone || "Desconhecido";
-  const initials = displayName.charAt(0).toUpperCase();
+  const [imgError, setImgError] = useState(false);
 
   const handleClick = useCallback(() => {
     onSelect(conversation);
@@ -293,15 +293,16 @@ function ConversationItem({
     >
       {/* Avatar with Channel Badge */}
       <div className="relative shrink-0">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
-          {contact?.avatar_url ? (
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground select-none">
+          {contact?.avatar_url && !imgError ? (
             <img
               src={contact.avatar_url}
               alt={displayName}
+              onError={() => setImgError(true)}
               className="h-10 w-10 rounded-full object-cover"
             />
           ) : (
-            initials
+            <User className="h-5 w-5 text-muted-foreground" />
           )}
         </div>
         <div

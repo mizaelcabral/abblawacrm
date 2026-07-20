@@ -21,6 +21,7 @@ import {
   Clock,
   ArrowLeft,
   RefreshCw,
+  User,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -178,6 +179,11 @@ export function MessageThread({
     }, 700);
   }, [isRefreshing, onRefresh]);
   const [replyTo, setReplyTo] = useState<ReplyDraft | null>(null);
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [conversation?.id]);
 
   // Profiles are bounded by RLS to rows the current user is allowed to
   // see — today that's just the current user, but the dropdown keeps the
@@ -860,15 +866,16 @@ export function MessageThread({
           )}
           {/* Avatar with Channel Badge */}
           <div className="relative shrink-0">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
-              {contact.avatar_url ? (
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground select-none">
+              {contact.avatar_url && !imgError ? (
                 <img
                   src={contact.avatar_url}
                   alt={contactDisplayName}
+                  onError={() => setImgError(true)}
                   className="h-9 w-9 rounded-full object-cover"
                 />
               ) : (
-                contactDisplayName.charAt(0).toUpperCase()
+                <User className="h-4 w-4 text-muted-foreground" />
               )}
             </div>
             <div
