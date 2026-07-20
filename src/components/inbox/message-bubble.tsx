@@ -221,11 +221,16 @@ function MessageContent({ message }: { message: Message }) {
 
     case "audio":
       return (
-        <div>
+        <div className="space-y-1.5">
           {message.media_url ? (
             <audio src={message.media_url} controls className="max-w-60" />
           ) : (
             <MediaUnavailable label="Audio" />
+          )}
+          {message.content_text && message.content_text !== '[Mensagem de voz]' && (
+            <p className="mt-1.5 whitespace-pre-wrap break-words text-sm opacity-90">
+              {message.content_text}
+            </p>
           )}
         </div>
       );
