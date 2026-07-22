@@ -158,7 +158,7 @@ export interface Conversation {
   created_at: string;
   updated_at: string;
   contact?: Contact;
-  channel?: 'whatsapp' | 'messenger' | 'instagram' | 'telegram';
+  channel?: 'whatsapp' | 'messenger' | 'instagram' | 'telegram' | 'tiktok' | 'livechat';
 }
 
 export type SenderType = 'customer' | 'agent' | 'bot';
@@ -188,7 +188,7 @@ export interface Message {
   status: MessageStatus;
   created_at: string;
   reply_to_message_id?: string;
-  channel?: 'whatsapp' | 'messenger' | 'instagram' | 'telegram';
+  channel?: 'whatsapp' | 'messenger' | 'instagram' | 'telegram' | 'tiktok' | 'livechat';
   /**
    * Only set when `content_type === 'interactive'` — the stable id of
    * the button or list row the customer tapped. The Flows engine uses

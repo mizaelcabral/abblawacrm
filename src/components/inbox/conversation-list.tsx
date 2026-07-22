@@ -231,7 +231,7 @@ interface ConversationItemProps {
   onSelect: (conversation: Conversation) => void;
 }
 
-function ChannelIcon({ channel }: { channel: 'whatsapp' | 'messenger' | 'instagram' | 'telegram' }) {
+function ChannelIcon({ channel }: { channel: NonNullable<Conversation['channel']> }) {
   if (channel === 'messenger') {
     return (
       <svg className="h-2.5 w-2.5 fill-current" viewBox="0 0 24 24">
@@ -252,6 +252,13 @@ function ChannelIcon({ channel }: { channel: 'whatsapp' | 'messenger' | 'instagr
     return (
       <svg className="h-2.5 w-2.5 fill-current" viewBox="0 0 24 24">
         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15.75-.85 4.11-1.2 5.75-.15.7-.4 1.15-.75 1.18-.75.07-1.32-.49-2.04-.96-.72-.47-1.12-.76-1.82-1.22-.81-.53-.29-.82.18-1.3.12-.13 2.22-2.03 2.26-2.2.01-.02.01-.11-.04-.15-.05-.04-.13-.03-.19-.01-.08.02-1.38.88-3.9 2.58-.37.25-.7.37-1 .36-.33-.01-.97-.19-1.44-.35-.58-.19-1.04-.29-1-.62.02-.17.25-.35.7-.53 2.76-1.2 4.6-2 5.53-2.39 2.64-1.1 3.19-1.29 3.55-1.29.08 0 .25.02.36.11.1.08.13.19.14.28 0 .04.01.12 0 .19z"/>
+      </svg>
+    );
+  }
+  if (channel === 'livechat') {
+    return (
+      <svg className="h-2.5 w-2.5 fill-current" viewBox="0 0 24 24">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
       </svg>
     );
   }
@@ -311,6 +318,7 @@ function ConversationItem({
             conversation.channel === "messenger" && "bg-[#0084FF]",
             conversation.channel === "instagram" && "bg-[linear-gradient(45deg,#f09433_0%,#e6683c_25%,#dc2743_50%,#cc2366_75%,#bc1888_100%)]",
             conversation.channel === "telegram" && "bg-[#0088cc]",
+            conversation.channel === "livechat" && "bg-slate-900 dark:bg-slate-700",
             (conversation.channel === "whatsapp" || !conversation.channel) && "bg-[#25D366]"
           )}
           title={conversation.channel || "whatsapp"}

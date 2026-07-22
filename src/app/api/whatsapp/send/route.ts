@@ -297,6 +297,45 @@ export async function POST(request: Request) {
       });
     }
 
+    if (channel === 'livechat') {
+      const { data: messageRecord, error: msgError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id,
+          sender_type: 'agent',
+          content_type: message_type,
+          content_text: content_text || null,
+          media_url: media_url || null,
+          status: 'sent',
+          reply_to_message_id: reply_to_message_id || null,
+          channel: 'livechat',
+        })
+        .select()
+        .single();
+
+      if (msgError) {
+        console.error('Error inserting sent LiveChat message:', msgError);
+        return NextResponse.json(
+          { error: `Failed to save message to DB: ${msgError.message}` },
+          { status: 500 }
+        );
+      }
+
+      await supabase
+        .from('conversations')
+        .update({
+          last_message_text: content_text || `[${message_type}]`,
+          last_message_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', conversation_id);
+
+      return NextResponse.json({
+        success: true,
+        message_id: messageRecord.id,
+      });
+    }
+
     if (channel === 'messenger' || channel === 'instagram') {
       const recipientId = channel === 'messenger' ? contact?.messenger_psid : contact?.instagram_igsid
       if (!recipientId) {

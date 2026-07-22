@@ -47,7 +47,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { createClient } from "@/lib/supabase/client";
-import type { Product, ProductVariation } from "@/types";
+import type { Product, ProductVariation, Conversation } from "@/types";
 import { useCan } from "@/hooks/use-can";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -141,7 +141,7 @@ interface MessageComposerProps {
   onOpenTemplates: () => void;
   replyTo?: ReplyDraft | null;
   onClearReply?: () => void;
-  channel?: "whatsapp" | "messenger" | "instagram" | "telegram";
+  channel?: Conversation["channel"];
   isWhatsAppWeb?: boolean;
 }
 
