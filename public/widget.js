@@ -26,7 +26,7 @@
     const isRight = config.position !== 'bottom_left';
     const primaryColor = config.primary_color || '#0F172A';
 
-    // Inject Responsive CSS Styles
+    // Inject Responsive CSS Styles (Pre-load iframe with visibility: hidden to prevent iOS WebKit throttling)
     const styleId = 'abbla-widget-styles';
     if (!document.getElementById(styleId)) {
       const styleEl = document.createElement('style');
@@ -67,10 +67,20 @@
           border-radius: 16px;
           box-shadow: 0 8px 32px rgba(0,0,0,0.2);
           z-index: 999999;
-          display: none;
+          visibility: hidden;
+          opacity: 0;
+          pointer-events: none;
+          transform: translateY(12px) scale(0.96);
           background: transparent;
           overflow: hidden;
-          transition: opacity 0.2s ease, transform 0.2s ease;
+          transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.2s;
+        }
+
+        #abbla-widget-iframe.abbla-widget-open {
+          visibility: visible !important;
+          opacity: 1 !important;
+          pointer-events: auto !important;
+          transform: translateY(0) scale(1) !important;
         }
 
         @media (max-width: 640px) {
@@ -124,15 +134,31 @@
       isOpen = typeof openState === 'boolean' ? openState : !isOpen;
       const isMobile = window.innerWidth <= 640;
 
-      iframe.style.display = isOpen ? 'block' : 'none';
+      if (isOpen) {
+        iframe.classList.add('abbla-widget-open');
+      } else {
+        iframe.classList.remove('abbla-widget-open');
+      }
+
       document.getElementById('abbla-icon-chat').style.display = isOpen ? 'none' : 'block';
       document.getElementById('abbla-icon-close').style.display = isOpen ? 'block' : 'none';
 
       // On mobile, hide launcher when widget is open for zero overlap
       if (isMobile) {
         launcher.style.display = isOpen ? 'none' : 'flex';
+        document.body.style.overflow = isOpen ? 'hidden' : '';
       } else {
         launcher.style.display = 'flex';
+        document.body.style.overflow = '';
+      }
+
+      // Send instant message to iframe on open so it re-triggers immediate fetch and layout paint
+      if (isOpen && iframe.contentWindow) {
+        try {
+          iframe.contentWindow.postMessage({ type: 'ABBLA_WIDGET_OPENED' }, '*');
+        } catch (e) {
+          // ignore cross-origin error if any
+        }
       }
     }
 

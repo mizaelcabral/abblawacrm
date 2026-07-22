@@ -130,6 +130,23 @@ export default function WidgetClient({
   const isAtBottomRef = useRef<boolean>(true);
   const prevCountRef = useRef<number>(0);
 
+  // Load cached messages immediately on visitorToken setup for 0ms instant display
+  useEffect(() => {
+    if (typeof window !== 'undefined' && visitorToken) {
+      const cached = localStorage.getItem(`abbla_widget_cached_msgs_${visitorToken}`);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+  }, [visitorToken]);
+
   // Dynamic Theme Mode Detector (matches client's system dark/light mode)
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -223,7 +240,15 @@ export default function WidgetClient({
         .then((res) => res.json())
         .then((data) => {
           if (data.messages) {
-            setMessages((prev) => mergeMessages(prev, data.messages));
+            setMessages((prev) => {
+              const merged = mergeMessages(prev, data.messages);
+              if (typeof window !== 'undefined' && visitorToken) {
+                try {
+                  localStorage.setItem(`abbla_widget_cached_msgs_${visitorToken}`, JSON.stringify(merged));
+                } catch (e) {}
+              }
+              return merged;
+            });
           }
         })
         .catch((err) => console.error(err));
@@ -232,6 +257,35 @@ export default function WidgetClient({
     fetchMessages();
     const interval = setInterval(fetchMessages, 3000);
     return () => clearInterval(interval);
+  }, [widgetKey, visitorToken]);
+
+  // Listen for instant ABBLA_WIDGET_OPENED event from parent page to trigger 0ms re-fetch
+  useEffect(() => {
+    const handleMessageEvent = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'ABBLA_WIDGET_OPENED') {
+        if (visitorToken) {
+          fetch(`/api/widget/${widgetKey}/messages?visitorToken=${visitorToken}`)
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.messages) {
+                setMessages((prev) => {
+                  const merged = mergeMessages(prev, data.messages);
+                  if (typeof window !== 'undefined' && visitorToken) {
+                    try {
+                      localStorage.setItem(`abbla_widget_cached_msgs_${visitorToken}`, JSON.stringify(merged));
+                    } catch (e) {}
+                  }
+                  return merged;
+                });
+              }
+            })
+            .catch((err) => console.error(err));
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessageEvent);
+    return () => window.removeEventListener('message', handleMessageEvent);
   }, [widgetKey, visitorToken]);
 
   useEffect(() => {
@@ -285,7 +339,15 @@ export default function WidgetClient({
       });
       const data = await res.json();
       if (data.message) {
-        setMessages((prev) => mergeMessages(prev, [data.message]));
+        setMessages((prev) => {
+          const merged = mergeMessages(prev, [data.message]);
+          if (typeof window !== 'undefined' && visitorToken) {
+            try {
+              localStorage.setItem(`abbla_widget_cached_msgs_${visitorToken}`, JSON.stringify(merged));
+            } catch (e) {}
+          }
+          return merged;
+        });
       }
     } catch (err) {
       console.error(err);
