@@ -5,103 +5,178 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ widgetKey: string }> }
 ) {
-  const { widgetKey } = await params;
-  const { searchParams } = new URL(request.url);
-  const visitorToken = searchParams.get('visitorToken');
+  try {
+    const { widgetKey } = await params;
+    const { searchParams } = new URL(request.url);
+    const visitorToken = searchParams.get('visitorToken');
 
-  if (!visitorToken) {
-    return NextResponse.json({ error: 'visitorToken is required' }, { status: 400 });
+    if (!visitorToken) {
+      return NextResponse.json({ error: 'visitorToken é obrigatório' }, { status: 400 });
+    }
+
+    const supabase = createAdminClient();
+
+    const { data: session } = await supabase
+      .from('chat_widget_sessions')
+      .select('conversation_id')
+      .eq('visitor_token', visitorToken)
+      .maybeSingle();
+
+    if (!session?.conversation_id) {
+      return NextResponse.json({ messages: [] }, { headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
+
+    const { data: dbMessages } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('conversation_id', session.conversation_id)
+      .order('created_at', { ascending: true });
+
+    const formattedMessages = (dbMessages || []).map((m: any) => ({
+      id: m.id,
+      content: m.content_text || '',
+      direction: m.sender_type === 'customer' || m.sender_type === 'visitor' ? 'inbound' : 'outbound',
+      created_at: m.created_at || m.inserted_at,
+    }));
+
+    return NextResponse.json({ messages: formattedMessages }, {
+      headers: { 'Access-Control-Allow-Origin': '*' },
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Erro ao buscar mensagens' }, { status: 500 });
   }
-
-  const supabase = createAdminClient();
-
-  const { data: session } = await supabase
-    .from('chat_widget_sessions')
-    .select('contact_id')
-    .eq('visitor_token', visitorToken)
-    .single();
-
-  if (!session?.contact_id) {
-    return NextResponse.json({ messages: [] }, { headers: { 'Access-Control-Allow-Origin': '*' } });
-  }
-
-  const { data: messages } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('contact_id', session.contact_id)
-    .order('created_at', { ascending: true });
-
-  return NextResponse.json({ messages: messages || [] }, {
-    headers: { 'Access-Control-Allow-Origin': '*' },
-  });
 }
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ widgetKey: string }> }
 ) {
-  const { widgetKey } = await params;
-  const body = await request.json();
-  const { visitorToken, content } = body;
+  try {
+    const { widgetKey } = await params;
+    const body = await request.json().catch(() => ({}));
+    const { visitorToken, content } = body;
 
-  if (!visitorToken || !content) {
-    return NextResponse.json({ error: 'visitorToken and content are required' }, { status: 400 });
-  }
-
-  const supabase = createAdminClient();
-
-  const { data: config } = await supabase
-    .from('chat_widget_configs')
-    .select('id, account_id, ai_auto_respond, ai_agent_id')
-    .eq('widget_key', widgetKey)
-    .single();
-
-  if (!config) {
-    return NextResponse.json({ error: 'Widget not found' }, { status: 404 });
-  }
-
-  let { data: session } = await supabase
-    .from('chat_widget_sessions')
-    .select('*')
-    .eq('widget_config_id', config.id)
-    .eq('visitor_token', visitorToken)
-    .single();
-
-  let contactId = session?.contact_id;
-  if (!contactId) {
-    const { data: newContact } = await supabase.from('contacts').insert({
-      account_id: config.account_id,
-      name: 'Visitante do Site',
-      channel: 'livechat',
-    }).select('id').single();
-
-    contactId = newContact?.id;
-
-    if (session) {
-      await supabase.from('chat_widget_sessions').update({ contact_id: contactId }).eq('id', session.id);
+    if (!visitorToken || !content?.trim()) {
+      return NextResponse.json({ error: 'visitorToken e content são obrigatórios' }, { status: 400 });
     }
-  }
 
-  const { data: message, error: msgErr } = await supabase
-    .from('messages')
-    .insert({
-      account_id: config.account_id,
-      contact_id: contactId,
+    const supabase = createAdminClient();
+
+    // 1) Get widget config
+    const { data: config } = await supabase
+      .from('chat_widget_configs')
+      .select('id, account_id, ai_auto_respond')
+      .eq('widget_key', widgetKey)
+      .eq('is_active', true)
+      .single();
+
+    if (!config) {
+      return NextResponse.json({ error: 'Widget não encontrado ou inativo' }, { status: 404 });
+    }
+
+    // 2) Get owner user_id
+    const { data: ownerProfile } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('account_id', config.account_id)
+      .limit(1)
+      .maybeSingle();
+
+    const ownerUserId = ownerProfile?.user_id;
+
+    // 3) Find or create session
+    let { data: session } = await supabase
+      .from('chat_widget_sessions')
+      .select('*')
+      .eq('widget_config_id', config.id)
+      .eq('visitor_token', visitorToken)
+      .maybeSingle();
+
+    let contactId = session?.contact_id;
+    let conversationId = session?.conversation_id;
+
+    if (ownerUserId && !contactId) {
+      const { data: newContact } = await supabase.from('contacts').insert({
+        account_id: config.account_id,
+        user_id: ownerUserId,
+        name: 'Visitante do Site',
+      }).select('id').single();
+
+      contactId = newContact?.id;
+    }
+
+    if (ownerUserId && contactId && !conversationId) {
+      const { data: newConv } = await supabase.from('conversations').insert({
+        account_id: config.account_id,
+        user_id: ownerUserId,
+        contact_id: contactId,
+        channel: 'livechat',
+        status: 'open',
+      }).select('id').single();
+
+      conversationId = newConv?.id;
+    }
+
+    if (!session && ownerUserId) {
+      const { data: newSession } = await supabase.from('chat_widget_sessions').insert({
+        widget_config_id: config.id,
+        account_id: config.account_id,
+        visitor_token: visitorToken,
+        contact_id: contactId || null,
+        conversation_id: conversationId || null,
+      }).select('*').single();
+      session = newSession;
+    } else if (session && (contactId !== session.contact_id || conversationId !== session.conversation_id)) {
+      await supabase.from('chat_widget_sessions').update({
+        contact_id: contactId,
+        conversation_id: conversationId,
+      }).eq('id', session.id);
+    }
+
+    if (!conversationId) {
+      return NextResponse.json({ error: 'Erro ao criar conversa no CRM' }, { status: 500 });
+    }
+
+    // 4) Insert message into Supabase
+    const { data: dbMsg, error: msgErr } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_type: 'customer',
+        content_type: 'text',
+        content_text: content.trim(),
+        status: 'delivered',
+        channel: 'livechat',
+      })
+      .select('*')
+      .single();
+
+    if (msgErr) {
+      console.error('[widget-messages-api] Insert message error:', msgErr);
+      return NextResponse.json({ error: msgErr.message }, { status: 500 });
+    }
+
+    // 5) Update conversation metadata
+    await supabase.from('conversations').update({
+      last_message_text: content.trim(),
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('id', conversationId);
+
+    const messageResponse = {
+      id: dbMsg.id,
+      content: dbMsg.content_text,
       direction: 'inbound',
-      content: content,
-      channel: 'livechat',
-      sender_type: 'visitor',
-    })
-    .select('*')
-    .single();
+      created_at: dbMsg.created_at || dbMsg.inserted_at,
+    };
 
-  if (msgErr) {
-    return NextResponse.json({ error: msgErr.message }, { status: 500 });
+    return NextResponse.json({ message: messageResponse }, {
+      headers: { 'Access-Control-Allow-Origin': '*' },
+    });
+  } catch (err: any) {
+    console.error('[widget-messages-api] Error:', err);
+    return NextResponse.json({ error: err.message || 'Erro ao enviar mensagem' }, { status: 500 });
   }
-
-  return NextResponse.json({ message }, {
-    headers: { 'Access-Control-Allow-Origin': '*' },
-  });
 }
 
 export async function OPTIONS() {
