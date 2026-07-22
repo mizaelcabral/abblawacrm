@@ -252,7 +252,8 @@ export function MessageComposer({
 
   const handleSendProductLink = () => {
     if (!selectedProd) return;
-    const linkText = `Confira nosso produto *${selectedProd.name}* em nossa vitrine virtual:\n👉 https://${window.location.host}/shop/${accountId}/product/${selectedProd.slug}`;
+    const prodSlugOrId = selectedProd.slug || selectedProd.id;
+    const linkText = `Confira nosso produto *${selectedProd.name}* em nossa vitrine virtual:\n👉 https://${window.location.host}/shop/${accountId}/product/${prodSlugOrId}`;
     setText((prev) => prev ? `${prev}\n${linkText}` : linkText);
     setStoreDialogOpen(false);
     toast.success('Link do produto inserido no editor!');
@@ -313,7 +314,8 @@ export function MessageComposer({
         msg += `🔹 *Link QR Code:*\n${order.woovi_qrcode_image}\n\n`;
       }
 
-      msg += `Você também pode finalizar a compra informando seus dados de entrega no link:\n👉 https://${window.location.host}/shop/${accountId}/product/${selectedProd.slug}`;
+      const prodSlugOrId = selectedProd.slug || selectedProd.id;
+      msg += `Você também pode finalizar a compra informando seus dados de entrega no link:\n👉 https://${window.location.host}/shop/${accountId}/product/${prodSlugOrId}`;
 
       // 4. Enviar mensagem
       onSend(msg, replyTo?.id);

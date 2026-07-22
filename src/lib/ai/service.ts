@@ -354,11 +354,12 @@ export async function getAccountCatalogs(accountId: string): Promise<string> {
     if (products && products.length > 0) {
       let productText = '=== CATÁLOGO DE PRODUTOS DO E-COMMERCE ===\n';
       products.forEach((p) => {
-        const productLink = p.slug ? `${baseUrl}/shop/${storeSlug}/product/${p.slug}` : `${baseUrl}/shop/${storeSlug}`;
+        const productSlugOrId = p.slug || p.id;
+        const productLink = `${baseUrl}/shop/${storeSlug}/product/${productSlugOrId}`;
         productText += `• ${p.name}${p.description ? `: ${p.description}` : ''}\n   Link do Produto: ${productLink}\n`;
       });
       parts.push(productText);
-    } else if (wooviConfig?.store_slug) {
+    } else {
       parts.push(`=== CATÁLOGO DA LOJA VIRTUAL ===\n• Página da Loja: ${baseUrl}/shop/${storeSlug}\n`);
     }
 

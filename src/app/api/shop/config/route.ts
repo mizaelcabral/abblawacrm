@@ -30,6 +30,22 @@ export async function GET(request: Request) {
   }
 
   if (!data) {
+    if (isUuid) {
+      const { data: account } = await supabaseAdmin.from('accounts').select('id, name').eq('id', tenantSlug).maybeSingle();
+      if (account) {
+        return NextResponse.json({
+          account_id: account.id,
+          onboarding_status: 'none',
+          default_shipping_fee: 0,
+          store_name: account.name || 'Loja Virtual',
+          store_slug: null,
+          store_description: null,
+          store_logo_url: null,
+          password_protected: false,
+          has_app_id: false
+        });
+      }
+    }
     return NextResponse.json({ error: 'Store not found' }, { status: 404 });
   }
 

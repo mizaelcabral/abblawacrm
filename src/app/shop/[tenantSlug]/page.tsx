@@ -386,7 +386,7 @@ export default function StorefrontPage() {
                     <div className="flex gap-2">
                       {/* Detalhes */}
                       <a
-                        href={`/shop/${tenantSlug}/product/${p.slug}`}
+                        href={`/shop/${tenantSlug}/product/${p.slug || p.id}`}
                         className="flex-1 inline-flex items-center justify-center rounded-xl border border-input bg-background text-sm font-semibold hover:bg-accent h-10 transition-colors"
                       >
                         Ver Detalhes

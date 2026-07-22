@@ -393,7 +393,7 @@ export default function EcommerceProductsPage() {
                       <Edit2 className="h-3 w-3 mr-1" /> Editar
                     </Button>
                     <a
-                      href={`/shop/${accountId}/product/${p.slug}`}
+                      href={`/shop/${accountId}/product/${p.slug || p.id}`}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-2 text-xs font-semibold hover:bg-accent text-muted-foreground hover:text-accent-foreground"

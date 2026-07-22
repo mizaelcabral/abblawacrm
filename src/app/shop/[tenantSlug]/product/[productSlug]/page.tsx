@@ -72,7 +72,8 @@ export default function ProductDetailPage() {
       setConfig(mappedConfig);
 
       // 2. Fetch Product detail with category and variations using resolved account_id
-      const { data: prodData, error: prodError } = await supabase
+      const isProdUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productSlug);
+      let prodQuery = supabase
         .from('products')
         .select(`
           *,
@@ -80,9 +81,33 @@ export default function ProductDetailPage() {
           variations:product_variations(*)
         `)
         .eq('account_id', configData.account_id)
-        .eq('slug', productSlug)
-        .eq('active', true)
-        .maybeSingle();
+        .eq('active', true);
+
+      if (isProdUuid) {
+        prodQuery = prodQuery.or(`slug.eq.${productSlug},id.eq.${productSlug}`);
+      } else {
+        prodQuery = prodQuery.eq('slug', productSlug);
+      }
+
+      let { data: prodData, error: prodError } = await prodQuery.maybeSingle();
+
+      if (!prodData && !isProdUuid) {
+        const { data: fallbackData } = await supabase
+          .from('products')
+          .select(`
+            *,
+            category:product_categories(*),
+            variations:product_variations(*)
+          `)
+          .eq('account_id', configData.account_id)
+          .eq('active', true)
+          .ilike('slug', productSlug)
+          .maybeSingle();
+
+        if (fallbackData) {
+          prodData = fallbackData;
+        }
+      }
 
       if (prodError) throw prodError;
 

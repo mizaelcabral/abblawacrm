@@ -104,7 +104,7 @@ describe('GET /api/shop/config', () => {
     expect(mockQueryChain.eq).toHaveBeenCalledWith('store_slug', slug);
   });
 
-  it('should return 404 if store not found', async () => {
+  it('should return 404 if store not found and not a valid account', async () => {
     const req = new Request('http://localhost/api/shop/config?tenantSlug=nonexistent');
     mockQueryChain.maybeSingle.mockResolvedValue({ data: null, error: null });
 
@@ -112,6 +112,22 @@ describe('GET /api/shop/config', () => {
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.error).toBe('Store not found');
+  });
+
+  it('should fallback to account details if woovi_config is missing for account UUID', async () => {
+    const uuid = '87654321-4321-4321-4321-0987654321ba';
+    const req = new Request(`http://localhost/api/shop/config?tenantSlug=${uuid}`);
+    // First query for woovi_config returns null, second query for accounts returns account
+    mockQueryChain.maybeSingle
+      .mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: { id: uuid, name: 'Minha Empresa' }, error: null });
+
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.account_id).toBe(uuid);
+    expect(body.store_name).toBe('Minha Empresa');
+    expect(body.has_app_id).toBe(false);
   });
 
   it('should return 500 on db error', async () => {
