@@ -13,6 +13,7 @@ import {
   Globe,
   Settings2,
   Eye,
+  Pencil,
   Code2,
   Sparkles,
   ShieldAlert,
@@ -23,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface WidgetConfig {
@@ -45,14 +47,26 @@ interface WidgetConfig {
   updated_at: string;
 }
 
+const PRESET_COLORS = [
+  '#0F172A', // Slate
+  '#25D366', // WhatsApp Green
+  '#0084FF', // Messenger Blue
+  '#6366F1', // Indigo
+  '#EC4899', // Pink
+  '#F59E0B', // Amber
+  '#10B981', // Emerald
+  '#8B5CF6', // Purple
+];
+
 export default function WidgetsSettingsPage() {
   const [widgets, setWidgets] = useState<WidgetConfig[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editingWidget, setEditingWidget] = useState<WidgetConfig | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // Form State for New Widget
+  // Form State
   const [name, setName] = useState('Widget do Site');
   const [primaryColor, setPrimaryColor] = useState('#0F172A');
   const [title, setTitle] = useState('Atendimento Online');
@@ -60,6 +74,9 @@ export default function WidgetsSettingsPage() {
   const [welcomeMessage, setWelcomeMessage] = useState('Olá! Seja bem-vindo ao nosso site.');
   const [position, setPosition] = useState<'bottom_right' | 'bottom_left'>('bottom_right');
   const [requireLeadInfo, setRequireLeadInfo] = useState(false);
+  const [askName, setAskName] = useState(true);
+  const [askEmail, setAskEmail] = useState(true);
+  const [askPhone, setAskPhone] = useState(true);
   const [aiAutoRespond, setAiAutoRespond] = useState(false);
 
   const fetchWidgets = async () => {
@@ -83,54 +100,97 @@ export default function WidgetsSettingsPage() {
     fetchWidgets();
   }, []);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleOpenCreateModal = () => {
+    setEditingWidget(null);
+    setName('Widget do Site');
+    setPrimaryColor('#0F172A');
+    setTitle('Atendimento Online');
+    setSubtitle('Como podemos ajudar você hoje?');
+    setWelcomeMessage('Olá! Seja bem-vindo ao nosso site.');
+    setPosition('bottom_right');
+    setRequireLeadInfo(false);
+    setAskName(true);
+    setAskEmail(true);
+    setAskPhone(true);
+    setAiAutoRespond(false);
+    setShowModal(true);
+  };
+
+  const handleOpenEditModal = (widget: WidgetConfig) => {
+    setEditingWidget(widget);
+    setName(widget.name || 'Widget do Site');
+    setPrimaryColor(widget.primary_color || '#0F172A');
+    setTitle(widget.title || 'Atendimento Online');
+    setSubtitle(widget.subtitle || 'Como podemos ajudar você hoje?');
+    setWelcomeMessage(widget.welcome_message || 'Olá! Seja bem-vindo ao nosso site.');
+    setPosition(widget.position || 'bottom_right');
+    setRequireLeadInfo(widget.require_lead_info ?? false);
+    setAskName(widget.ask_name ?? true);
+    setAskEmail(widget.ask_email ?? true);
+    setAskPhone(widget.ask_phone ?? true);
+    setAiAutoRespond(widget.ai_auto_respond ?? false);
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCreating(true);
+    setSaving(true);
+
+    const isEdit = !!editingWidget;
+    const url = '/api/account/widgets';
+    const method = isEdit ? 'PATCH' : 'POST';
+
+    const payload: any = {
+      name,
+      primary_color: primaryColor,
+      title,
+      subtitle,
+      welcome_message: welcomeMessage,
+      position,
+      require_lead_info: requireLeadInfo,
+      ask_name: askName,
+      ask_email: askEmail,
+      ask_phone: askPhone,
+      ai_auto_respond: aiAutoRespond,
+    };
+
+    if (isEdit) {
+      payload.id = editingWidget.id;
+    }
 
     try {
-      const res = await fetch('/api/account/widgets', {
-        method: 'POST',
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          primary_color: primaryColor,
-          title,
-          subtitle,
-          welcome_message: welcomeMessage,
-          position,
-          require_lead_info: requireLeadInfo,
-          ai_auto_respond: aiAutoRespond,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
+
       if (res.ok && data.widget) {
-        setWidgets((prev) => [data.widget, ...prev]);
-        setShowCreateModal(false);
-        toast.success('Widget de Chat criado com sucesso!');
-        // Reset form defaults
-        setName('Widget do Site');
-        setPrimaryColor('#0F172A');
-        setTitle('Atendimento Online');
-        setSubtitle('Como podemos ajudar você hoje?');
-        setWelcomeMessage('Olá! Seja bem-vindo ao nosso site.');
-        setPosition('bottom_right');
-        setRequireLeadInfo(false);
-        setAiAutoRespond(false);
+        if (isEdit) {
+          setWidgets((prev) =>
+            prev.map((w) => (w.id === data.widget.id ? data.widget : w))
+          );
+          toast.success('Widget atualizado com sucesso!');
+        } else {
+          setWidgets((prev) => [data.widget, ...prev]);
+          toast.success('Widget de Chat criado com sucesso!');
+        }
+        setShowModal(false);
       } else {
-        toast.error(data.error || 'Falha ao criar widget');
+        toast.error(data.error || 'Falha ao salvar widget');
       }
     } catch (err) {
-      toast.error('Erro de conexão ao criar widget');
+      toast.error('Erro de conexão ao salvar widget');
     } finally {
-      setCreating(false);
+      setSaving(false);
     }
   };
 
   const handleToggleActive = async (widget: WidgetConfig) => {
     const nextState = !widget.is_active;
 
-    // Optimistic Update
     setWidgets((prev) =>
       prev.map((w) => (w.id === widget.id ? { ...w, is_active: nextState } : w))
     );
@@ -143,7 +203,6 @@ export default function WidgetsSettingsPage() {
       });
 
       if (!res.ok) {
-        // Revert on failure
         setWidgets((prev) =>
           prev.map((w) => (w.id === widget.id ? { ...w, is_active: widget.is_active } : w))
         );
@@ -195,7 +254,7 @@ export default function WidgetsSettingsPage() {
           </p>
         </div>
 
-        <Button onClick={() => setShowCreateModal(true)} className="gap-2 shrink-0">
+        <Button onClick={handleOpenCreateModal} className="gap-2 shrink-0">
           <Plus className="h-4 w-4" />
           Novo Widget
         </Button>
@@ -209,7 +268,7 @@ export default function WidgetsSettingsPage() {
             <CardTitle className="text-foreground">Seus Widgets Configurados</CardTitle>
           </div>
           <CardDescription className="text-muted-foreground">
-            Gerencie os snippets de chat ativos, personalize cores e mensagens de boas-vindas.
+            Gerencie os snippets de chat ativos, edite cores, campos de captura e mensagens de boas-vindas.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -226,7 +285,7 @@ export default function WidgetsSettingsPage() {
               <p className="text-sm text-muted-foreground max-w-sm mb-4">
                 Crie seu primeiro widget de chat para integrar o atendimento ao vivo do CRM no seu site.
               </p>
-              <Button onClick={() => setShowCreateModal(true)} size="sm" className="gap-2">
+              <Button onClick={handleOpenCreateModal} size="sm" className="gap-2">
                 <Plus className="h-4 w-4" />
                 Criar Primeiro Widget
               </Button>
@@ -264,8 +323,18 @@ export default function WidgetsSettingsPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenEditModal(w)}
+                        className="gap-1.5 text-xs h-8"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Editar
+                      </Button>
+
+                      <div className="flex items-center gap-2 pl-2 border-l border-border">
                         <Label htmlFor={`toggle-${w.id}`} className="text-xs text-muted-foreground cursor-pointer">
                           {w.is_active ? 'Ativo' : 'Desativado'}
                         </Label>
@@ -290,7 +359,9 @@ export default function WidgetsSettingsPage() {
                     </div>
                     <div>
                       <span className="font-medium text-foreground block">Captura de Lead:</span>
-                      {w.require_lead_info ? 'Obrigatória (Nome/Email)' : 'Opcional / Direto'}
+                      {w.require_lead_info
+                        ? `Obrigatória (${[w.ask_name && 'Nome', w.ask_email && 'E-mail', w.ask_phone && 'WhatsApp'].filter(Boolean).join(', ')})`
+                        : 'Opcional / Direto'}
                     </div>
                     <div>
                       <span className="font-medium text-foreground block">Posição na Tela:</span>
@@ -298,34 +369,37 @@ export default function WidgetsSettingsPage() {
                     </div>
                   </div>
 
-                  {/* Embed Snippet Box */}
-                  <div className="space-y-1.5 pt-2">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                      <Code2 className="h-3.5 w-3.5 text-primary" />
-                      Código de Incorporação (Script Tag HTML)
-                    </Label>
-                    <div className="flex gap-2">
-                      <Input
-                        readOnly
-                        value={getSnippet(w.widget_key)}
-                        className="font-mono bg-muted text-xs border-border select-all"
-                      />
+                  {/* Snippet Code Box */}
+                  <div className="space-y-1.5 bg-muted/40 rounded-lg p-3 border border-border">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <Code2 className="h-3.5 w-3.5 text-primary" />
+                        CÓDIGO DE INCORPORAÇÃO (SCRIPT TAG HTML)
+                      </span>
                       <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1.5"
                         onClick={() => handleCopySnippet(w.widget_key)}
-                        size="icon"
-                        variant="secondary"
-                        className="shrink-0"
-                        title="Copiar Código HTML"
                       >
                         {copiedKey === w.widget_key ? (
-                          <Check className="h-4 w-4 text-emerald-500" />
+                          <>
+                            <Check className="h-3.5 w-3.5 text-emerald-500" />
+                            Copiado!
+                          </>
                         ) : (
-                          <Copy className="h-4 w-4" />
+                          <>
+                            <Copy className="h-3.5 w-3.5" />
+                            Copiar Código
+                          </>
                         )}
                       </Button>
                     </div>
+                    <pre className="text-xs font-mono bg-card p-2.5 rounded border border-border overflow-x-auto text-foreground">
+                      {getSnippet(w.widget_key)}
+                    </pre>
                     <p className="text-[11px] text-muted-foreground">
-                      Copie e cole este código antes da tag <code className="text-foreground font-mono">&lt;/body&gt;</code> do seu site ou e-commerce.
+                      Copie e cole este código antes da tag <code className="text-primary font-mono">&lt;/body&gt;</code> do seu site ou e-commerce.
                     </p>
                   </div>
                 </div>
@@ -335,67 +409,82 @@ export default function WidgetsSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Create Widget Modal */}
-      {showCreateModal && (
+      {/* Modal - Create & Edit Widget */}
+      {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-2xl space-y-6 my-8 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-border pb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Settings2 className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-foreground">Novo Widget do Site</h3>
-                  <p className="text-xs text-muted-foreground">Configure a aparência e comportamentos do chat.</p>
-                </div>
+          <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-2xl my-8 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-border p-5">
+              <div className="flex items-center gap-2">
+                <Settings2 className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-bold text-foreground">
+                  {editingWidget ? 'Editar Widget de Chat' : 'Criar Novo Widget de Chat'}
+                </h2>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setShowCreateModal(false)}>
-                Cancelar
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => setShowModal(false)}
+              >
+                ✕
               </Button>
             </div>
 
-            <form onSubmit={handleCreate} className="space-y-6">
+            <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 flex-1">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="w-name" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Nome Identificador Interno
-                  </Label>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="w-name">Nome do Widget (Identificação Interna)</Label>
                   <Input
                     id="w-name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Ex: Landing Page Principal, E-commerce"
+                    placeholder="Ex: Chat do Site Institucional"
                     required
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="w-color" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Cor Primária
-                  </Label>
-                  <div className="flex gap-2 items-center">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Cor Primária do Widget</Label>
+                  <div className="flex items-center gap-3">
                     <Input
-                      id="w-color-picker"
                       type="color"
                       value={primaryColor}
                       onChange={(e) => setPrimaryColor(e.target.value)}
-                      className="h-9 w-12 p-1 cursor-pointer bg-transparent border-border shrink-0"
+                      className="h-10 w-14 p-1 cursor-pointer"
                     />
                     <Input
-                      id="w-color"
+                      type="text"
                       value={primaryColor}
                       onChange={(e) => setPrimaryColor(e.target.value)}
-                      placeholder="#0F172A"
-                      className="font-mono text-xs"
-                      required
+                      className="w-32 font-mono text-sm uppercase"
                     />
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {PRESET_COLORS.map((c) => (
+                        <button
+                          type="button"
+                          key={c}
+                          className="h-6 w-6 rounded-full border border-black/10 transition hover:scale-110"
+                          style={{ backgroundColor: c }}
+                          onClick={() => setPrimaryColor(c)}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="w-position" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Posição do Widget
-                  </Label>
+                <div className="space-y-2">
+                  <Label htmlFor="w-title">Título do Cabeçalho</Label>
+                  <Input
+                    id="w-title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Atendimento Online"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="w-position">Posição na Tela</Label>
                   <Select
                     value={position}
                     onValueChange={(val) => {
@@ -403,7 +492,7 @@ export default function WidgetsSettingsPage() {
                     }}
                   >
                     <SelectTrigger id="w-position">
-                      <SelectValue placeholder="Selecione..." />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="bottom_right">Canto Inferior Direito</SelectItem>
@@ -412,96 +501,118 @@ export default function WidgetsSettingsPage() {
                   </Select>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="w-title" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Título no Cabeçalho
-                  </Label>
-                  <Input
-                    id="w-title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Ex: Atendimento Online"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="w-subtitle" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Subtítulo no Cabeçalho
-                  </Label>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="w-subtitle">Subtítulo / Descrição</Label>
                   <Input
                     id="w-subtitle"
                     value={subtitle}
                     onChange={(e) => setSubtitle(e.target.value)}
-                    placeholder="Ex: Como podemos ajudar você hoje?"
-                    required
+                    placeholder="Como podemos ajudar você hoje?"
                   />
                 </div>
 
-                <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor="w-welcome" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Mensagem de Boas-Vindas Inicial
-                  </Label>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="w-welcome">Mensagem de Boas-Vindas</Label>
                   <Textarea
                     id="w-welcome"
                     value={welcomeMessage}
                     onChange={(e) => setWelcomeMessage(e.target.value)}
-                    placeholder="Ex: Olá! Seja bem-vindo ao nosso site. Como posso ajudar?"
                     rows={2}
+                    placeholder="Olá! Seja bem-vindo ao nosso site."
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg border border-border p-3 sm:col-span-2">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="w-lead" className="text-sm font-medium text-foreground cursor-pointer">
-                      Exigir Dados do Visitante (Lead Capture)
+                <div className="space-y-4 sm:col-span-2 rounded-lg border border-border p-4 bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="w-lead" className="font-semibold text-foreground cursor-pointer">
+                        Exigir Coleta de Dados do Lead
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Exibe um formulário de identificação antes de permitir o envio da primeira mensagem.
+                      </p>
+                    </div>
+                    <Switch
+                      id="w-lead"
+                      checked={requireLeadInfo}
+                      onCheckedChange={setRequireLeadInfo}
+                    />
+                  </div>
+
+                  {requireLeadInfo && (
+                    <div className="pt-3 border-t border-border space-y-3">
+                      <Label className="text-xs font-semibold text-foreground">Campos Solicitados no Formulário:</Label>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="ask-name"
+                            checked={askName}
+                            onCheckedChange={(c) => setAskName(!!c)}
+                          />
+                          <label htmlFor="ask-name" className="text-xs font-medium cursor-pointer">
+                            Nome Completo
+                          </label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="ask-email"
+                            checked={askEmail}
+                            onCheckedChange={(c) => setAskEmail(!!c)}
+                          />
+                          <label htmlFor="ask-email" className="text-xs font-medium cursor-pointer">
+                            E-mail
+                          </label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="ask-phone"
+                            checked={askPhone}
+                            onCheckedChange={(c) => setAskPhone(!!c)}
+                          />
+                          <label htmlFor="ask-phone" className="text-xs font-medium cursor-pointer">
+                            WhatsApp / Telefone
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between sm:col-span-2 rounded-lg border border-border p-4 bg-muted/30">
+                  <div>
+                    <Label htmlFor="w-ai" className="font-semibold text-foreground cursor-pointer flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                      IA Responde Automaticamente
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      Exige Nome e E-mail do visitante antes de enviar a primeira mensagem.
+                      Responde dúvidas do visitante automaticamente usando a IA e a sua Base de Conhecimento.
                     </p>
                   </div>
                   <Switch
-                    id="w-lead"
-                    checked={requireLeadInfo}
-                    onCheckedChange={setRequireLeadInfo}
+                    id="w-ai"
+                    checked={aiAutoRespond}
+                    onCheckedChange={setAiAutoRespond}
                   />
                 </div>
               </div>
 
-              {/* Live Preview Card */}
-              <div className="rounded-xl border border-border bg-muted/40 p-4 space-y-2">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase">
-                  <Eye className="h-3.5 w-3.5 text-primary" />
-                  Pré-visualização do Widget
-                </div>
-                <div className="max-w-xs mx-auto rounded-xl shadow-lg border border-border overflow-hidden bg-background">
-                  <div
-                    className="p-3 text-white flex items-center justify-between"
-                    style={{ backgroundColor: primaryColor }}
-                  >
-                    <div>
-                      <h4 className="font-bold text-sm">{title || 'Atendimento Online'}</h4>
-                      <p className="text-[11px] opacity-80">{subtitle || 'Como podemos ajudar?'}</p>
-                    </div>
-                  </div>
-                  <div className="p-3 space-y-2 text-xs bg-slate-50 dark:bg-slate-900 min-h-[90px]">
-                    {welcomeMessage && (
-                      <div className="rounded-xl rounded-tl-none bg-white dark:bg-slate-800 p-2 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 max-w-[85%]">
-                        {welcomeMessage}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Modal Buttons */}
-              <div className="flex justify-end gap-2 border-t border-border pt-4">
-                <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowModal(false)}
+                >
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={creating}>
-                  {creating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  Salvar e Criar Widget
+                <Button type="submit" disabled={saving} className="gap-2">
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    'Salvar Widget'
+                  )}
                 </Button>
               </div>
             </form>

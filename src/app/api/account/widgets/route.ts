@@ -62,6 +62,9 @@ export async function POST(request: Request) {
         welcome_message: body.welcome_message || 'Olá! Seja bem-vindo ao nosso site.',
         position: body.position || 'bottom_right',
         require_lead_info: body.require_lead_info ?? false,
+        ask_name: body.ask_name ?? true,
+        ask_email: body.ask_email ?? true,
+        ask_phone: body.ask_phone ?? true,
         ai_auto_respond: body.ai_auto_respond ?? false,
       })
       .select('*')
@@ -112,6 +115,9 @@ export async function PATCH(request: Request) {
     if (body.welcome_message !== undefined) updates.welcome_message = body.welcome_message;
     if (body.position !== undefined) updates.position = body.position;
     if (body.require_lead_info !== undefined) updates.require_lead_info = body.require_lead_info;
+    if (body.ask_name !== undefined) updates.ask_name = body.ask_name;
+    if (body.ask_email !== undefined) updates.ask_email = body.ask_email;
+    if (body.ask_phone !== undefined) updates.ask_phone = body.ask_phone;
     if (body.ai_auto_respond !== undefined) updates.ai_auto_respond = body.ai_auto_respond;
     if (body.is_active !== undefined) updates.is_active = body.is_active;
 

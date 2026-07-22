@@ -65,7 +65,8 @@ export default function WidgetClient({
       .then((data) => {
         if (data.session) {
           setSession(data.session);
-          if (data.session.contact_id || data.session.visitor_name) {
+          // ONLY consider identified if visitor actually provided name, email, or phone details!
+          if (data.session.visitor_name || data.session.visitor_email || data.session.visitor_phone) {
             setIdentified(true);
           }
         }
@@ -173,38 +174,39 @@ export default function WidgetClient({
           <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">
             Por favor, preencha seus dados para iniciar o atendimento:
           </p>
-          {config.ask_name && (
+          {config.ask_name !== false && (
             <input
               type="text"
-              placeholder="Seu Nome"
+              placeholder="Seu Nome *"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-sm"
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary"
             />
           )}
-          {config.ask_email && (
+          {config.ask_email !== false && (
             <input
               type="email"
-              placeholder="Seu E-mail"
+              placeholder="Seu E-mail *"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-sm"
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary"
             />
           )}
-          {config.ask_phone && (
+          {config.ask_phone !== false && (
             <input
               type="tel"
-              placeholder="Seu WhatsApp"
+              placeholder="Seu WhatsApp / Telefone *"
+              required
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-sm"
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary"
             />
           )}
           <button
             type="submit"
-            className="w-full rounded-lg p-2.5 text-sm font-semibold text-white shadow transition"
+            className="w-full rounded-lg p-2.5 text-sm font-semibold text-white shadow transition hover:opacity-90 active:scale-[0.99]"
             style={{ backgroundColor: primaryColor }}
           >
             Iniciar Chat
