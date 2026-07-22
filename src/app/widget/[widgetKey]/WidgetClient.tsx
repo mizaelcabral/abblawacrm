@@ -108,7 +108,17 @@ export default function WidgetClient({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
 
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef<boolean>(true);
+  const prevCountRef = useRef<number>(0);
+
+  const handleScroll = () => {
+    if (!chatContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    // Consider user at bottom if within 80px threshold of bottom
+    isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 80;
+  };
 
   useEffect(() => {
     // 1) Check local storage identification cache for immediate rendering
@@ -171,7 +181,17 @@ export default function WidgetClient({
   }, [widgetKey, visitorToken]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const currentCount = messages.length;
+    const isInitial = prevCountRef.current === 0 && currentCount > 0;
+    const hasNewMessages = currentCount > prevCountRef.current;
+    prevCountRef.current = currentCount;
+
+    // Only auto-scroll if:
+    // 1. Initial message load
+    // 2. New message arrived AND user was already near the bottom
+    if (isInitial || (hasNewMessages && isAtBottomRef.current)) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   const handleLeadSubmit = async (e: React.FormEvent) => {
@@ -201,6 +221,7 @@ export default function WidgetClient({
     const msgContent = text.trim();
     setText('');
     setSending(true);
+    isAtBottomRef.current = true; // Force scroll to bottom on user message
 
     try {
       const res = await fetch(`/api/widget/${widgetKey}/messages`, {
@@ -296,7 +317,11 @@ export default function WidgetClient({
         </form>
       ) : (
         <div className="flex flex-1 flex-col justify-between overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div
+            ref={chatContainerRef}
+            onScroll={handleScroll}
+            className="flex-1 overflow-y-auto p-4 space-y-3"
+          >
             {config.welcome_message && (
               <div className="flex justify-start">
                 <div className="max-w-[85%] rounded-2xl rounded-tl-none bg-white dark:bg-slate-900 p-3 text-sm shadow-sm border border-slate-200 dark:border-slate-800">
