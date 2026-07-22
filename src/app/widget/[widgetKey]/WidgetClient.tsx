@@ -111,6 +111,15 @@ export default function WidgetClient({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // 1) Check local storage identification cache for immediate rendering
+    if (typeof window !== 'undefined') {
+      const isLocallyIdentified = localStorage.getItem(`abbla_widget_identified_${widgetKey}`);
+      if (isLocallyIdentified === 'true') {
+        setIdentified(true);
+      }
+    }
+
+    // 2) Fetch Widget Config
     fetch(`/api/widget/${widgetKey}/config`)
       .then((res) => res.json())
       .then((data) => {
@@ -122,6 +131,7 @@ export default function WidgetClient({
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
 
+    // 3) Create or restore visitor session
     fetch(`/api/widget/${widgetKey}/session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -131,9 +141,12 @@ export default function WidgetClient({
       .then((data) => {
         if (data.session) {
           setSession(data.session);
-          // ONLY consider identified if visitor actually provided name, email, or phone details!
+          // Check if visitor has already submitted lead info previously
           if (data.session.visitor_name || data.session.visitor_email || data.session.visitor_phone) {
             setIdentified(true);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem(`abbla_widget_identified_${widgetKey}`, 'true');
+            }
           }
         }
       })
@@ -171,6 +184,9 @@ export default function WidgetClient({
         body: JSON.stringify({ visitorToken, name, email, phone }),
       });
       setIdentified(true);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`abbla_widget_identified_${widgetKey}`, 'true');
+      }
     } catch (err) {
       console.error(err);
     } finally {

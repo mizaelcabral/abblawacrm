@@ -97,7 +97,7 @@ export async function POST(
       }
     }
 
-    // 6) Create or update session record
+    // 6) Create or update session record (ALWAYS persist visitor_name, visitor_email, visitor_phone)
     let session = existingSession;
     if (!session) {
       const { data: newSession } = await supabase
@@ -116,20 +116,24 @@ export async function POST(
         .select('*')
         .single();
       session = newSession;
-    } else if (contactId !== existingSession.contact_id || conversationId !== existingSession.conversation_id) {
-      const { data: updatedSession } = await supabase
-        .from('chat_widget_sessions')
-        .update({
-          contact_id: contactId || existingSession.contact_id,
-          conversation_id: conversationId || existingSession.conversation_id,
-          visitor_name: name || existingSession.visitor_name,
-          visitor_email: email || existingSession.visitor_email,
-          visitor_phone: phone || existingSession.visitor_phone,
-        })
-        .eq('id', existingSession.id)
-        .select('*')
-        .single();
-      session = updatedSession;
+    } else {
+      // Update session with new lead details or foreign keys whenever provided
+      const updatePayload: Record<string, any> = {};
+      if (contactId && contactId !== existingSession.contact_id) updatePayload.contact_id = contactId;
+      if (conversationId && conversationId !== existingSession.conversation_id) updatePayload.conversation_id = conversationId;
+      if (name) updatePayload.visitor_name = name;
+      if (email) updatePayload.visitor_email = email;
+      if (phone) updatePayload.visitor_phone = phone;
+
+      if (Object.keys(updatePayload).length > 0) {
+        const { data: updatedSession } = await supabase
+          .from('chat_widget_sessions')
+          .update(updatePayload)
+          .eq('id', existingSession.id)
+          .select('*')
+          .single();
+        if (updatedSession) session = updatedSession;
+      }
     }
 
     return NextResponse.json({ session, contactId, conversationId }, {
