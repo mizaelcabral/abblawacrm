@@ -513,7 +513,7 @@ export default function WidgetClient({
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Footer Form with Safe Area Bottom Padding */}
+          {/* Footer Form */}
           <form
             onSubmit={handleSend}
             className={`border-t p-3 flex items-center space-x-2 shrink-0 ${
@@ -521,9 +521,6 @@ export default function WidgetClient({
                 ? 'bg-[#0F172A] border-slate-800/80'
                 : 'bg-white border-slate-200/80'
             }`}
-            style={{
-              paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0.75rem))',
-            }}
           >
             <input
               type="text"
@@ -547,6 +544,29 @@ export default function WidgetClient({
           </form>
         </div>
       )}
+
+      {/* Copyright Footer */}
+      <div
+        className={`py-1.5 text-center text-[11px] font-normal transition-colors shrink-0 ${
+          isDark
+            ? 'bg-[#0B1120] text-slate-400 border-t border-slate-800/60'
+            : 'bg-slate-50 text-slate-500 border-t border-slate-200/60'
+        }`}
+        style={{
+          paddingBottom: 'max(0.375rem, env(safe-area-inset-bottom, 0.375rem))',
+        }}
+      >
+        <span>Feito com </span>
+        <a
+          href="https://www.abblahub.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium hover:underline transition-all"
+          style={{ color: primaryColor }}
+        >
+          Abblahub
+        </a>
+      </div>
     </div>
   );
 }
