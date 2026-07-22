@@ -246,7 +246,7 @@ export default function WidgetClient({
 
   if (loading || !config) {
     return (
-      <div className="flex h-screen items-center justify-center bg-white dark:bg-slate-900">
+      <div className="flex h-dvh items-center justify-center bg-white dark:bg-slate-900">
         <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
       </div>
     );
@@ -255,25 +255,36 @@ export default function WidgetClient({
   const primaryColor = config.primary_color || '#0F172A';
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div className="flex h-dvh flex-col bg-slate-50 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-100 overflow-hidden">
+      {/* Header with Safe Area Top Padding */}
       <div
-        className="flex items-center justify-between p-4 text-white shadow-md"
-        style={{ backgroundColor: primaryColor }}
+        className="flex items-center justify-between px-4 py-3 text-white shadow-md shrink-0"
+        style={{
+          backgroundColor: primaryColor,
+          paddingTop: 'max(1rem, env(safe-area-inset-top, 1rem))',
+        }}
       >
         <div>
-          <h2 className="font-bold text-base">{config.title}</h2>
-          <p className="text-xs opacity-80">{config.subtitle}</p>
+          <h2 className="font-bold text-base leading-tight">{config.title}</h2>
+          <p className="text-xs opacity-85 leading-tight">{config.subtitle}</p>
         </div>
         <button
           onClick={closeWidget}
-          className="rounded p-1 hover:bg-white/20 transition"
+          className="rounded-lg p-1.5 hover:bg-white/20 transition active:scale-95 shrink-0"
+          aria-label="Fechar atendimento"
         >
           <X className="h-5 w-5" />
         </button>
       </div>
 
       {!identified && config.require_lead_info ? (
-        <form onSubmit={handleLeadSubmit} className="flex-1 p-6 flex flex-col justify-center space-y-4">
+        <form
+          onSubmit={handleLeadSubmit}
+          className="flex-1 p-6 flex flex-col justify-center space-y-4 overflow-y-auto"
+          style={{
+            paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom, 1.5rem))',
+          }}
+        >
           <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">
             Por favor, preencha seus dados para iniciar o atendimento:
           </p>
@@ -357,7 +368,14 @@ export default function WidgetClient({
             <div ref={messagesEndRef} />
           </div>
 
-          <form onSubmit={handleSend} className="border-t border-slate-200 dark:border-slate-800 p-3 bg-white dark:bg-slate-900 flex items-center space-x-2">
+          {/* Footer Form with Safe Area Bottom Padding */}
+          <form
+            onSubmit={handleSend}
+            className="border-t border-slate-200 dark:border-slate-800 p-3 bg-white dark:bg-slate-900 flex items-center space-x-2 shrink-0"
+            style={{
+              paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0.75rem))',
+            }}
+          >
             <input
               type="text"
               placeholder="Digite sua mensagem..."

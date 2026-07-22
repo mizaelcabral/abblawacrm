@@ -26,25 +26,76 @@
     const isRight = config.position !== 'bottom_left';
     const primaryColor = config.primary_color || '#0F172A';
 
+    // Inject Responsive CSS Styles
+    const styleId = 'abbla-widget-styles';
+    if (!document.getElementById(styleId)) {
+      const styleEl = document.createElement('style');
+      styleEl.id = styleId;
+      styleEl.textContent = `
+        #abbla-widget-launcher {
+          position: fixed;
+          bottom: 20px;
+          ${isRight ? 'right: 20px;' : 'left: 20px;'}
+          width: 60px;
+          height: 60px;
+          border-radius: 50%;
+          background-color: ${primaryColor};
+          box-shadow: 0 4px 16px rgba(0,0,0,0.24);
+          cursor: pointer;
+          z-index: 999998;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: transform 0.2s ease, opacity 0.2s ease;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        #abbla-widget-launcher:hover {
+          transform: scale(1.05);
+        }
+
+        #abbla-widget-iframe {
+          position: fixed;
+          bottom: 90px;
+          ${isRight ? 'right: 20px;' : 'left: 20px;'}
+          width: 380px;
+          max-width: calc(100vw - 40px);
+          height: 600px;
+          max-height: calc(100vh - 120px);
+          max-height: calc(100dvh - 120px);
+          border: none;
+          border-radius: 16px;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+          z-index: 999999;
+          display: none;
+          background: transparent;
+          overflow: hidden;
+          transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        @media (max-width: 640px) {
+          #abbla-widget-iframe {
+            position: fixed !important;
+            top: 0 !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            max-width: 100% !important;
+            max-height: 100% !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+          }
+        }
+      `;
+      document.head.appendChild(styleEl);
+    }
+
     // Launcher Button
     const launcher = document.createElement('div');
     launcher.id = 'abbla-widget-launcher';
-    launcher.style.cssText = `
-      position: fixed;
-      bottom: 20px;
-      ${isRight ? 'right: 20px;' : 'left: 20px;'}
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      background-color: ${primaryColor};
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      cursor: pointer;
-      z-index: 999998;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: transform 0.2s ease;
-    `;
 
     launcher.innerHTML = `
       <svg id="abbla-icon-chat" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -64,39 +115,40 @@
     iframeUrl.searchParams.set('pageUrl', window.location.href);
     iframe.src = iframeUrl.toString();
 
-    iframe.style.cssText = `
-      position: fixed;
-      bottom: 90px;
-      ${isRight ? 'right: 20px;' : 'left: 20px;'}
-      width: 380px;
-      max-width: calc(100vw - 40px);
-      height: 600px;
-      max-height: calc(100vh - 120px);
-      border: none;
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.16);
-      z-index: 999999;
-      display: none;
-      background: transparent;
-    `;
-
     document.body.appendChild(launcher);
     document.body.appendChild(iframe);
 
     let isOpen = false;
-    launcher.addEventListener('click', () => {
-      isOpen = !isOpen;
+
+    function toggleWidget(openState) {
+      isOpen = typeof openState === 'boolean' ? openState : !isOpen;
+      const isMobile = window.innerWidth <= 640;
+
       iframe.style.display = isOpen ? 'block' : 'none';
       document.getElementById('abbla-icon-chat').style.display = isOpen ? 'none' : 'block';
       document.getElementById('abbla-icon-close').style.display = isOpen ? 'block' : 'none';
-    });
+
+      // On mobile, hide launcher when widget is open for zero overlap
+      if (isMobile) {
+        launcher.style.display = isOpen ? 'none' : 'flex';
+      } else {
+        launcher.style.display = 'flex';
+      }
+    }
+
+    launcher.addEventListener('click', () => toggleWidget());
 
     window.addEventListener('message', (event) => {
       if (event.data && event.data.type === 'ABBLA_WIDGET_CLOSE') {
-        isOpen = false;
-        iframe.style.display = 'none';
-        document.getElementById('abbla-icon-chat').style.display = 'block';
-        document.getElementById('abbla-icon-close').style.display = 'none';
+        toggleWidget(false);
+      }
+    });
+
+    // Handle resize/orientation changes
+    window.addEventListener('resize', () => {
+      if (isOpen) {
+        const isMobile = window.innerWidth <= 640;
+        launcher.style.display = isMobile ? 'none' : 'flex';
       }
     });
   }
