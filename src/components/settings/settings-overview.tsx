@@ -24,6 +24,7 @@ interface OverviewCounts {
   tags: number | null;
   customFields: number | null;
   mcpKeys: number | null;
+  widgets: number | null;
 }
 
 interface WhatsAppStatus {
@@ -42,10 +43,6 @@ export function SettingsOverview({
 
   const [counts, setCounts] = useState<OverviewCounts | null>(null);
   const [countsLoading, setCountsLoading] = useState(true);
-  // WhatsApp status is tracked separately: its health check decrypts the
-  // token and pings Meta, which is far slower than the cheap count
-  // queries. Gating it independently keeps a slow/flaky Meta round-trip
-  // from blanking the rest of the landing.
   const [whatsapp, setWhatsapp] = useState<WhatsAppStatus | null>(null);
   const [whatsappLoading, setWhatsappLoading] = useState(true);
   const [metaStatus, setMetaStatus] = useState<{ configured: boolean; connected: boolean } | null>(null);
@@ -65,7 +62,7 @@ export function SettingsOverview({
     // Cheap counts — resolve fast, render immediately.
     (async () => {
       setCountsLoading(true);
-      const [membersRes, invitesRes, templatesTotal, templatesPending, tagsRes, fieldsRes, mcpKeysRes] =
+      const [membersRes, invitesRes, templatesTotal, templatesPending, tagsRes, fieldsRes, mcpKeysRes, widgetsRes] =
         await Promise.allSettled([
           fetch('/api/account/members', { cache: 'no-store' }).then((r) => r.json()),
           canManageMembers
@@ -89,6 +86,10 @@ export function SettingsOverview({
           supabase.from('custom_fields').select('id', { count: 'exact', head: true }),
           supabase
             .from('mcp_api_keys')
+            .select('id', { count: 'exact', head: true })
+            .eq('account_id', acctId),
+          supabase
+            .from('chat_widget_configs')
             .select('id', { count: 'exact', head: true })
             .eq('account_id', acctId),
         ]);
@@ -122,6 +123,8 @@ export function SettingsOverview({
           fieldsRes.status === 'fulfilled' ? fieldsRes.value.count ?? null : null,
         mcpKeys:
           mcpKeysRes.status === 'fulfilled' ? mcpKeysRes.value.count ?? null : null,
+        widgets:
+          widgetsRes.status === 'fulfilled' ? widgetsRes.value.count ?? null : null,
       });
       setCountsLoading(false);
     })();
@@ -327,6 +330,14 @@ export function SettingsOverview({
       section: 'appearance',
       loading: false,
       subtitle: `Modo ${mode === 'light' ? 'Claro' : 'Escuro'} · Tema ${themeName}`,
+    },
+    {
+      section: 'widgets',
+      loading: countsLoading,
+      subtitle:
+        counts?.widgets == null
+          ? 'Instalar chat no site'
+          : `${counts.widgets} ${counts.widgets === 1 ? 'widget configurado' : 'widgets configurados'}`,
     },
     {
       section: 'plans',
