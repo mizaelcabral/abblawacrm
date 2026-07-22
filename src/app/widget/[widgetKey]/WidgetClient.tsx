@@ -103,6 +103,7 @@ export default function WidgetClient({
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [identified, setIdentified] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -112,6 +113,26 @@ export default function WidgetClient({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef<boolean>(true);
   const prevCountRef = useRef<number>(0);
+
+  // Handle dynamic visualViewport for mobile browser address bar and soft keyboard adjustments
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+
+    const updateHeight = () => {
+      if (window.visualViewport) {
+        setViewportHeight(window.visualViewport.height);
+      }
+    };
+
+    updateHeight();
+    window.visualViewport.addEventListener('resize', updateHeight);
+    window.visualViewport.addEventListener('scroll', updateHeight);
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', updateHeight);
+      window.visualViewport?.removeEventListener('scroll', updateHeight);
+    };
+  }, []);
 
   const handleScroll = () => {
     if (!chatContainerRef.current) return;
@@ -255,13 +276,16 @@ export default function WidgetClient({
   const primaryColor = config.primary_color || '#0F172A';
 
   return (
-    <div className="flex h-dvh flex-col bg-slate-50 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-100 overflow-hidden">
+    <div
+      className="flex flex-col bg-slate-50 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-100 overflow-hidden w-full"
+      style={{ height: viewportHeight ? `${viewportHeight}px` : '100dvh' }}
+    >
       {/* Header with Safe Area Top Padding */}
       <div
         className="flex items-center justify-between px-4 py-3 text-white shadow-md shrink-0"
         style={{
           backgroundColor: primaryColor,
-          paddingTop: 'max(1rem, env(safe-area-inset-top, 1rem))',
+          paddingTop: 'max(0.75rem, env(safe-area-inset-top, 0.75rem))',
         }}
       >
         <div>
@@ -295,7 +319,7 @@ export default function WidgetClient({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-[16px] sm:text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary"
             />
           )}
           {config.ask_email !== false && (
@@ -305,7 +329,7 @@ export default function WidgetClient({
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-[16px] sm:text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary"
             />
           )}
           {config.ask_phone !== false && (
@@ -315,7 +339,7 @@ export default function WidgetClient({
               required
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-[16px] sm:text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary"
             />
           )}
           <button
@@ -327,11 +351,11 @@ export default function WidgetClient({
           </button>
         </form>
       ) : (
-        <div className="flex flex-1 flex-col justify-between overflow-hidden">
+        <div className="flex flex-1 flex-col justify-between overflow-hidden min-h-0">
           <div
             ref={chatContainerRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto p-4 space-y-3"
+            className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0"
           >
             {config.welcome_message && (
               <div className="flex justify-start">
@@ -381,12 +405,12 @@ export default function WidgetClient({
               placeholder="Digite sua mensagem..."
               value={text}
               onChange={(e) => setText(e.target.value)}
-              className="flex-1 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm focus:outline-none"
+              className="flex-1 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-[16px] sm:text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none"
             />
             <button
               type="submit"
               disabled={sending || !text.trim()}
-              className="rounded-lg p-2 text-white disabled:opacity-50"
+              className="rounded-lg p-2.5 text-white disabled:opacity-50 active:scale-95 shrink-0"
               style={{ backgroundColor: primaryColor }}
             >
               <Send className="h-4 w-4" />
