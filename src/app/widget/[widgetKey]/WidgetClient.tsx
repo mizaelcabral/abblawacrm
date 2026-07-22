@@ -21,6 +21,21 @@ interface Message {
   created_at: string;
 }
 
+function mergeMessages(existing: Message[], incoming: Message[]): Message[] {
+  const map = new Map<string, Message>();
+
+  for (const m of existing) {
+    if (m && m.id) map.set(m.id, m);
+  }
+  for (const m of incoming) {
+    if (m && m.id) map.set(m.id, m);
+  }
+
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+}
+
 function MessageContent({
   content,
   primaryColor,
@@ -207,7 +222,9 @@ export default function WidgetClient({
       fetch(`/api/widget/${widgetKey}/messages?visitorToken=${visitorToken}`)
         .then((res) => res.json())
         .then((data) => {
-          if (data.messages) setMessages(data.messages);
+          if (data.messages) {
+            setMessages((prev) => mergeMessages(prev, data.messages));
+          }
         })
         .catch((err) => console.error(err));
     };
@@ -268,7 +285,7 @@ export default function WidgetClient({
       });
       const data = await res.json();
       if (data.message) {
-        setMessages((prev) => [...prev, data.message]);
+        setMessages((prev) => mergeMessages(prev, [data.message]));
       }
     } catch (err) {
       console.error(err);
