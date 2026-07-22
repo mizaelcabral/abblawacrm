@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { generateAIResponse } from '@/lib/ai/service';
+import { verifyBillingAndUsage, incrementAIConsumption } from '@/lib/billing/guard';
 
 export async function GET(
   request: Request,
@@ -112,6 +114,7 @@ export async function POST(
         contact_id: contactId,
         channel: 'livechat',
         status: 'open',
+        ai_enabled: config.ai_auto_respond ?? false,
       }).select('id').single();
 
       conversationId = newConv?.id;
@@ -137,7 +140,7 @@ export async function POST(
       return NextResponse.json({ error: 'Erro ao criar conversa no CRM' }, { status: 500 });
     }
 
-    // 4) Insert message into Supabase
+    // 4) Insert visitor message into Supabase
     const { data: dbMsg, error: msgErr } = await supabase
       .from('messages')
       .insert({
@@ -162,6 +165,80 @@ export async function POST(
       last_message_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('id', conversationId);
+
+    // 6) Check and trigger AI Autopilot if enabled
+    const { data: convData } = await supabase
+      .from('conversations')
+      .select('ai_enabled, ai_system_prompt')
+      .eq('id', conversationId)
+      .single();
+
+    const isAiActive = convData?.ai_enabled || config.ai_auto_respond;
+
+    if (isAiActive) {
+      const billingGuard = await verifyBillingAndUsage(config.account_id, 'autopilot');
+      if (!billingGuard.allowed) {
+        console.warn(`[Widget AI] Autopilot blocked: ${billingGuard.reason}`);
+
+        await supabase.from('conversations').update({ ai_enabled: false }).eq('id', conversationId);
+        await supabase.from('messages').insert({
+          conversation_id: conversationId,
+          sender_type: 'system',
+          content_type: 'text',
+          content_text: `⚠️ Piloto Automático desativado: ${billingGuard.reason}`,
+          status: 'delivered',
+          channel: 'livechat',
+        });
+      } else {
+        try {
+          const aiResult = await generateAIResponse(
+            content.trim(),
+            conversationId,
+            config.account_id,
+            convData?.ai_system_prompt || undefined,
+            true
+          );
+
+          let replyText = aiResult.text || '';
+          const isHandoff = aiResult.action === 'handoff';
+
+          if (isHandoff) {
+            await supabase.from('conversations').update({ ai_enabled: false, status: 'open' }).eq('id', conversationId);
+            await supabase.from('messages').insert({
+              conversation_id: conversationId,
+              sender_type: 'system',
+              content_type: 'text',
+              content_text: '⚠️ IA desativada automaticamente. Cliente solicitou atendente humano.',
+              status: 'delivered',
+              channel: 'livechat',
+            });
+            replyText = aiResult.text || 'Entendi. Vou transferir você para um atendente humano agora mesmo. Por favor, aguarde.';
+          }
+
+          // Insert AI response into messages table
+          await supabase.from('messages').insert({
+            conversation_id: conversationId,
+            sender_type: 'bot',
+            content_type: 'text',
+            content_text: replyText,
+            status: 'delivered',
+            channel: 'livechat',
+          });
+
+          // Update conversation metadata
+          await supabase.from('conversations').update({
+            last_message_text: replyText,
+            last_message_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq('id', conversationId);
+
+          // Increment AI usage
+          await incrementAIConsumption(config.account_id);
+        } catch (aiErr) {
+          console.error('[Widget AI] Failed to generate AI response:', aiErr);
+        }
+      }
+    }
 
     const messageResponse = {
       id: dbMsg.id,

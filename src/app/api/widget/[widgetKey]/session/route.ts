@@ -19,7 +19,7 @@ export async function POST(
     // 1) Find widget config
     const { data: config, error: configErr } = await supabase
       .from('chat_widget_configs')
-      .select('id, account_id')
+      .select('id, account_id, ai_auto_respond')
       .eq('widget_key', widgetKey)
       .eq('is_active', true)
       .single();
@@ -90,6 +90,7 @@ export async function POST(
           contact_id: contactId,
           channel: 'livechat',
           status: 'open',
+          ai_enabled: config.ai_auto_respond ?? false,
         }).select('id').single();
 
         conversationId = newConv?.id;
