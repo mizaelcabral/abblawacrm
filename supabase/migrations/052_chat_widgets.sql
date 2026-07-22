@@ -46,9 +46,7 @@ CREATE INDEX IF NOT EXISTS idx_chat_widget_sessions_account_id ON public.chat_wi
 CREATE POLICY "Tenants can manage their own widget configs"
 ON public.chat_widget_configs
 FOR ALL
-USING (account_id IN (
-    SELECT account_id FROM public.account_members WHERE user_id = auth.uid()
-));
+USING (is_account_member(account_id));
 
 CREATE POLICY "Public read widget configs by widget_key"
 ON public.chat_widget_configs
@@ -58,6 +56,4 @@ USING (is_active = true);
 CREATE POLICY "Tenants can view their widget sessions"
 ON public.chat_widget_sessions
 FOR ALL
-USING (account_id IN (
-    SELECT account_id FROM public.account_members WHERE user_id = auth.uid()
-));
+USING (is_account_member(account_id));
