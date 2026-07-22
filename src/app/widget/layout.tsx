@@ -1,4 +1,5 @@
 import type { Viewport } from 'next';
+import '../globals.css';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -16,6 +17,12 @@ export default function WidgetLayout({
   return (
     <html lang="pt-BR" className="h-full w-full overflow-hidden">
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
         <style>{`
           html, body {
             position: fixed;
@@ -28,10 +35,11 @@ export default function WidgetLayout({
             overflow: hidden;
             touch-action: manipulation;
             -webkit-text-size-adjust: 100%;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           }
         `}</style>
       </head>
-      <body className="h-full w-full overflow-hidden bg-transparent antialiased">
+      <body className="h-full w-full overflow-hidden bg-transparent antialiased font-sans">
         {children}
       </body>
     </html>

@@ -104,6 +104,7 @@ export default function WidgetClient({
   const [sending, setSending] = useState(false);
   const [identified, setIdentified] = useState(false);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const [isDark, setIsDark] = useState<boolean>(false);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -113,6 +114,21 @@ export default function WidgetClient({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef<boolean>(true);
   const prevCountRef = useRef<number>(0);
+
+  // Dynamic Theme Mode Detector (matches client's system dark/light mode)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    setIsDark(mediaQuery.matches);
+
+    const handleThemeChange = (e: MediaQueryListEvent) => {
+      setIsDark(e.matches);
+    };
+
+    mediaQuery.addEventListener('change', handleThemeChange);
+    return () => mediaQuery.removeEventListener('change', handleThemeChange);
+  }, []);
 
   // Handle dynamic visualViewport for mobile browser address bar and soft keyboard adjustments
   useEffect(() => {
@@ -267,8 +283,8 @@ export default function WidgetClient({
 
   if (loading || !config) {
     return (
-      <div className="flex h-dvh items-center justify-center bg-white dark:bg-slate-900">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+      <div className={`flex h-dvh items-center justify-center ${isDark ? 'bg-slate-950 text-white' : 'bg-white text-slate-900'}`}>
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
       </div>
     );
   }
@@ -277,20 +293,22 @@ export default function WidgetClient({
 
   return (
     <div
-      className="flex flex-col bg-slate-50 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-100 overflow-hidden w-full"
+      className={`flex flex-col font-sans tracking-tight overflow-hidden w-full transition-colors duration-200 ${
+        isDark ? 'dark bg-[#090D16] text-slate-100' : 'bg-white text-slate-900'
+      }`}
       style={{ height: viewportHeight ? `${viewportHeight}px` : '100dvh' }}
     >
       {/* Header with Safe Area Top Padding */}
       <div
-        className="flex items-center justify-between px-4 py-3 text-white shadow-md shrink-0"
+        className="flex items-center justify-between px-4 py-3.5 text-white shadow-md shrink-0"
         style={{
           backgroundColor: primaryColor,
-          paddingTop: 'max(0.75rem, env(safe-area-inset-top, 0.75rem))',
+          paddingTop: 'max(0.875rem, env(safe-area-inset-top, 0.875rem))',
         }}
       >
         <div>
-          <h2 className="font-bold text-base leading-tight">{config.title}</h2>
-          <p className="text-xs opacity-85 leading-tight">{config.subtitle}</p>
+          <h2 className="font-semibold text-[15px] leading-tight tracking-tight">{config.title}</h2>
+          <p className="text-xs opacity-85 leading-tight tracking-normal font-normal">{config.subtitle}</p>
         </div>
         <button
           onClick={closeWidget}
@@ -304,12 +322,14 @@ export default function WidgetClient({
       {!identified && config.require_lead_info ? (
         <form
           onSubmit={handleLeadSubmit}
-          className="flex-1 p-6 flex flex-col justify-center space-y-4 overflow-y-auto"
+          className={`flex-1 p-6 flex flex-col justify-center space-y-4 overflow-y-auto ${
+            isDark ? 'bg-[#090D16]' : 'bg-slate-50/50'
+          }`}
           style={{
             paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom, 1.5rem))',
           }}
         >
-          <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">
+          <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
             Por favor, preencha seus dados para iniciar o atendimento:
           </p>
           {config.ask_name !== false && (
@@ -319,7 +339,11 @@ export default function WidgetClient({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-[16px] sm:text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary"
+              className={`w-full rounded-xl border p-3 text-[16px] sm:text-sm font-normal focus:outline-none focus:ring-2 focus:ring-primary ${
+                isDark
+                  ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-500'
+                  : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400'
+              }`}
             />
           )}
           {config.ask_email !== false && (
@@ -329,7 +353,11 @@ export default function WidgetClient({
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-[16px] sm:text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary"
+              className={`w-full rounded-xl border p-3 text-[16px] sm:text-sm font-normal focus:outline-none focus:ring-2 focus:ring-primary ${
+                isDark
+                  ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-500'
+                  : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400'
+              }`}
             />
           )}
           {config.ask_phone !== false && (
@@ -339,12 +367,16 @@ export default function WidgetClient({
               required
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-[16px] sm:text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary"
+              className={`w-full rounded-xl border p-3 text-[16px] sm:text-sm font-normal focus:outline-none focus:ring-2 focus:ring-primary ${
+                isDark
+                  ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-500'
+                  : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400'
+              }`}
             />
           )}
           <button
             type="submit"
-            className="w-full rounded-lg p-2.5 text-sm font-semibold text-white shadow transition hover:opacity-90 active:scale-[0.99]"
+            className="w-full rounded-xl p-3 text-sm font-semibold text-white shadow transition hover:opacity-90 active:scale-[0.99]"
             style={{ backgroundColor: primaryColor }}
           >
             Iniciar Chat
@@ -355,11 +387,19 @@ export default function WidgetClient({
           <div
             ref={chatContainerRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0"
+            className={`flex-1 overflow-y-auto p-4 space-y-3.5 min-h-0 ${
+              isDark ? 'bg-[#090D16]' : 'bg-slate-50/50'
+            }`}
           >
             {config.welcome_message && (
               <div className="flex justify-start">
-                <div className="max-w-[85%] rounded-2xl rounded-tl-none bg-white dark:bg-slate-900 p-3 text-sm shadow-sm border border-slate-200 dark:border-slate-800">
+                <div
+                  className={`max-w-[85%] rounded-2xl rounded-tl-none p-3.5 text-sm shadow-sm border ${
+                    isDark
+                      ? 'bg-slate-900 border-slate-800/80 text-slate-100'
+                      : 'bg-white border-slate-200/80 text-slate-900'
+                  }`}
+                >
                   <MessageContent
                     content={config.welcome_message}
                     primaryColor={primaryColor}
@@ -374,10 +414,12 @@ export default function WidgetClient({
                 className={`flex ${msg.direction === 'inbound' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm ${
+                  className={`max-w-[85%] rounded-2xl p-3.5 text-sm shadow-sm ${
                     msg.direction === 'inbound'
                       ? 'rounded-tr-none text-white'
-                      : 'rounded-tl-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800'
+                      : isDark
+                      ? 'rounded-tl-none bg-slate-900 border border-slate-800/80 text-slate-100'
+                      : 'rounded-tl-none bg-white border border-slate-200/80 text-slate-900'
                   }`}
                   style={msg.direction === 'inbound' ? { backgroundColor: primaryColor } : {}}
                 >
@@ -395,7 +437,11 @@ export default function WidgetClient({
           {/* Footer Form with Safe Area Bottom Padding */}
           <form
             onSubmit={handleSend}
-            className="border-t border-slate-200 dark:border-slate-800 p-3 bg-white dark:bg-slate-900 flex items-center space-x-2 shrink-0"
+            className={`border-t p-3 flex items-center space-x-2 shrink-0 ${
+              isDark
+                ? 'bg-[#0F172A] border-slate-800/80'
+                : 'bg-white border-slate-200/80'
+            }`}
             style={{
               paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0.75rem))',
             }}
@@ -405,12 +451,16 @@ export default function WidgetClient({
               placeholder="Digite sua mensagem..."
               value={text}
               onChange={(e) => setText(e.target.value)}
-              className="flex-1 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-[16px] sm:text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none"
+              className={`flex-1 rounded-xl border px-3.5 py-2.5 text-[16px] sm:text-sm font-normal focus:outline-none focus:ring-2 focus:ring-primary ${
+                isDark
+                  ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-500'
+                  : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+              }`}
             />
             <button
               type="submit"
               disabled={sending || !text.trim()}
-              className="rounded-lg p-2.5 text-white disabled:opacity-50 active:scale-95 shrink-0"
+              className="rounded-xl p-2.5 text-white disabled:opacity-50 active:scale-95 shrink-0 transition"
               style={{ backgroundColor: primaryColor }}
             >
               <Send className="h-4 w-4" />
