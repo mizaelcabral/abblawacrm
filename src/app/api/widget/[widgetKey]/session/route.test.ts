@@ -53,42 +53,26 @@ describe('Public Widget Session API (/api/widget/[widgetKey]/session)', () => {
   });
 
   it('should register visitor session and link contact/conversation', async () => {
-    const mockConfigChain = {
+    const createGenericChain = (defaultSingleData: any = null) => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: 'w-1', account_id: 'acc-1' }, error: null }),
-    };
-
-    const mockProfileChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: { user_id: 'owner-1' }, error: null }),
-    };
-
-    const mockSessionChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: defaultSingleData, error: null }),
+      single: vi.fn().mockResolvedValue({ data: defaultSingleData, error: null }),
       insert: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: { id: 'sess-1', visitor_token: 'vtoken-123', contact_id: 'c-1', conversation_id: 'conv-1' },
-      }),
-    };
+      update: vi.fn().mockReturnThis(),
+    });
 
-    const mockContactChain = {
-      insert: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: 'c-1' } }),
-    };
-
-    const mockConvChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null }),
-      insert: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: { id: 'conv-1' } }),
-    };
+    const mockConfigChain = createGenericChain({ id: 'w-1', account_id: 'acc-1' });
+    const mockProfileChain = createGenericChain({ user_id: 'owner-1' });
+    const mockSessionChain = createGenericChain({ id: 'sess-1', visitor_token: 'vtoken-123', contact_id: 'c-1', conversation_id: 'conv-1' });
+    const mockContactChain = createGenericChain({ id: 'c-1' });
+    const mockConvChain = createGenericChain({ id: 'conv-1' });
+    const mockPipelineChain = createGenericChain([{ id: 'pipe-1' }]);
+    const mockStageChain = createGenericChain([{ id: 'stage-1' }]);
+    const mockDealChain = createGenericChain({ id: 'deal-1' });
 
     mockAdminClient.from.mockImplementation((table: string) => {
       if (table === 'chat_widget_configs') return mockConfigChain;
@@ -96,7 +80,10 @@ describe('Public Widget Session API (/api/widget/[widgetKey]/session)', () => {
       if (table === 'chat_widget_sessions') return mockSessionChain;
       if (table === 'contacts') return mockContactChain;
       if (table === 'conversations') return mockConvChain;
-      return {};
+      if (table === 'pipelines') return mockPipelineChain;
+      if (table === 'pipeline_stages') return mockStageChain;
+      if (table === 'deals') return mockDealChain;
+      return createGenericChain();
     });
 
     const req = new Request('http://localhost/api/widget/valid-key/session', {
