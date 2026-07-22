@@ -21,6 +21,72 @@ interface Message {
   created_at: string;
 }
 
+function MessageContent({
+  content,
+  primaryColor,
+  isInbound,
+}: {
+  content: string;
+  primaryColor: string;
+  isInbound: boolean;
+}) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const urls = content.match(urlRegex) || [];
+
+  // Extract clean text body by removing raw URLs from message text
+  let cleanText = content;
+  urls.forEach((url) => {
+    cleanText = cleanText.replace(url, '').replace(/:\s*$/, '.').trim();
+  });
+
+  if (!cleanText) cleanText = content;
+
+  return (
+    <div className="space-y-2.5">
+      <div className="whitespace-pre-wrap leading-relaxed">
+        {cleanText}
+      </div>
+
+      {urls.length > 0 && (
+        <div className="flex flex-col gap-2 pt-1">
+          {urls.map((url, index) => {
+            const isBooking = url.includes('/book/');
+            const isProduct = url.includes('/shop/') || url.includes('/product/');
+
+            let label = '🔗 Abrir Link';
+            if (isBooking) label = '📅 Agendar Horário Online';
+            if (isProduct) label = '🛍️ Ver Produto / Comprar';
+
+            return (
+              <a
+                key={index}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold shadow-md transition hover:opacity-90 active:scale-[0.98] ${
+                  isInbound
+                    ? 'bg-white/20 hover:bg-white/30 text-white'
+                    : 'bg-primary text-primary-foreground hover:opacity-90'
+                }`}
+                style={
+                  !isInbound
+                    ? { backgroundColor: primaryColor, color: '#FFFFFF' }
+                    : {}
+                }
+              >
+                <span>{label}</span>
+                <svg className="h-3.5 w-3.5 stroke-current" fill="none" viewBox="0 0 24 24" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                </svg>
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function WidgetClient({
   widgetKey,
   visitorToken,
@@ -217,8 +283,12 @@ export default function WidgetClient({
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {config.welcome_message && (
               <div className="flex justify-start">
-                <div className="max-w-[80%] rounded-2xl rounded-tl-none bg-white dark:bg-slate-900 p-3 text-sm shadow-sm border border-slate-200 dark:border-slate-800">
-                  {config.welcome_message}
+                <div className="max-w-[85%] rounded-2xl rounded-tl-none bg-white dark:bg-slate-900 p-3 text-sm shadow-sm border border-slate-200 dark:border-slate-800">
+                  <MessageContent
+                    content={config.welcome_message}
+                    primaryColor={primaryColor}
+                    isInbound={false}
+                  />
                 </div>
               </div>
             )}
@@ -228,14 +298,18 @@ export default function WidgetClient({
                 className={`flex ${msg.direction === 'inbound' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-2xl p-3 text-sm shadow-sm ${
+                  className={`max-w-[85%] rounded-2xl p-3 text-sm shadow-sm ${
                     msg.direction === 'inbound'
                       ? 'rounded-tr-none text-white'
                       : 'rounded-tl-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800'
                   }`}
                   style={msg.direction === 'inbound' ? { backgroundColor: primaryColor } : {}}
                 >
-                  {msg.content}
+                  <MessageContent
+                    content={msg.content}
+                    primaryColor={primaryColor}
+                    isInbound={msg.direction === 'inbound'}
+                  />
                 </div>
               </div>
             ))}
