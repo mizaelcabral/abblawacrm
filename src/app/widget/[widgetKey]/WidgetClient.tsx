@@ -1,0 +1,264 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { Send, X, Loader2 } from 'lucide-react';
+
+interface WidgetConfig {
+  primary_color: string;
+  title: string;
+  subtitle: string;
+  welcome_message: string;
+  require_lead_info: boolean;
+  ask_name: boolean;
+  ask_email: boolean;
+  ask_phone: boolean;
+}
+
+interface Message {
+  id: string;
+  content: string;
+  direction: 'inbound' | 'outbound';
+  created_at: string;
+}
+
+export default function WidgetClient({
+  widgetKey,
+  visitorToken,
+  pageUrl,
+}: {
+  widgetKey: string;
+  visitorToken: string;
+  pageUrl: string;
+}) {
+  const [config, setConfig] = useState<WidgetConfig | null>(null);
+  const [session, setSession] = useState<any>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [identified, setIdentified] = useState(false);
+
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch(`/api/widget/${widgetKey}/config`)
+      .then((res) => res.json())
+      .then((data) => {
+        setConfig(data);
+        if (!data.require_lead_info) {
+          setIdentified(true);
+        }
+      })
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false));
+
+    fetch(`/api/widget/${widgetKey}/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visitorToken, metadata: { pageUrl } }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.session) {
+          setSession(data.session);
+          if (data.session.contact_id || data.session.visitor_name) {
+            setIdentified(true);
+          }
+        }
+      })
+      .catch((err) => console.error(err));
+  }, [widgetKey, visitorToken, pageUrl]);
+
+  useEffect(() => {
+    if (!visitorToken) return;
+
+    const fetchMessages = () => {
+      fetch(`/api/widget/${widgetKey}/messages?visitorToken=${visitorToken}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.messages) setMessages(data.messages);
+        })
+        .catch((err) => console.error(err));
+    };
+
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 3000);
+    return () => clearInterval(interval);
+  }, [widgetKey, visitorToken]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleLeadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await fetch(`/api/widget/${widgetKey}/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visitorToken, name, email, phone }),
+      });
+      setIdentified(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text.trim() || sending) return;
+
+    const msgContent = text.trim();
+    setText('');
+    setSending(true);
+
+    try {
+      const res = await fetch(`/api/widget/${widgetKey}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visitorToken, content: msgContent }),
+      });
+      const data = await res.json();
+      if (data.message) {
+        setMessages((prev) => [...prev, data.message]);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const closeWidget = () => {
+    window.parent.postMessage({ type: 'ABBLA_WIDGET_CLOSE' }, '*');
+  };
+
+  if (loading || !config) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-white dark:bg-slate-900">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+      </div>
+    );
+  }
+
+  const primaryColor = config.primary_color || '#0F172A';
+
+  return (
+    <div className="flex h-screen flex-col bg-slate-50 font-sans text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      <div
+        className="flex items-center justify-between p-4 text-white shadow-md"
+        style={{ backgroundColor: primaryColor }}
+      >
+        <div>
+          <h2 className="font-bold text-base">{config.title}</h2>
+          <p className="text-xs opacity-80">{config.subtitle}</p>
+        </div>
+        <button
+          onClick={closeWidget}
+          className="rounded p-1 hover:bg-white/20 transition"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      {!identified && config.require_lead_info ? (
+        <form onSubmit={handleLeadSubmit} className="flex-1 p-6 flex flex-col justify-center space-y-4">
+          <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">
+            Por favor, preencha seus dados para iniciar o atendimento:
+          </p>
+          {config.ask_name && (
+            <input
+              type="text"
+              placeholder="Seu Nome"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-sm"
+            />
+          )}
+          {config.ask_email && (
+            <input
+              type="email"
+              placeholder="Seu E-mail"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-sm"
+            />
+          )}
+          {config.ask_phone && (
+            <input
+              type="tel"
+              placeholder="Seu WhatsApp"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-800 p-2.5 text-sm"
+            />
+          )}
+          <button
+            type="submit"
+            className="w-full rounded-lg p-2.5 text-sm font-semibold text-white shadow transition"
+            style={{ backgroundColor: primaryColor }}
+          >
+            Iniciar Chat
+          </button>
+        </form>
+      ) : (
+        <div className="flex flex-1 flex-col justify-between overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {config.welcome_message && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] rounded-2xl rounded-tl-none bg-white dark:bg-slate-900 p-3 text-sm shadow-sm border border-slate-200 dark:border-slate-800">
+                  {config.welcome_message}
+                </div>
+              </div>
+            )}
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex ${msg.direction === 'inbound' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[80%] rounded-2xl p-3 text-sm shadow-sm ${
+                    msg.direction === 'inbound'
+                      ? 'rounded-tr-none text-white'
+                      : 'rounded-tl-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800'
+                  }`}
+                  style={msg.direction === 'inbound' ? { backgroundColor: primaryColor } : {}}
+                >
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+
+          <form onSubmit={handleSend} className="border-t border-slate-200 dark:border-slate-800 p-3 bg-white dark:bg-slate-900 flex items-center space-x-2">
+            <input
+              type="text"
+              placeholder="Digite sua mensagem..."
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="flex-1 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={sending || !text.trim()}
+              className="rounded-lg p-2 text-white disabled:opacity-50"
+              style={{ backgroundColor: primaryColor }}
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
