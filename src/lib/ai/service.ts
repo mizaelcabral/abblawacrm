@@ -299,6 +299,77 @@ export async function dispatchLLMCompletion(
 }
 
 /**
+ * Query active services, booking links, store config and e-commerce products for context injection
+ */
+export async function getAccountCatalogs(accountId: string): Promise<string> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://portal.abblahub.com';
+  const parts: string[] = [];
+
+  try {
+    // 1. Fetch Staff Profile for Booking Link
+    const { data: profile } = await supabaseAdmin()
+      .from('profiles')
+      .select('id, slug, full_name')
+      .eq('account_id', accountId)
+      .limit(1)
+      .maybeSingle();
+
+    const bookingSlug = profile?.slug || profile?.id;
+
+    // 2. Fetch Active Services
+    const { data: services } = await supabaseAdmin()
+      .from('services')
+      .select('id, name, description, duration_minutes, price')
+      .eq('account_id', accountId)
+      .eq('is_active', true);
+
+    if (services && services.length > 0) {
+      let serviceText = '=== SERVIÇOS E LINKS DE AGENDAMENTO DISPONÍVEIS ===\n';
+      services.forEach((s) => {
+        const priceStr = s.price ? ` - R$ ${Number(s.price).toFixed(2)}` : '';
+        const durationStr = s.duration_minutes ? ` (${s.duration_minutes} min)` : '';
+        const linkStr = bookingSlug ? `\n   Link direto para agendar: ${baseUrl}/book/${bookingSlug}` : '';
+        serviceText += `• ${s.name}${durationStr}${priceStr}${s.description ? `: ${s.description}` : ''}${linkStr}\n`;
+      });
+      parts.push(serviceText);
+    } else if (bookingSlug) {
+      parts.push(`=== LINK DE AGENDAMENTO DA CONTA ===\n• Página de Agendamento Online: ${baseUrl}/book/${bookingSlug}\n`);
+    }
+
+    // 3. Fetch E-Commerce Store & Products
+    const { data: wooviConfig } = await supabaseAdmin()
+      .from('woovi_config')
+      .select('store_name, store_slug')
+      .eq('account_id', accountId)
+      .maybeSingle();
+
+    const storeSlug = wooviConfig?.store_slug || accountId;
+
+    const { data: products } = await supabaseAdmin()
+      .from('products')
+      .select('id, name, slug, description, active')
+      .eq('account_id', accountId)
+      .eq('active', true);
+
+    if (products && products.length > 0) {
+      let productText = '=== CATÁLOGO DE PRODUTOS DO E-COMMERCE ===\n';
+      products.forEach((p) => {
+        const productLink = p.slug ? `${baseUrl}/shop/${storeSlug}/product/${p.slug}` : `${baseUrl}/shop/${storeSlug}`;
+        productText += `• ${p.name}${p.description ? `: ${p.description}` : ''}\n   Link do Produto: ${productLink}\n`;
+      });
+      parts.push(productText);
+    } else if (wooviConfig?.store_slug) {
+      parts.push(`=== CATÁLOGO DA LOJA VIRTUAL ===\n• Página da Loja: ${baseUrl}/shop/${storeSlug}\n`);
+    }
+
+  } catch (err) {
+    console.error('[AI Service] Error fetching account catalogs:', err);
+  }
+
+  return parts.join('\n');
+}
+
+/**
  * Generate response incorporating context and conversation history using the configured AI provider
  */
 export async function generateAIResponse(
@@ -323,6 +394,9 @@ export async function generateAIResponse(
   // 2. Fetch context from Knowledge Base (if useRag is active)
   const context = useRag ? await getRelevantContext(messageText, accountId) : ''
 
+  // 2b. Fetch active Services & E-commerce Products Catalogs
+  const catalogContext = await getAccountCatalogs(accountId)
+
   // 3. Assemble system prompt
   const defaultPrompt = 'Você é um assistente virtual atencioso que responde dúvidas de clientes no WhatsApp.'
   const systemInstruction = `
@@ -330,8 +404,12 @@ ${systemPromptOverride || defaultPrompt}
 
 ${context ? `Use as seguintes informações da Base de Conhecimento para responder às perguntas:\n===\n${context}\n===` : ''}
 
+${catalogContext ? `Catálogos de Produtos e Serviços da empresa disponíveis para indicação:\n===\n${catalogContext}\n===` : ''}
+
 Instruções críticas:
 - Responda de forma clara, natural e concisa.
+- Se o cliente perguntar sobre agendamento, reunião, consulta, horários ou contratar um serviço, forneça as informações do serviço e envie o LINK DE AGENDAMENTO correspondente.
+- Se o cliente demonstrar interesse em produtos, preços, comprar ou ver o catálogo do e-commerce, apresente o produto e forneça o LINK DIRETO do produto ou da loja virtual.
 - Se a resposta não puder ser derivada das informações fornecidas e for uma dúvida que necessite de suporte especializado, defina o campo "handoff" como true.
 - Se o usuário pedir explicitamente para falar com um humano, com um atendente, ou expressar irritação extrema, defina o campo "handoff" como true.
 - Identifique se o cliente solicitou alguma ação/demanda que precise de acompanhamento interno ou execução futura (ex: envio de documentos, agendamento de reunião, ligar de volta, analisar um caso). Se sim, preencha o campo "detected_task" com um título curto e claro, uma descrição detalhada e o prazo estimado em dias. Caso contrário, defina "detected_task" como null.
