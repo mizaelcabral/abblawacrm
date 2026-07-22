@@ -29,6 +29,7 @@ import {
   ShoppingBag,
   Calendar,
   PenTool,
+  Globe,
 } from "lucide-react";
 import type { AccountRole } from "@/lib/auth/roles";
 import { Logo } from "./logo";
@@ -102,6 +103,7 @@ const navItems: NavItem[] = [
   { href: "/broadcasts", label: "Transmissões", icon: Radio },
   { href: "/automations", label: "Automações", icon: Zap },
   { href: "/flows", label: "Fluxos", icon: Workflow, beta: true },
+  { href: "/settings/widgets", label: "Widget do Site", icon: Globe },
   { href: "/tasks", label: "Tarefas", icon: CheckSquare },
   { href: "/signatures", label: "Assinaturas", icon: PenTool },
   { href: "/appointments", label: "Agenda", icon: Calendar },

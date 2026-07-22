@@ -23,6 +23,7 @@ import { MembersTab } from '@/components/settings/members-tab';
 import { McpKeysCard } from '@/components/settings/mcp-keys-card';
 import { ConsentPanel } from '@/components/settings/consent-panel';
 import { AuditPanel } from '@/components/settings/audit-panel';
+import WidgetsSettingsPage from '@/app/(dashboard)/settings/widgets/page';
 import {
   resolveSection,
   type SettingsSection,
@@ -87,6 +88,7 @@ function SettingsPageContent() {
     meta: <MetaConfig />,
     telegram: <TelegramConfig />,
     tiktok: <TikTokConfig />,
+    widgets: <WidgetsSettingsPage />,
     zapsign: <ZapSignConfig />,
     templates: <TemplateManager />,
     fields: <FieldsAndTagsPanel />,

@@ -16,6 +16,7 @@ import {
   FileCheck,
   History,
   PenTool,
+  MessageSquare,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -38,6 +39,7 @@ export const SETTINGS_SECTIONS = [
   'meta',
   'telegram',
   'tiktok',
+  'widgets',
   'zapsign',
   'templates',
   'fields',
@@ -71,6 +73,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   meta: { id: 'meta', label: 'Facebook & Instagram', icon: Share2, group: 'workspace' },
   telegram: { id: 'telegram', label: 'Telegram', icon: Send, group: 'workspace' },
   tiktok: { id: 'tiktok', label: 'TikTok', icon: Video, group: 'workspace' },
+  widgets: { id: 'widgets', label: 'Widget do Site', icon: MessageSquare, group: 'workspace' },
   zapsign: { id: 'zapsign', label: 'ZapSign (Assinaturas)', icon: PenTool, group: 'workspace' },
   templates: { id: 'templates', label: 'Modelos', icon: FileText, group: 'workspace' },
   fields: { id: 'fields', label: 'Campos e tags', icon: Tags, group: 'workspace' },
