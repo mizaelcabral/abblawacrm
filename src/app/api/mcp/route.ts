@@ -275,17 +275,45 @@ export async function POST(request: Request) {
 export async function handleToolCall(name: string, args: any, accountId: string, userId?: string) {
   const admin = supabaseAdmin();
 
-  // ponytail: resolve fallback creatorUserId if userId is absent/null
-  let creatorUserId = userId;
-  if (!creatorUserId) {
-    const { data: member } = await admin
+  // ponytail: strict & deterministic resolution of creatorUserId
+  let creatorUserId: string | null = null;
+
+  // 1. Validate if provided userId is an active member of this account
+  if (userId) {
+    const { data: validUser } = await admin
       .from('profiles')
       .select('user_id')
       .eq('account_id', accountId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (validUser) {
+      creatorUserId = validUser.user_id;
+    }
+  }
+
+  // 2. Deterministic fallback: Account Owner (account_role = 'owner')
+  if (!creatorUserId) {
+    const { data: owner } = await admin
+      .from('profiles')
+      .select('user_id')
+      .eq('account_id', accountId)
+      .eq('account_role', 'owner')
       .limit(1)
       .maybeSingle();
-    creatorUserId = member?.user_id;
+
+    if (owner) {
+      creatorUserId = owner.user_id;
+    }
   }
+
+  // 3. Reject write operations if no valid deterministic author exists
+  const isWriteTool = name === 'create_contact' || name === 'send_whatsapp_message' || name === 'create_direct_charge';
+  if (!creatorUserId && isWriteTool) {
+    throw new Error('Operação recusada: Não foi possível determinar o autor responsável pela integração MCP nesta conta.');
+  }
+
+  console.log(`[mcp] Tool: ${name} | Account: ${accountId} | CreatorUserId: ${creatorUserId || 'N/A'}`);
 
   switch (name) {
     case 'list_contacts': {
