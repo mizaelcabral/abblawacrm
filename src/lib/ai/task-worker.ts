@@ -72,6 +72,23 @@ const GEMINI_TOOLS = [
         }
       },
       {
+        name: 'update_task',
+        description: 'Update an existing task in the CRM (change status, title, description, due date, or assigned agent).',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            task_id: { type: 'STRING', description: 'UUID of the task to update' },
+            status: { type: 'STRING', description: 'New status for the task (pending, in_progress, completed)' },
+            title: { type: 'STRING', description: 'Updated task title' },
+            description: { type: 'STRING', description: 'Updated detailed description' },
+            due_days: { type: 'INTEGER', description: 'Reschedule task due date (days from now)' },
+            due_at: { type: 'STRING', description: 'Reschedule task due date in ISO 8601 format' },
+            assigned_agent_id: { type: 'STRING', description: 'UUID of the assigned agent profile' }
+          },
+          required: ['task_id']
+        }
+      },
+      {
         name: 'send_whatsapp_message',
         description: 'Send a WhatsApp text message to a phone number using your configured WhatsApp Business account.',
         parameters: {

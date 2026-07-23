@@ -192,6 +192,23 @@ export async function POST(request: Request) {
                 }
               },
               {
+                name: 'update_task',
+                description: 'Update an existing task in the CRM (change status, title, description, due date, or assigned agent).',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    task_id: { type: 'string', description: 'UUID of the task to update' },
+                    status: { type: 'string', enum: ['pending', 'in_progress', 'completed'], description: 'New status for the task' },
+                    title: { type: 'string', description: 'Updated task title' },
+                    description: { type: 'string', description: 'Updated detailed description' },
+                    due_days: { type: 'integer', description: 'Reschedule task due date (days from now)' },
+                    due_at: { type: 'string', description: 'Reschedule task due date in ISO 8601 format' },
+                    assigned_agent_id: { type: 'string', description: 'UUID of the assigned agent profile' }
+                  },
+                  required: ['task_id']
+                }
+              },
+              {
                 name: 'send_whatsapp_message',
                 description: 'Send a WhatsApp text message to a phone number using your configured WhatsApp Business account.',
                 inputSchema: {
@@ -376,9 +393,10 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
     case 'list_tasks': {
       const status = args?.status;
+      // ponytail: data minimization — select essential task fields & minimal relations
       let builder = admin
         .from('tasks')
-        .select('*, contact:contacts(name, phone)')
+        .select('id, title, description, status, due_at, created_at, updated_at, contact:contacts(name, phone), assigned_agent:profiles!assigned_agent_id(full_name, email)')
         .eq('account_id', accountId)
         .order('due_at', { ascending: true, nullsFirst: false })
         .limit(50);
@@ -459,6 +477,94 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           {
             type: 'text',
             text: `Task created successfully:\n${JSON.stringify(data, null, 2)}`,
+          },
+        ],
+      };
+    }
+
+    case 'update_task': {
+      const { task_id, status, title, description, due_days, due_at, assigned_agent_id } = args;
+
+      if (!task_id) {
+        throw new Error('task_id is required.');
+      }
+
+      // Verify task exists and belongs to this account
+      const { data: existingTask, error: fetchErr } = await admin
+        .from('tasks')
+        .select('id')
+        .eq('id', task_id)
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (fetchErr || !existingTask) {
+        throw new Error('Task not found or access denied.');
+      }
+
+      const updates: Record<string, any> = {};
+
+      if (status) {
+        if (!['pending', 'in_progress', 'completed', 'review_required'].includes(status)) {
+          throw new Error('Invalid status. Allowed values: pending, in_progress, completed.');
+        }
+        updates.status = status;
+      }
+
+      if (title !== undefined) {
+        if (!title.trim()) throw new Error('Title cannot be empty.');
+        updates.title = title.trim();
+      }
+
+      if (description !== undefined) {
+        updates.description = description?.trim() || null;
+      }
+
+      if (due_days !== undefined) {
+        const d = new Date();
+        d.setDate(d.getDate() + Number(due_days));
+        updates.due_at = d.toISOString();
+      } else if (due_at !== undefined) {
+        updates.due_at = due_at ? new Date(due_at).toISOString() : null;
+      }
+
+      if (assigned_agent_id !== undefined) {
+        if (assigned_agent_id) {
+          const { data: validAgent } = await admin
+            .from('profiles')
+            .select('user_id')
+            .eq('account_id', accountId)
+            .eq('user_id', assigned_agent_id)
+            .maybeSingle();
+
+          if (!validAgent) {
+            throw new Error('Assigned agent does not belong to this account.');
+          }
+          updates.assigned_agent_id = assigned_agent_id;
+        } else {
+          updates.assigned_agent_id = null;
+        }
+      }
+
+      if (Object.keys(updates).length === 0) {
+        throw new Error('No valid fields provided for update.');
+      }
+
+      // ponytail: update task filtered by account_id for tenant isolation
+      const { data: updatedTask, error: updateError } = await admin
+        .from('tasks')
+        .update(updates)
+        .eq('id', task_id)
+        .eq('account_id', accountId)
+        .select('id, title, description, status, due_at, updated_at')
+        .single();
+
+      if (updateError) throw updateError;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Task updated successfully:\n${JSON.stringify(updatedTask, null, 2)}`,
           },
         ],
       };
