@@ -168,11 +168,11 @@ export async function POST(request: Request) {
               },
               {
                 name: 'list_tasks',
-                description: "List tasks. Supports optional status filter ('pending', 'in_progress', 'completed').",
+                description: "List tasks. Supports optional status filter ('pending', 'in_progress', 'completed', 'review_required').",
                 inputSchema: {
                   type: 'object',
                   properties: {
-                    status: { type: 'string', enum: ['pending', 'in_progress', 'completed'], description: 'Filter tasks by status' }
+                    status: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'review_required'], description: 'Filter tasks by status' }
                   }
                 }
               },
@@ -184,7 +184,7 @@ export async function POST(request: Request) {
                   properties: {
                     title: { type: 'string', description: 'Task title' },
                     description: { type: 'string', description: 'Detailed task description' },
-                    status: { type: 'string', enum: ['pending', 'in_progress', 'completed'], default: 'pending' },
+                    status: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'review_required'], default: 'pending' },
                     contact_phone: { type: 'string', description: 'Associated contact phone number (international format)' },
                     due_days: { type: 'integer', description: 'Days from now until the task is due' }
                   },
@@ -198,7 +198,7 @@ export async function POST(request: Request) {
                   type: 'object',
                   properties: {
                     task_id: { type: 'string', description: 'UUID of the task to update' },
-                    status: { type: 'string', enum: ['pending', 'in_progress', 'completed'], description: 'New status for the task' },
+                    status: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'review_required'], description: 'New status for the task' },
                     title: { type: 'string', description: 'Updated task title' },
                     description: { type: 'string', description: 'Updated detailed description' },
                     due_days: { type: 'integer', description: 'Reschedule task due date (days from now)' },
@@ -396,7 +396,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
       // ponytail: data minimization — select essential task fields & minimal relations
       let builder = admin
         .from('tasks')
-        .select('id, title, description, status, due_at, created_at, updated_at, contact:contacts(name, phone), assigned_agent:profiles!assigned_agent_id(full_name, email)')
+        .select('id, title, description, status, due_at, completed_at, created_at, updated_at, contact:contacts(name, phone), assigned_agent:profiles!assigned_agent_id(full_name, email)')
         .eq('account_id', accountId)
         .order('due_at', { ascending: true, nullsFirst: false })
         .limit(50);
@@ -456,16 +456,20 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         dueAt = d.toISOString();
       }
 
+      const initialStatus = status || 'pending';
+      const completedAt = initialStatus === 'completed' ? new Date().toISOString() : null;
+
       const { data, error } = await admin
         .from('tasks')
         .insert({
           account_id: accountId,
           title: title.trim(),
           description: description?.trim() || null,
-          status: status || 'pending',
+          status: initialStatus,
           contact_id: contactId,
           conversation_id: conversationId,
           due_at: dueAt,
+          completed_at: completedAt,
         })
         .select()
         .single();
@@ -505,9 +509,14 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
       if (status) {
         if (!['pending', 'in_progress', 'completed', 'review_required'].includes(status)) {
-          throw new Error('Invalid status. Allowed values: pending, in_progress, completed.');
+          throw new Error('Invalid status. Allowed values: pending, in_progress, completed, review_required.');
         }
         updates.status = status;
+        if (status === 'completed') {
+          updates.completed_at = new Date().toISOString();
+        } else {
+          updates.completed_at = null;
+        }
       }
 
       if (title !== undefined) {
@@ -555,7 +564,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         .update(updates)
         .eq('id', task_id)
         .eq('account_id', accountId)
-        .select('id, title, description, status, due_at, updated_at')
+        .select('id, title, description, status, due_at, completed_at, updated_at')
         .single();
 
       if (updateError) throw updateError;

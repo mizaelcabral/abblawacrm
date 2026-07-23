@@ -63,11 +63,11 @@ const GEMINI_TOOLS = [
       },
       {
         name: 'list_tasks',
-        description: "List tasks. Supports optional status filter ('pending', 'in_progress', 'completed').",
+        description: "List tasks. Supports optional status filter ('pending', 'in_progress', 'completed', 'review_required').",
         parameters: {
           type: 'OBJECT',
           properties: {
-            status: { type: 'STRING', description: 'Filter tasks by status' }
+            status: { type: 'STRING', description: 'Filter tasks by status (pending, in_progress, completed, review_required)' }
           }
         }
       },
@@ -78,7 +78,7 @@ const GEMINI_TOOLS = [
           type: 'OBJECT',
           properties: {
             task_id: { type: 'STRING', description: 'UUID of the task to update' },
-            status: { type: 'STRING', description: 'New status for the task (pending, in_progress, completed)' },
+            status: { type: 'STRING', description: 'New status for the task (pending, in_progress, completed, review_required)' },
             title: { type: 'STRING', description: 'Updated task title' },
             description: { type: 'STRING', description: 'Updated detailed description' },
             due_days: { type: 'INTEGER', description: 'Reschedule task due date (days from now)' },
