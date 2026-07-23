@@ -248,7 +248,11 @@ CREATE POLICY "Checklist delete" ON public.checklist_items FOR DELETE USING (is_
 
 -- 9. Trigger PL/pgSQL de Validação Estrita de Multi-Tenant (8 Vínculos)
 CREATE OR REPLACE FUNCTION public.validate_document_and_checklist_accounts()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
 BEGIN
   -- Validar Document
   IF TG_TABLE_NAME = 'documents' THEN
@@ -257,6 +261,13 @@ BEGIN
     END IF;
     IF NEW.deal_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public.deals WHERE id = NEW.deal_id AND account_id = NEW.account_id) THEN
       RAISE EXCEPTION 'deal_id pertence a outra conta';
+    END IF;
+  END IF;
+
+  -- Validar Document Version
+  IF TG_TABLE_NAME = 'document_versions' THEN
+    IF NOT EXISTS (SELECT 1 FROM public.documents WHERE id = NEW.document_id AND account_id = NEW.account_id) THEN
+      RAISE EXCEPTION 'document_id da versão pertence a outra conta';
     END IF;
   END IF;
 
@@ -275,11 +286,16 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS trg_validate_documents_account ON public.documents;
 CREATE TRIGGER trg_validate_documents_account
   BEFORE INSERT OR UPDATE ON public.documents
+  FOR EACH ROW EXECUTE FUNCTION public.validate_document_and_checklist_accounts();
+
+DROP TRIGGER IF EXISTS trg_validate_document_versions_account ON public.document_versions;
+CREATE TRIGGER trg_validate_document_versions_account
+  BEFORE INSERT OR UPDATE ON public.document_versions
   FOR EACH ROW EXECUTE FUNCTION public.validate_document_and_checklist_accounts();
 
 DROP TRIGGER IF EXISTS trg_validate_checklist_account ON public.checklist_items;
@@ -289,7 +305,11 @@ CREATE TRIGGER trg_validate_checklist_account
 
 -- 10. Trigger de Gravação Automática de Histórico de Status
 CREATE OR REPLACE FUNCTION public.log_document_status_change()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
 BEGIN
   IF TG_OP = 'INSERT' OR (TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status) THEN
     INSERT INTO public.document_status_history (
@@ -312,9 +332,30 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 DROP TRIGGER IF EXISTS trg_log_document_status_change ON public.documents;
 CREATE TRIGGER trg_log_document_status_change
   AFTER INSERT OR UPDATE ON public.documents
   FOR EACH ROW EXECUTE FUNCTION public.log_document_status_change();
+
+-- 11. Trigger de Trava de Retenção Legal (Impedir DELETE físico durante retenção)
+CREATE OR REPLACE FUNCTION public.prevent_document_delete_during_retention()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+BEGIN
+  IF OLD.retention_until IS NOT NULL AND OLD.retention_until > NOW() THEN
+    RAISE EXCEPTION 'Exclusão recusada: Documento sob período obrigatório de retenção legal até %', OLD.retention_until;
+  END IF;
+  RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_prevent_document_delete_during_retention ON public.documents;
+CREATE TRIGGER trg_prevent_document_delete_during_retention
+  BEFORE DELETE ON public.documents
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_document_delete_during_retention();
+

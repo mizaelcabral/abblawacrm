@@ -413,6 +413,17 @@ export async function POST(request: Request) {
                   },
                   required: ['id']
                 }
+              },
+              {
+                name: 'list_checklist_items',
+                description: 'Lista os itens de checklist da conta com filtros opcionais por negócio (deal_id) e status.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    deal_id: { type: 'string', description: 'Filtrar por UUID do negócio' },
+                    status: { type: 'string', enum: ['pending', 'in_review', 'approved', 'rejected', 'waived'], description: 'Filtrar por status' }
+                  }
+                }
               }
             ],
           },
@@ -1787,6 +1798,32 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           {
             type: 'text',
             text: JSON.stringify(updatedItem, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'list_checklist_items': {
+      const { deal_id, status } = args;
+
+      let query = admin
+        .from('checklist_items')
+        .select('id, account_id, deal_id, contact_id, title, requirement_type, is_required, status, due_date, assigned_user_id, document_id, notes, created_at, updated_at')
+        .eq('account_id', accountId)
+        .eq('is_archived', false)
+        .order('created_at', { ascending: true });
+
+      if (deal_id) query = query.eq('deal_id', deal_id);
+      if (status) query = query.eq('status', status);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(data, null, 2),
           },
         ],
       };
