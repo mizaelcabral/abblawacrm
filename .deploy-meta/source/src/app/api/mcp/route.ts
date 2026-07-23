@@ -811,7 +811,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
       const { name, stages: customStages } = args;
       if (!name?.trim()) throw new Error('Pipeline name is required.');
 
-      // ponytail: insert pipeline filtered by account_id
+      // ponytail: insert pipeline filtered by account_id and select minimized fields
       const { data: pipeline, error: pErr } = await admin
         .from('pipelines')
         .insert({
@@ -819,7 +819,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           user_id: creatorUserId,
           name: name.trim(),
         })
-        .select()
+        .select('id, name, created_at')
         .single();
 
       if (pErr) throw pErr;
@@ -838,7 +838,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
       const { data: stages, error: sErr } = await admin
         .from('pipeline_stages')
         .insert(stageRows)
-        .select()
+        .select('id, name, position, color')
         .order('position', { ascending: true });
 
       if (sErr) throw sErr;
@@ -847,7 +847,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         content: [
           {
             type: 'text',
-            text: `Pipeline created successfully:\n${JSON.stringify({ pipeline, stages }, null, 2)}`,
+            text: `Pipeline created successfully:\n${JSON.stringify({ ...pipeline, stages }, null, 2)}`,
           },
         ],
       };
@@ -886,7 +886,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           color: color || '#3b82f6',
           position: pos,
         })
-        .select()
+        .select('id, pipeline_id, name, color, position, created_at')
         .single();
 
       if (stgErr) throw stgErr;
@@ -949,7 +949,16 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         if (!agent) throw new Error('Assigned agent does not belong to this account.');
       }
 
-      // ponytail: insert deal with account_id and author user_id
+      // ponytail: fetch account default_currency with BRL fallback
+      const { data: acc } = await admin
+        .from('accounts')
+        .select('default_currency')
+        .eq('id', accountId)
+        .maybeSingle();
+
+      const accountCurrency = acc?.default_currency || 'BRL';
+
+      // ponytail: insert deal with account default currency and select minimized fields
       const { data: deal, error: dErr } = await admin
         .from('deals')
         .insert({
@@ -959,13 +968,14 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           stage_id,
           title: title.trim(),
           value: value != null ? Number(value) : 0,
+          currency: accountCurrency,
           contact_id: contactId,
           assigned_to: assigned_to || null,
           notes: notes?.trim() || null,
           expected_close_date: expected_close_date || null,
           status: 'open',
         })
-        .select()
+        .select('id, title, value, currency, status, pipeline_id, stage_id, expected_close_date, notes, created_at, updated_at')
         .single();
 
       if (dErr) throw dErr;
@@ -1037,7 +1047,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         .update(updates)
         .eq('id', deal_id)
         .eq('account_id', accountId)
-        .select()
+        .select('id, title, value, currency, status, pipeline_id, stage_id, expected_close_date, notes, created_at, updated_at')
         .single();
 
       if (uErr) throw uErr;
@@ -1065,6 +1075,18 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
       if (!existingDeal) throw new Error('Deal not found or access denied.');
 
+      // ponytail: prevent redundant move if deal is already in requested stage
+      if (existingDeal.stage_id === stage_id) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'Deal is already in this stage. No changes were made.',
+            },
+          ],
+        };
+      }
+
       // Verify destination stage belongs to the same pipeline
       const { data: targetStage } = await admin
         .from('pipeline_stages')
@@ -1077,15 +1099,27 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
       const oldStageId = existingDeal.stage_id;
 
+      // ponytail: atomic update with neq(stage_id) for concurrency safety
       const { data: movedDeal, error: mErr } = await admin
         .from('deals')
         .update({ stage_id, updated_at: new Date().toISOString() })
         .eq('id', deal_id)
         .eq('account_id', accountId)
-        .select()
-        .single();
+        .neq('stage_id', stage_id)
+        .select('id, title, value, currency, status, pipeline_id, stage_id, expected_close_date, notes, created_at, updated_at')
+        .maybeSingle();
 
       if (mErr) throw mErr;
+      if (!movedDeal) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'Deal is already in this stage. No changes were made.',
+            },
+          ],
+        };
+      }
 
       // ponytail: log stage movement history
       await admin.from('deal_stage_history').insert({
