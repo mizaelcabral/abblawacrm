@@ -527,11 +527,15 @@ export async function handleToolCall(name: string, args: any, accountId: string)
 
       if (pError) throw pError;
 
-      const { data: stages, error: sError } = await admin
-        .from('pipeline_stages')
-        .select('id, name, pipeline_id, position')
-        .eq('account_id', accountId)
-        .order('position', { ascending: true });
+      // ponytail: filter stages via pipeline_id as pipeline_stages doesn't have account_id
+      const pIds = (pipelines || []).map((p) => p.id);
+      const { data: stages, error: sError } = pIds.length > 0
+        ? await admin
+            .from('pipeline_stages')
+            .select('id, name, pipeline_id, position')
+            .in('pipeline_id', pIds)
+            .order('position', { ascending: true })
+        : { data: [], error: null };
 
       if (sError) throw sError;
 
