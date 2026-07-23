@@ -230,6 +230,90 @@ export async function POST(request: Request) {
                 }
               },
               {
+                name: 'create_pipeline',
+                description: 'Create a new sales pipeline with custom or default stages.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    name: { type: 'string', description: 'Pipeline name (e.g. Vendas B2B, Atendimento RDC 660)' },
+                    stages: { type: 'array', items: { type: 'string' }, description: 'Optional list of initial stage names in sequence order' }
+                  },
+                  required: ['name']
+                }
+              },
+              {
+                name: 'create_pipeline_stage',
+                description: 'Add a new stage to an existing sales pipeline.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    pipeline_id: { type: 'string', description: 'UUID of the target pipeline' },
+                    name: { type: 'string', description: 'Stage name' },
+                    color: { type: 'string', description: 'Hex color code (e.g. #3b82f6)' },
+                    position: { type: 'integer', description: 'Optional numerical sequence position' }
+                  },
+                  required: ['pipeline_id', 'name']
+                }
+              },
+              {
+                name: 'create_deal',
+                description: 'Create a new deal inside a pipeline and stage.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    pipeline_id: { type: 'string', description: 'UUID of the target pipeline' },
+                    stage_id: { type: 'string', description: 'UUID of the target stage' },
+                    title: { type: 'string', description: 'Deal title or lead name' },
+                    value: { type: 'number', description: 'Monetary value of the deal' },
+                    contact_phone: { type: 'string', description: 'Associated contact phone number (international format)' },
+                    assigned_to: { type: 'string', description: 'UUID of assigned agent profile' },
+                    notes: { type: 'string', description: 'Additional deal notes' },
+                    expected_close_date: { type: 'string', description: 'Expected close date (YYYY-MM-DD)' }
+                  },
+                  required: ['pipeline_id', 'stage_id', 'title']
+                }
+              },
+              {
+                name: 'update_deal',
+                description: 'Update deal details (title, value, status, notes, assigned agent, expected close date).',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    deal_id: { type: 'string', description: 'UUID of the deal to update' },
+                    title: { type: 'string', description: 'Updated title' },
+                    value: { type: 'number', description: 'Updated monetary value' },
+                    status: { type: 'string', enum: ['open', 'won', 'lost'], description: 'Deal status' },
+                    notes: { type: 'string', description: 'Updated notes' },
+                    assigned_to: { type: 'string', description: 'UUID of assigned agent profile' },
+                    expected_close_date: { type: 'string', description: 'Expected close date (YYYY-MM-DD)' }
+                  },
+                  required: ['deal_id']
+                }
+              },
+              {
+                name: 'move_deal',
+                description: 'Move a deal to a new stage within the pipeline and log movement history.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    deal_id: { type: 'string', description: 'UUID of the deal to move' },
+                    stage_id: { type: 'string', description: 'UUID of the destination stage' }
+                  },
+                  required: ['deal_id', 'stage_id']
+                }
+              },
+              {
+                name: 'list_deal_history',
+                description: 'List stage movement timeline and time-in-stage history for a deal.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    deal_id: { type: 'string', description: 'UUID of the deal' }
+                  },
+                  required: ['deal_id']
+                }
+              },
+              {
                 name: 'search_store_products',
                 description: 'Search active products in the store catalog.',
                 inputSchema: {
@@ -744,6 +828,337 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           {
             type: 'text',
             text: JSON.stringify({ pipelines, stages, deals }, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'create_pipeline': {
+      const { name, stages: customStages } = args;
+      if (!name?.trim()) throw new Error('Pipeline name is required.');
+
+      // ponytail: insert pipeline filtered by account_id
+      const { data: pipeline, error: pErr } = await admin
+        .from('pipelines')
+        .insert({
+          account_id: accountId,
+          user_id: creatorUserId,
+          name: name.trim(),
+        })
+        .select()
+        .single();
+
+      if (pErr) throw pErr;
+
+      const stageNames = Array.isArray(customStages) && customStages.length > 0
+        ? customStages
+        : ['Novo Lead', 'Qualificado', 'Proposta Enviada', 'Negociação', 'Ganho'];
+
+      const stageRows = stageNames.map((sName: string, idx: number) => ({
+        pipeline_id: pipeline.id,
+        name: String(sName).trim(),
+        position: idx,
+        color: ['#3b82f6', '#eab308', '#f97316', '#8b5cf6', '#22c55e'][idx % 5] || '#3b82f6',
+      }));
+
+      const { data: stages, error: sErr } = await admin
+        .from('pipeline_stages')
+        .insert(stageRows)
+        .select()
+        .order('position', { ascending: true });
+
+      if (sErr) throw sErr;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Pipeline created successfully:\n${JSON.stringify({ pipeline, stages }, null, 2)}`,
+          },
+        ],
+      };
+    }
+
+    case 'create_pipeline_stage': {
+      const { pipeline_id, name, color, position } = args;
+      if (!pipeline_id || !name?.trim()) throw new Error('pipeline_id and name are required.');
+
+      // Verify pipeline belongs to account
+      const { data: pipeline } = await admin
+        .from('pipelines')
+        .select('id')
+        .eq('id', pipeline_id)
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (!pipeline) throw new Error('Pipeline not found or access denied.');
+
+      let pos = position;
+      if (pos == null) {
+        const { data: existingStages } = await admin
+          .from('pipeline_stages')
+          .select('position')
+          .eq('pipeline_id', pipeline_id)
+          .order('position', { ascending: false })
+          .limit(1);
+        pos = existingStages && existingStages.length > 0 ? existingStages[0].position + 1 : 0;
+      }
+
+      const { data: stage, error: stgErr } = await admin
+        .from('pipeline_stages')
+        .insert({
+          pipeline_id,
+          name: name.trim(),
+          color: color || '#3b82f6',
+          position: pos,
+        })
+        .select()
+        .single();
+
+      if (stgErr) throw stgErr;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Pipeline stage created successfully:\n${JSON.stringify(stage, null, 2)}`,
+          },
+        ],
+      };
+    }
+
+    case 'create_deal': {
+      const { pipeline_id, stage_id, title, value, contact_phone, assigned_to, notes, expected_close_date } = args;
+      if (!pipeline_id || !stage_id || !title?.trim()) {
+        throw new Error('pipeline_id, stage_id, and title are required.');
+      }
+
+      // Verify pipeline belongs to account
+      const { data: pipeline } = await admin
+        .from('pipelines')
+        .select('id')
+        .eq('id', pipeline_id)
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (!pipeline) throw new Error('Pipeline not found or access denied.');
+
+      // Verify stage belongs to pipeline
+      const { data: stage } = await admin
+        .from('pipeline_stages')
+        .select('id')
+        .eq('id', stage_id)
+        .eq('pipeline_id', pipeline_id)
+        .maybeSingle();
+
+      if (!stage) throw new Error('Stage not found in specified pipeline.');
+
+      let contactId: string | null = null;
+      if (contact_phone) {
+        const sanitizedPhone = sanitizePhoneForMeta(contact_phone);
+        const { data: contact } = await admin
+          .from('contacts')
+          .select('id')
+          .eq('account_id', accountId)
+          .eq('phone', sanitizedPhone)
+          .maybeSingle();
+        if (contact) contactId = contact.id;
+      }
+
+      if (assigned_to) {
+        const { data: agent } = await admin
+          .from('profiles')
+          .select('user_id')
+          .eq('account_id', accountId)
+          .eq('user_id', assigned_to)
+          .maybeSingle();
+        if (!agent) throw new Error('Assigned agent does not belong to this account.');
+      }
+
+      // ponytail: insert deal with account_id and author user_id
+      const { data: deal, error: dErr } = await admin
+        .from('deals')
+        .insert({
+          account_id: accountId,
+          user_id: creatorUserId,
+          pipeline_id,
+          stage_id,
+          title: title.trim(),
+          value: value != null ? Number(value) : 0,
+          contact_id: contactId,
+          assigned_to: assigned_to || null,
+          notes: notes?.trim() || null,
+          expected_close_date: expected_close_date || null,
+          status: 'open',
+        })
+        .select()
+        .single();
+
+      if (dErr) throw dErr;
+
+      // Log initial stage entry in history
+      await admin.from('deal_stage_history').insert({
+        account_id: accountId,
+        deal_id: deal.id,
+        from_stage_id: null,
+        to_stage_id: stage_id,
+        user_id: creatorUserId,
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Deal created successfully:\n${JSON.stringify(deal, null, 2)}`,
+          },
+        ],
+      };
+    }
+
+    case 'update_deal': {
+      const { deal_id, title, value, status, notes, assigned_to, expected_close_date } = args;
+      if (!deal_id) throw new Error('deal_id is required.');
+
+      const { data: existingDeal } = await admin
+        .from('deals')
+        .select('id')
+        .eq('id', deal_id)
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (!existingDeal) throw new Error('Deal not found or access denied.');
+
+      const updates: Record<string, any> = {};
+      if (title !== undefined) {
+        if (!title.trim()) throw new Error('Title cannot be empty.');
+        updates.title = title.trim();
+      }
+      if (value !== undefined) updates.value = Number(value);
+      if (status !== undefined) {
+        if (!['open', 'won', 'lost'].includes(status)) throw new Error('Invalid status. Allowed: open, won, lost.');
+        updates.status = status;
+      }
+      if (notes !== undefined) updates.notes = notes?.trim() || null;
+      if (expected_close_date !== undefined) updates.expected_close_date = expected_close_date || null;
+
+      if (assigned_to !== undefined) {
+        if (assigned_to) {
+          const { data: agent } = await admin
+            .from('profiles')
+            .select('user_id')
+            .eq('account_id', accountId)
+            .eq('user_id', assigned_to)
+            .maybeSingle();
+          if (!agent) throw new Error('Assigned agent does not belong to this account.');
+          updates.assigned_to = assigned_to;
+        } else {
+          updates.assigned_to = null;
+        }
+      }
+
+      if (Object.keys(updates).length === 0) throw new Error('No valid fields provided for update.');
+
+      const { data: updatedDeal, error: uErr } = await admin
+        .from('deals')
+        .update(updates)
+        .eq('id', deal_id)
+        .eq('account_id', accountId)
+        .select()
+        .single();
+
+      if (uErr) throw uErr;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Deal updated successfully:\n${JSON.stringify(updatedDeal, null, 2)}`,
+          },
+        ],
+      };
+    }
+
+    case 'move_deal': {
+      const { deal_id, stage_id } = args;
+      if (!deal_id || !stage_id) throw new Error('deal_id and stage_id are required.');
+
+      const { data: existingDeal } = await admin
+        .from('deals')
+        .select('id, pipeline_id, stage_id')
+        .eq('id', deal_id)
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (!existingDeal) throw new Error('Deal not found or access denied.');
+
+      // Verify destination stage belongs to the same pipeline
+      const { data: targetStage } = await admin
+        .from('pipeline_stages')
+        .select('id')
+        .eq('id', stage_id)
+        .eq('pipeline_id', existingDeal.pipeline_id)
+        .maybeSingle();
+
+      if (!targetStage) throw new Error('Target stage does not belong to the deal pipeline.');
+
+      const oldStageId = existingDeal.stage_id;
+
+      const { data: movedDeal, error: mErr } = await admin
+        .from('deals')
+        .update({ stage_id, updated_at: new Date().toISOString() })
+        .eq('id', deal_id)
+        .eq('account_id', accountId)
+        .select()
+        .single();
+
+      if (mErr) throw mErr;
+
+      // ponytail: log stage movement history
+      await admin.from('deal_stage_history').insert({
+        account_id: accountId,
+        deal_id,
+        from_stage_id: oldStageId,
+        to_stage_id: stage_id,
+        user_id: creatorUserId,
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Deal moved successfully:\n${JSON.stringify(movedDeal, null, 2)}`,
+          },
+        ],
+      };
+    }
+
+    case 'list_deal_history': {
+      const { deal_id } = args;
+      if (!deal_id) throw new Error('deal_id is required.');
+
+      const { data: existingDeal } = await admin
+        .from('deals')
+        .select('id, title')
+        .eq('id', deal_id)
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (!existingDeal) throw new Error('Deal not found or access denied.');
+
+      const { data: history, error: hErr } = await admin
+        .from('deal_stage_history')
+        .select('id, from_stage:pipeline_stages!from_stage_id(name), to_stage:pipeline_stages!to_stage_id(name), user:profiles!user_id(full_name), entered_at')
+        .eq('deal_id', deal_id)
+        .eq('account_id', accountId)
+        .order('entered_at', { ascending: true });
+
+      if (hErr) throw hErr;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ deal: existingDeal, history }, null, 2),
           },
         ],
       };

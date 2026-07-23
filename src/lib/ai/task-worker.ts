@@ -109,6 +109,90 @@ const GEMINI_TOOLS = [
         }
       },
       {
+        name: 'create_pipeline',
+        description: 'Create a new sales pipeline with custom or default stages.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            name: { type: 'STRING', description: 'Pipeline name' },
+            stages: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Optional initial stage names in order' }
+          },
+          required: ['name']
+        }
+      },
+      {
+        name: 'create_pipeline_stage',
+        description: 'Add a new stage to an existing sales pipeline.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            pipeline_id: { type: 'STRING', description: 'UUID of the target pipeline' },
+            name: { type: 'STRING', description: 'Stage name' },
+            color: { type: 'STRING', description: 'Hex color code' },
+            position: { type: 'INTEGER', description: 'Optional numerical position' }
+          },
+          required: ['pipeline_id', 'name']
+        }
+      },
+      {
+        name: 'create_deal',
+        description: 'Create a new deal inside a pipeline and stage.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            pipeline_id: { type: 'STRING', description: 'UUID of the target pipeline' },
+            stage_id: { type: 'STRING', description: 'UUID of the target stage' },
+            title: { type: 'STRING', description: 'Deal title or lead name' },
+            value: { type: 'NUMBER', description: 'Monetary value of the deal' },
+            contact_phone: { type: 'STRING', description: 'Associated contact phone number' },
+            assigned_to: { type: 'STRING', description: 'UUID of assigned agent profile' },
+            notes: { type: 'STRING', description: 'Additional deal notes' },
+            expected_close_date: { type: 'STRING', description: 'Expected close date (YYYY-MM-DD)' }
+          },
+          required: ['pipeline_id', 'stage_id', 'title']
+        }
+      },
+      {
+        name: 'update_deal',
+        description: 'Update deal details (title, value, status, notes, assigned agent, expected close date).',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            deal_id: { type: 'STRING', description: 'UUID of the deal to update' },
+            title: { type: 'STRING', description: 'Updated title' },
+            value: { type: 'NUMBER', description: 'Updated monetary value' },
+            status: { type: 'STRING', description: 'Deal status (open, won, lost)' },
+            notes: { type: 'STRING', description: 'Updated notes' },
+            assigned_to: { type: 'STRING', description: 'UUID of assigned agent profile' },
+            expected_close_date: { type: 'STRING', description: 'Expected close date (YYYY-MM-DD)' }
+          },
+          required: ['deal_id']
+        }
+      },
+      {
+        name: 'move_deal',
+        description: 'Move a deal to a new stage within the pipeline and log movement history.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            deal_id: { type: 'STRING', description: 'UUID of the deal to move' },
+            stage_id: { type: 'STRING', description: 'UUID of the destination stage' }
+          },
+          required: ['deal_id', 'stage_id']
+        }
+      },
+      {
+        name: 'list_deal_history',
+        description: 'List stage movement timeline and time-in-stage history for a deal.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            deal_id: { type: 'STRING', description: 'UUID of the deal' }
+          },
+          required: ['deal_id']
+        }
+      },
+      {
         name: 'search_store_products',
         description: 'Search active products in the store catalog. Optional query parameter to filter by name or description.',
         parameters: {
