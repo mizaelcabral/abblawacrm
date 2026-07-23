@@ -539,11 +539,12 @@ export async function handleToolCall(name: string, args: any, accountId: string)
 
       if (sError) throw sError;
 
+      // ponytail: deals table uses title (not name) and created_at (not position)
       const { data: deals, error: dError } = await admin
         .from('deals')
-        .select('id, name, stage_id, value, currency, contact_id')
+        .select('id, title, stage_id, value, currency, contact_id')
         .eq('account_id', accountId)
-        .order('position', { ascending: true });
+        .order('created_at', { ascending: false });
 
       if (dError) throw dError;
 
