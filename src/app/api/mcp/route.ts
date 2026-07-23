@@ -425,6 +425,69 @@ export async function POST(request: Request) {
                     status: { type: 'string', enum: ['pending', 'in_review', 'approved', 'rejected', 'waived'], description: 'Filtrar por status' }
                   }
                 }
+              },
+              {
+                name: 'create_external_process',
+                description: 'Registra um novo processo externo (Anvisa, licença, processo judicial, crédito, etc.) vinculado a um negócio.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    deal_id: { type: 'string', description: 'UUID do negócio associado' },
+                    process_type: { type: 'string', description: 'Tipo de processo (ex: anvisa_authorization, court_process, credit_analysis)' },
+                    authority_name: { type: 'string', description: 'Nome do órgão ou entidade externa (ex: Anvisa, Seguradora X, TJSP)' },
+                    contact_id: { type: 'string', description: 'UUID do contato associado (opcional)' },
+                    protocol_number: { type: 'string', description: 'Número do protocolo externo' },
+                    external_reference: { type: 'string', description: 'Referência externa ou link' },
+                    notes: { type: 'string', description: 'Observações administrativas (sem dados sensíveis ou clínicos)' },
+                    assigned_user_id: { type: 'string', description: 'UUID do usuário responsável' },
+                    requirement_due_at: { type: 'string', description: 'Prazo para atendimento de exigência (ISO8601)' },
+                    valid_until: { type: 'string', description: 'Data de validade do parecer/autorização (ISO8601)' }
+                  },
+                  required: ['deal_id', 'process_type', 'authority_name']
+                }
+              },
+              {
+                name: 'update_external_process',
+                description: 'Atualiza o status, protocolo ou observações de um processo externo existente com validação de transição.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string', description: 'UUID do processo externo' },
+                    status: { type: 'string', enum: ['draft', 'submitted', 'under_review', 'requirement', 'approved', 'denied', 'cancelled', 'expired'], description: 'Novo status' },
+                    protocol_number: { type: 'string', description: 'Número do protocolo externo (obrigatório se status=submitted)' },
+                    requirement_due_at: { type: 'string', description: 'Prazo limite da exigência (ISO8601)' },
+                    valid_until: { type: 'string', description: 'Validade do deferimento (ISO8601)' },
+                    notes: { type: 'string', description: 'Observações/motivo (obrigatório se status=requirement, denied ou cancelled)' },
+                    external_reference: { type: 'string', description: 'Chave ou link de acompanhamento externo' },
+                    approved_document_id: { type: 'string', description: 'UUID de documento aprovado associado no CRM' },
+                    assigned_user_id: { type: 'string', description: 'UUID do usuário responsável' }
+                  },
+                  required: ['id']
+                }
+              },
+              {
+                name: 'list_external_processes',
+                description: 'Lista os processos externos da conta com filtros por negócio, contato, tipo ou status.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    deal_id: { type: 'string', description: 'Filtrar por UUID do negócio' },
+                    contact_id: { type: 'string', description: 'Filtrar por UUID do contato' },
+                    process_type: { type: 'string', description: 'Filtrar por tipo de processo' },
+                    status: { type: 'string', enum: ['draft', 'submitted', 'under_review', 'requirement', 'approved', 'denied', 'cancelled', 'expired'], description: 'Filtrar por status' }
+                  }
+                }
+              },
+              {
+                name: 'list_external_process_history',
+                description: 'Lista o histórico imutável de transições de status de um processo externo específico.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    process_id: { type: 'string', description: 'UUID do processo externo' }
+                  },
+                  required: ['process_id']
+                }
               }
             ],
           },
@@ -591,6 +654,106 @@ async function formatChecklistResponse(admin: any, item: any) {
     ...(dealRes ? { deal: dealRes } : {}),
     ...(docRes ? { document: docRes } : {}),
     ...(assignedUserRes ? { assigned_user: assignedUserRes } : {}),
+  };
+}
+
+async function formatExternalProcessResponse(admin: any, proc: any) {
+  if (!proc) return null;
+
+  let dealRes: { id: string; title: string } | undefined = undefined;
+  if (proc.deal_id) {
+    const { data: deal } = await admin
+      .from('deals')
+      .select('id, title')
+      .eq('id', proc.deal_id)
+      .maybeSingle();
+    if (deal) dealRes = { id: deal.id, title: deal.title };
+  }
+
+  let contactRes: { id: string; name: string } | undefined = undefined;
+  if (proc.contact_id) {
+    const { data: contact } = await admin
+      .from('contacts')
+      .select('id, name')
+      .eq('id', proc.contact_id)
+      .maybeSingle();
+    if (contact) contactRes = { id: contact.id, name: contact.name };
+  }
+
+  let assignedUserRes: { name: string } | undefined = undefined;
+  if (proc.assigned_user_id) {
+    const { data: aProfile } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('user_id', proc.assigned_user_id)
+      .maybeSingle();
+    if (aProfile) assignedUserRes = { name: aProfile.full_name };
+  }
+
+  let createdByUserRes: { name: string } | undefined = undefined;
+  if (proc.created_by_user_id) {
+    const { data: cProfile } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('user_id', proc.created_by_user_id)
+      .maybeSingle();
+    if (cProfile) createdByUserRes = { name: cProfile.full_name };
+  }
+
+  let approvedDocRes: { id: string; display_name: string; status: string } | undefined = undefined;
+  if (proc.approved_document_id) {
+    const { data: doc } = await admin
+      .from('documents')
+      .select('id, display_name, status')
+      .eq('id', proc.approved_document_id)
+      .maybeSingle();
+    if (doc) approvedDocRes = { id: doc.id, display_name: doc.display_name, status: doc.status };
+  }
+
+  return {
+    id: proc.id,
+    process_type: proc.process_type,
+    authority_name: proc.authority_name,
+    protocol_number: proc.protocol_number || null,
+    status: proc.status,
+    submitted_at: proc.submitted_at || null,
+    last_status_at: proc.last_status_at,
+    requirement_due_at: proc.requirement_due_at || null,
+    decision_at: proc.decision_at || null,
+    valid_until: proc.valid_until || null,
+    external_reference: proc.external_reference || null,
+    notes: proc.notes || null,
+    created_at: proc.created_at,
+    updated_at: proc.updated_at,
+    ...(dealRes ? { deal: dealRes } : {}),
+    ...(contactRes ? { contact: contactRes } : {}),
+    ...(assignedUserRes ? { assigned_user: assignedUserRes } : {}),
+    ...(createdByUserRes ? { created_by_user: createdByUserRes } : {}),
+    ...(approvedDocRes ? { approved_document: approvedDocRes } : {}),
+  };
+}
+
+async function formatExternalProcessHistoryResponse(admin: any, historyItem: any) {
+  if (!historyItem) return null;
+
+  let changedByName: string | undefined = undefined;
+  if (historyItem.changed_by_user_id) {
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('user_id', historyItem.changed_by_user_id)
+      .maybeSingle();
+    if (profile) changedByName = profile.full_name;
+  }
+
+  return {
+    id: historyItem.id,
+    process_id: historyItem.process_id,
+    previous_status: historyItem.previous_status || null,
+    new_status: historyItem.new_status,
+    reason_or_notes: historyItem.reason_or_notes || null,
+    created_at: historyItem.created_at,
+    ...(changedByName ? { changed_by_name: changedByName } : {}),
   };
 }
 
@@ -2005,6 +2168,276 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           {
             type: 'text',
             text: JSON.stringify(formattedList, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'create_external_process': {
+      const {
+        deal_id,
+        process_type,
+        authority_name,
+        contact_id,
+        protocol_number,
+        external_reference,
+        notes,
+        assigned_user_id,
+        requirement_due_at,
+        valid_until,
+      } = args;
+
+      const { data: deal } = await admin
+        .from('deals')
+        .select('id, contact_id')
+        .eq('id', deal_id)
+        .eq('account_id', accountId)
+        .maybeSingle();
+      if (!deal) throw new Error('Negócio especificado não pertence a esta conta.');
+
+      let resolvedContactId = contact_id || deal.contact_id || null;
+      if (contact_id) {
+        const { data: contact } = await admin
+          .from('contacts')
+          .select('id')
+          .eq('id', contact_id)
+          .eq('account_id', accountId)
+          .maybeSingle();
+        if (!contact) throw new Error('Contato especificado não pertence a esta conta.');
+      }
+
+      if (assigned_user_id) {
+        const { data: assignedProfile } = await admin
+          .from('profiles')
+          .select('user_id')
+          .eq('user_id', assigned_user_id)
+          .eq('account_id', accountId)
+          .maybeSingle();
+        if (!assignedProfile) throw new Error('Usuário responsável especificado não pertence a esta conta.');
+      }
+
+      const initialStatus = protocol_number ? 'submitted' : 'draft';
+      const submittedAt = protocol_number ? new Date().toISOString() : null;
+
+      const { data: proc, error } = await admin
+        .from('external_processes')
+        .insert({
+          account_id: accountId,
+          deal_id,
+          contact_id: resolvedContactId,
+          process_type,
+          authority_name,
+          protocol_number: protocol_number || null,
+          status: initialStatus,
+          submitted_at: submittedAt,
+          requirement_due_at: requirement_due_at || null,
+          valid_until: valid_until || null,
+          external_reference: external_reference || null,
+          notes: notes || null,
+          assigned_user_id: assigned_user_id || null,
+          created_by_user_id: creatorUserId,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const formatted = await formatExternalProcessResponse(admin, proc);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(formatted, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'update_external_process': {
+      const {
+        id: procId,
+        status,
+        protocol_number,
+        requirement_due_at,
+        valid_until,
+        notes,
+        external_reference,
+        approved_document_id,
+        assigned_user_id,
+      } = args;
+
+      const { data: existingProc } = await admin
+        .from('external_processes')
+        .select('*')
+        .eq('id', procId)
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (!existingProc) throw new Error('Processo externo não encontrado ou não pertence a esta conta.');
+
+      const updateData: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+        last_status_at: new Date().toISOString(),
+      };
+
+      if (protocol_number !== undefined) updateData.protocol_number = protocol_number;
+      if (external_reference !== undefined) updateData.external_reference = external_reference;
+      if (notes !== undefined) updateData.notes = notes;
+      if (requirement_due_at !== undefined) updateData.requirement_due_at = requirement_due_at;
+      if (valid_until !== undefined) updateData.valid_until = valid_until;
+
+      if (assigned_user_id !== undefined) {
+        if (assigned_user_id) {
+          const { data: assignedProfile } = await admin
+            .from('profiles')
+            .select('user_id')
+            .eq('user_id', assigned_user_id)
+            .eq('account_id', accountId)
+            .maybeSingle();
+          if (!assignedProfile) throw new Error('Usuário responsável especificado não pertence a esta conta.');
+        }
+        updateData.assigned_user_id = assigned_user_id;
+      }
+
+      if (approved_document_id !== undefined) {
+        if (approved_document_id) {
+          const { data: doc } = await admin
+            .from('documents')
+            .select('id')
+            .eq('id', approved_document_id)
+            .eq('account_id', accountId)
+            .maybeSingle();
+          if (!doc) throw new Error('Documento especificado não pertence a esta conta.');
+        }
+        updateData.approved_document_id = approved_document_id;
+      }
+
+      if (status) {
+        const effectiveProtocol = protocol_number !== undefined ? protocol_number : existingProc.protocol_number;
+
+        if (status === 'submitted') {
+          if (!effectiveProtocol || effectiveProtocol.trim().length < 3) {
+            throw new Error("Transição para 'submitted' exige um número de protocolo (protocol_number) preenchido.");
+          }
+          if (!existingProc.submitted_at) {
+            updateData.submitted_at = new Date().toISOString();
+          }
+        }
+
+        if (status === 'under_review') {
+          if (!existingProc.submitted_at && !updateData.submitted_at) {
+            throw new Error("Transição para 'under_review' exige que o processo já tenha sido submetido/protocolado.");
+          }
+        }
+
+        if (status === 'requirement') {
+          const effectiveNotes = notes !== undefined ? notes : existingProc.notes;
+          if (!effectiveNotes || effectiveNotes.trim().length < 3) {
+            throw new Error("Status 'requirement' exige a descrição da exigência informada em 'notes'.");
+          }
+        }
+
+        if (status === 'approved' || status === 'denied') {
+          updateData.decision_at = new Date().toISOString();
+          if (status === 'denied') {
+            const effectiveNotes = notes !== undefined ? notes : existingProc.notes;
+            if (!effectiveNotes || effectiveNotes.trim().length < 3) {
+              throw new Error("Indeferimento/Recusa ('denied') exige justificativa informada em 'notes'.");
+            }
+          }
+        }
+
+        if (status === 'cancelled') {
+          const effectiveNotes = notes !== undefined ? notes : existingProc.notes;
+          if (!effectiveNotes || effectiveNotes.trim().length < 3) {
+            throw new Error("Cancelamento de processo exige o motivo informado em 'notes'.");
+          }
+        }
+
+        updateData.status = status;
+      }
+
+      const { data: updatedProc, error } = await admin
+        .from('external_processes')
+        .update(updateData)
+        .eq('id', procId)
+        .eq('account_id', accountId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const formatted = await formatExternalProcessResponse(admin, updatedProc);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(formatted, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'list_external_processes': {
+      const { deal_id, contact_id, process_type, status } = args;
+
+      let query = admin
+        .from('external_processes')
+        .select('*')
+        .eq('account_id', accountId)
+        .eq('is_archived', false)
+        .order('updated_at', { ascending: false });
+
+      if (deal_id) query = query.eq('deal_id', deal_id);
+      if (contact_id) query = query.eq('contact_id', contact_id);
+      if (process_type) query = query.eq('process_type', process_type);
+      if (status) query = query.eq('status', status);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const formattedList = await Promise.all((data || []).map((proc: any) => formatExternalProcessResponse(admin, proc)));
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(formattedList, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'list_external_process_history': {
+      const { process_id } = args;
+
+      const { data: proc } = await admin
+        .from('external_processes')
+        .select('id')
+        .eq('id', process_id)
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (!proc) throw new Error('Processo externo não encontrado ou não pertence a esta conta.');
+
+      const { data: history, error } = await admin
+        .from('external_process_status_history')
+        .select('*')
+        .eq('process_id', process_id)
+        .eq('account_id', accountId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      const formattedHistory = await Promise.all(
+        (history || []).map((item: any) => formatExternalProcessHistoryResponse(admin, item))
+      );
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(formattedHistory, null, 2),
           },
         ],
       };

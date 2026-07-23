@@ -117,3 +117,50 @@ export interface AccountComplianceSettings {
   require_reviewer_sign: boolean;
   updated_at: string;
 }
+
+export type ExternalProcessStatus =
+  | 'draft'
+  | 'submitted'
+  | 'under_review'
+  | 'requirement'
+  | 'approved'
+  | 'denied'
+  | 'cancelled'
+  | 'expired';
+
+export interface ExternalProcess {
+  id: string;
+  account_id: string;
+  deal_id: string;
+  contact_id?: string | null;
+  approved_document_id?: string | null;
+  process_type: string;
+  authority_name: string;
+  protocol_number?: string | null;
+  status: ExternalProcessStatus;
+  submitted_at?: string | null;
+  last_status_at: string;
+  requirement_due_at?: string | null;
+  decision_at?: string | null;
+  valid_until?: string | null;
+  external_reference?: string | null;
+  notes?: string | null;
+  assigned_user_id?: string | null;
+  created_by_user_id?: string | null;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExternalProcessStatusHistory {
+  id: string;
+  account_id: string;
+  process_id: string;
+  previous_status?: string | null;
+  new_status: string;
+  changed_by_user_id?: string | null;
+  reason_or_notes?: string | null;
+  origin: string;
+  created_at: string;
+}
+
