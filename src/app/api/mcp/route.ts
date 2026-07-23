@@ -275,15 +275,16 @@ export async function handleToolCall(name: string, args: any, accountId: string)
   switch (name) {
     case 'list_contacts': {
       const query = args?.query || '';
+      // ponytail: contacts table column is name (not full_name)
       let builder = admin
         .from('contacts')
         .select('*')
         .eq('account_id', accountId)
-        .order('full_name', { ascending: true })
+        .order('name', { ascending: true })
         .limit(50);
 
       if (query) {
-        builder = builder.or(`full_name.ilike.%${query}%,phone.ilike.%${query}%`);
+        builder = builder.or(`name.ilike.%${query}%,phone.ilike.%${query}%`);
       }
 
       const { data, error } = await builder;
@@ -300,7 +301,12 @@ export async function handleToolCall(name: string, args: any, accountId: string)
     }
 
     case 'create_contact': {
-      const { full_name, phone, email } = args;
+      const { full_name, name: argName, phone, email } = args;
+      const contactName = (full_name || argName || '').trim();
+      if (!contactName) {
+        throw new Error('Contact name is required.');
+      }
+
       const sanitizedPhone = sanitizePhoneForMeta(phone);
       if (!isValidE164(sanitizedPhone)) {
         throw new Error('Invalid phone format. Please use international E.164 format (e.g. +5511999999999)');
@@ -324,11 +330,12 @@ export async function handleToolCall(name: string, args: any, accountId: string)
         };
       }
 
+      // ponytail: insert into column name (not full_name)
       const { data, error } = await admin
         .from('contacts')
         .insert({
           account_id: accountId,
-          full_name: full_name.trim(),
+          name: contactName,
           phone: sanitizedPhone,
           email: email?.trim() || null,
         })
@@ -351,7 +358,7 @@ export async function handleToolCall(name: string, args: any, accountId: string)
       const status = args?.status;
       let builder = admin
         .from('tasks')
-        .select('*, contact:contacts(full_name, phone)')
+        .select('*, contact:contacts(name, phone)')
         .eq('account_id', accountId)
         .order('due_at', { ascending: true, nullsFirst: false })
         .limit(50);
@@ -469,7 +476,7 @@ export async function handleToolCall(name: string, args: any, accountId: string)
           .from('contacts')
           .insert({
             account_id: accountId,
-            full_name: `Lead (${phone})`,
+            name: `Lead (${phone})`,
             phone: sanitizedPhone,
           })
           .select('id')
