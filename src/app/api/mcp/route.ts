@@ -179,7 +179,7 @@ export async function POST(request: Request) {
               },
               {
                 name: 'create_task',
-                description: 'Create a new task in the CRM, optionally associated with a contact.',
+                description: 'Create a new task in the CRM, optionally associated with a contact or deal.',
                 inputSchema: {
                   type: 'object',
                   properties: {
@@ -187,6 +187,7 @@ export async function POST(request: Request) {
                     description: { type: 'string', description: 'Detailed task description' },
                     status: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'review_required'], default: 'pending' },
                     contact_phone: { type: 'string', description: 'Associated contact phone number (international format)' },
+                    deal_id: { type: 'string', description: 'UUID of an associated deal/order' },
                     due_days: { type: 'integer', description: 'Days from now until the task is due' }
                   },
                   required: ['title']
@@ -194,7 +195,7 @@ export async function POST(request: Request) {
               },
               {
                 name: 'update_task',
-                description: 'Update an existing task in the CRM (change status, title, description, due date, or assigned agent).',
+                description: 'Update an existing task in the CRM (change status, title, description, due date, deal, or assigned agent).',
                 inputSchema: {
                   type: 'object',
                   properties: {
@@ -204,6 +205,7 @@ export async function POST(request: Request) {
                     description: { type: 'string', description: 'Updated detailed description' },
                     due_days: { type: 'integer', description: 'Reschedule task due date (days from now)' },
                     due_at: { type: 'string', description: 'Reschedule task due date in ISO 8601 format' },
+                    deal_id: { type: 'string', description: 'UUID of an associated deal/order (or null to unbind)' },
                     assigned_agent_id: { type: 'string', description: 'UUID of the assigned agent profile' }
                   },
                   required: ['task_id']
@@ -501,10 +503,10 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
     case 'list_tasks': {
       const status = args?.status;
-      // ponytail: data minimization — select essential task fields & minimal relations
+      // ponytail: data minimization — select essential task fields & minimal relations (contact, deal, agent)
       let builder = admin
         .from('tasks')
-        .select('id, title, description, status, due_at, completed_at, created_at, updated_at, contact:contacts(name, phone), assigned_agent:profiles!assigned_agent_id(full_name, email)')
+        .select('id, title, description, status, due_at, completed_at, created_at, updated_at, contact:contacts(name, phone), deal:deals(id, title), assigned_agent:profiles!assigned_agent_id(full_name, email)')
         .eq('account_id', accountId)
         .order('due_at', { ascending: true, nullsFirst: false })
         .limit(50);
@@ -527,10 +529,28 @@ export async function handleToolCall(name: string, args: any, accountId: string,
     }
 
     case 'create_task': {
-      const { title, description, status, contact_phone, due_days } = args;
+      const { title, description, status, contact_phone, deal_id, due_days } = args;
 
       let contactId: string | null = null;
       let conversationId: string | null = null;
+      let targetDealId: string | null = null;
+
+      if (deal_id) {
+        const { data: deal } = await admin
+          .from('deals')
+          .select('id, contact_id')
+          .eq('id', deal_id)
+          .eq('account_id', accountId)
+          .maybeSingle();
+
+        if (!deal) {
+          throw new Error('Deal not found or access denied.');
+        }
+        targetDealId = deal.id;
+        if (deal.contact_id) {
+          contactId = deal.contact_id;
+        }
+      }
 
       if (contact_phone) {
         const sanitizedPhone = sanitizePhoneForMeta(contact_phone);
@@ -542,8 +562,11 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           .maybeSingle();
 
         if (contact) {
+          if (contactId && contactId !== contact.id) {
+            throw new Error('Specified deal does not belong to the contact associated with contact_phone.');
+          }
           contactId = contact.id;
-          
+
           const { data: conv } = await admin
             .from('conversations')
             .select('id')
@@ -567,7 +590,8 @@ export async function handleToolCall(name: string, args: any, accountId: string,
       const initialStatus = status || 'pending';
       const completedAt = initialStatus === 'completed' ? new Date().toISOString() : null;
 
-      const { data, error } = await admin
+      // ponytail: insert task and select minimized fields
+      const { data: insertedTask, error } = await admin
         .from('tasks')
         .insert({
           account_id: accountId,
@@ -575,11 +599,12 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           description: description?.trim() || null,
           status: initialStatus,
           contact_id: contactId,
+          deal_id: targetDealId,
           conversation_id: conversationId,
           due_at: dueAt,
           completed_at: completedAt,
         })
-        .select()
+        .select('id, title, description, status, due_at, completed_at, created_at, updated_at, contact:contacts(name, phone), deal:deals(id, title), assigned_agent:profiles!assigned_agent_id(full_name, email)')
         .single();
 
       if (error) throw error;
@@ -588,14 +613,14 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         content: [
           {
             type: 'text',
-            text: `Task created successfully:\n${JSON.stringify(data, null, 2)}`,
+            text: `Task created successfully:\n${JSON.stringify(insertedTask, null, 2)}`,
           },
         ],
       };
     }
 
     case 'update_task': {
-      const { task_id, status, title, description, due_days, due_at, assigned_agent_id } = args;
+      const { task_id, status, title, description, due_days, due_at, deal_id, assigned_agent_id } = args;
 
       if (!task_id) {
         throw new Error('task_id is required.');
@@ -604,7 +629,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
       // Verify task exists and belongs to this account
       const { data: existingTask, error: fetchErr } = await admin
         .from('tasks')
-        .select('id')
+        .select('id, contact_id')
         .eq('id', task_id)
         .eq('account_id', accountId)
         .maybeSingle();
@@ -644,6 +669,27 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         updates.due_at = due_at ? new Date(due_at).toISOString() : null;
       }
 
+      if (deal_id !== undefined) {
+        if (deal_id) {
+          const { data: validDeal } = await admin
+            .from('deals')
+            .select('id, contact_id')
+            .eq('id', deal_id)
+            .eq('account_id', accountId)
+            .maybeSingle();
+
+          if (!validDeal) {
+            throw new Error('Deal not found or access denied.');
+          }
+          if (existingTask.contact_id && validDeal.contact_id && existingTask.contact_id !== validDeal.contact_id) {
+            throw new Error('Specified deal does not belong to the task contact.');
+          }
+          updates.deal_id = validDeal.id;
+        } else {
+          updates.deal_id = null;
+        }
+      }
+
       if (assigned_agent_id !== undefined) {
         if (assigned_agent_id) {
           const { data: validAgent } = await admin
@@ -666,13 +712,13 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         throw new Error('No valid fields provided for update.');
       }
 
-      // ponytail: update task filtered by account_id for tenant isolation
+      // ponytail: update task filtered by account_id and select minimized fields
       const { data: updatedTask, error: updateError } = await admin
         .from('tasks')
         .update(updates)
         .eq('id', task_id)
         .eq('account_id', accountId)
-        .select('id, title, description, status, due_at, completed_at, updated_at')
+        .select('id, title, description, status, due_at, completed_at, updated_at, contact:contacts(name, phone), deal:deals(id, title), assigned_agent:profiles!assigned_agent_id(full_name, email)')
         .single();
 
       if (updateError) throw updateError;

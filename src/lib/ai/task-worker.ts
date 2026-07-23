@@ -62,6 +62,22 @@ const GEMINI_TOOLS = [
         }
       },
       {
+        name: 'create_task',
+        description: 'Create a new task in the CRM, optionally associated with a contact or deal.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            title: { type: 'STRING', description: 'Task title' },
+            description: { type: 'STRING', description: 'Detailed task description' },
+            status: { type: 'STRING', description: 'Task status (pending, in_progress, completed, review_required)' },
+            contact_phone: { type: 'STRING', description: 'Associated contact phone number' },
+            deal_id: { type: 'STRING', description: 'UUID of an associated deal/order' },
+            due_days: { type: 'INTEGER', description: 'Days from now until the task is due' }
+          },
+          required: ['title']
+        }
+      },
+      {
         name: 'list_tasks',
         description: "List tasks. Supports optional status filter ('pending', 'in_progress', 'completed', 'review_required').",
         parameters: {
@@ -73,7 +89,7 @@ const GEMINI_TOOLS = [
       },
       {
         name: 'update_task',
-        description: 'Update an existing task in the CRM (change status, title, description, due date, or assigned agent).',
+        description: 'Update an existing task in the CRM (change status, title, description, due date, deal, or assigned agent).',
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -83,6 +99,7 @@ const GEMINI_TOOLS = [
             description: { type: 'STRING', description: 'Updated detailed description' },
             due_days: { type: 'INTEGER', description: 'Reschedule task due date (days from now)' },
             due_at: { type: 'STRING', description: 'Reschedule task due date in ISO 8601 format' },
+            deal_id: { type: 'STRING', description: 'UUID of an associated deal/order (or null to unbind)' },
             assigned_agent_id: { type: 'STRING', description: 'UUID of the assigned agent profile' }
           },
           required: ['task_id']
