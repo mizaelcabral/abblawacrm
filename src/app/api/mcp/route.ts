@@ -451,8 +451,19 @@ export async function POST(request: Request) {
     }
   } catch (err: any) {
     console.error('[mcp] Error processing request:', err);
-    const message = err?.message?.includes('violates') || err?.message?.includes('column')
-      ? 'Erro de banco de dados ao processar a requisição.'
+    const raw = String(err?.message || err?.details || err?.hint || '');
+    const isDbError =
+      raw.includes('violates') ||
+      raw.includes('column') ||
+      raw.includes('relation') ||
+      raw.includes('table') ||
+      raw.includes('does not exist') ||
+      raw.includes('syntax error') ||
+      raw.includes('PGRST') ||
+      raw.includes('PostgREST');
+
+    const message = isDbError
+      ? 'Erro interno de banco de dados ao processar a requisição.'
       : (err?.message || 'Internal error');
     return NextResponse.json({
       jsonrpc: '2.0',

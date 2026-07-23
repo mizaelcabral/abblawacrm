@@ -123,9 +123,9 @@ ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Documents select" ON public.documents;
 CREATE POLICY "Documents select" ON public.documents FOR SELECT USING (is_account_member(account_id, 'viewer'));
 DROP POLICY IF EXISTS "Documents insert" ON public.documents;
-CREATE POLICY "Documents insert" ON public.documents FOR INSERT WITH CHECK (is_account_member(account_id, 'member'));
+CREATE POLICY "Documents insert" ON public.documents FOR INSERT WITH CHECK (is_account_member(account_id, 'agent'));
 DROP POLICY IF EXISTS "Documents update" ON public.documents;
-CREATE POLICY "Documents update" ON public.documents FOR UPDATE USING (is_account_member(account_id, 'member'));
+CREATE POLICY "Documents update" ON public.documents FOR UPDATE USING (is_account_member(account_id, 'agent'));
 DROP POLICY IF EXISTS "Documents delete" ON public.documents;
 CREATE POLICY "Documents delete" ON public.documents FOR DELETE USING (is_account_member(account_id, 'admin'));
 
@@ -156,7 +156,7 @@ ALTER TABLE public.document_versions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Doc versions select" ON public.document_versions;
 CREATE POLICY "Doc versions select" ON public.document_versions FOR SELECT USING (is_account_member(account_id, 'viewer'));
 DROP POLICY IF EXISTS "Doc versions insert" ON public.document_versions;
-CREATE POLICY "Doc versions insert" ON public.document_versions FOR INSERT WITH CHECK (is_account_member(account_id, 'member'));
+CREATE POLICY "Doc versions insert" ON public.document_versions FOR INSERT WITH CHECK (is_account_member(account_id, 'agent'));
 
 -- 6. Tabela de Histórico Imutável de Status
 CREATE TABLE IF NOT EXISTS public.document_status_history (
@@ -176,7 +176,7 @@ ALTER TABLE public.document_status_history ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Status history select" ON public.document_status_history;
 CREATE POLICY "Status history select" ON public.document_status_history FOR SELECT USING (is_account_member(account_id, 'viewer'));
 DROP POLICY IF EXISTS "Status history insert" ON public.document_status_history;
-CREATE POLICY "Status history insert" ON public.document_status_history FOR INSERT WITH CHECK (is_account_member(account_id, 'member'));
+CREATE POLICY "Status history insert" ON public.document_status_history FOR INSERT WITH CHECK (is_account_member(account_id, 'agent'));
 
 -- 7. Templates de Checklist
 CREATE TABLE IF NOT EXISTS public.checklist_templates (
@@ -240,9 +240,9 @@ ALTER TABLE public.checklist_items ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Checklist select" ON public.checklist_items;
 CREATE POLICY "Checklist select" ON public.checklist_items FOR SELECT USING (is_account_member(account_id, 'viewer'));
 DROP POLICY IF EXISTS "Checklist insert" ON public.checklist_items;
-CREATE POLICY "Checklist insert" ON public.checklist_items FOR INSERT WITH CHECK (is_account_member(account_id, 'member'));
+CREATE POLICY "Checklist insert" ON public.checklist_items FOR INSERT WITH CHECK (is_account_member(account_id, 'agent'));
 DROP POLICY IF EXISTS "Checklist update" ON public.checklist_items;
-CREATE POLICY "Checklist update" ON public.checklist_items FOR UPDATE USING (is_account_member(account_id, 'member'));
+CREATE POLICY "Checklist update" ON public.checklist_items FOR UPDATE USING (is_account_member(account_id, 'agent'));
 DROP POLICY IF EXISTS "Checklist delete" ON public.checklist_items;
 CREATE POLICY "Checklist delete" ON public.checklist_items FOR DELETE USING (is_account_member(account_id, 'admin'));
 
