@@ -243,7 +243,7 @@ export async function POST(request: Request) {
 
       case 'tools/call': {
         const { name, arguments: args } = params;
-        const result = await handleToolCall(name, args, auth.accountId);
+        const result = await handleToolCall(name, args, auth.accountId, auth.userId);
         return NextResponse.json({
           jsonrpc: '2.0',
           result,
@@ -269,7 +269,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function handleToolCall(name: string, args: any, accountId: string) {
+export async function handleToolCall(name: string, args: any, accountId: string, userId: string) {
   const admin = supabaseAdmin();
 
   switch (name) {
@@ -330,11 +330,12 @@ export async function handleToolCall(name: string, args: any, accountId: string)
         };
       }
 
-      // ponytail: insert into column name (not full_name)
+      // ponytail: insert into column name and user_id (MCP API key owner)
       const { data, error } = await admin
         .from('contacts')
         .insert({
           account_id: accountId,
+          user_id: userId,
           name: contactName,
           phone: sanitizedPhone,
           email: email?.trim() || null,
@@ -476,6 +477,7 @@ export async function handleToolCall(name: string, args: any, accountId: string)
           .from('contacts')
           .insert({
             account_id: accountId,
+            user_id: userId,
             name: `Lead (${phone})`,
             phone: sanitizedPhone,
           })
@@ -697,6 +699,7 @@ export async function handleToolCall(name: string, args: any, accountId: string)
           .from('contacts')
           .insert({
             account_id: accountId,
+            user_id: userId,
             phone: sanitizedPhone,
             name: `Cliente (${phone})`,
           })

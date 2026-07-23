@@ -219,7 +219,7 @@ export async function POST(request: Request) {
 
       case 'tools/call': {
         const { name, arguments: args } = params;
-        const result = await handleToolCall(name, args, auth.accountId);
+        const result = await handleToolCall(name, args, auth.accountId, auth.userId);
         return NextResponse.json({
           jsonrpc: '2.0',
           result,
@@ -245,7 +245,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function handleToolCall(name: string, args: any, accountId: string) {
+export async function handleToolCall(name: string, args: any, accountId: string, userId: string) {
   const admin = supabaseAdmin();
 
   switch (name) {
@@ -306,11 +306,12 @@ export async function handleToolCall(name: string, args: any, accountId: string)
         };
       }
 
-      // ponytail: insert into column name (not full_name)
+      // ponytail: insert into column name and user_id (MCP API key owner)
       const { data, error } = await admin
         .from('contacts')
         .insert({
           account_id: accountId,
+          user_id: userId,
           name: contactName,
           phone: sanitizedPhone,
           email: email?.trim() || null,
@@ -446,21 +447,20 @@ export async function handleToolCall(name: string, args: any, accountId: string)
         .eq('phone', sanitizedPhone)
         .maybeSingle();
 
-      let contactId: string;
-      if (!contact) {
-        const res = await admin
+      let contactId: string | undefined = contact?.id;
+      if (!contactId) {
+        const { data: newContact, error: insertError } = await admin
           .from('contacts')
           .insert({
             account_id: accountId,
-            name: `Lead (${phone})`,
+            user_id: userId,
+            name: `Cliente (${phone})`,
             phone: sanitizedPhone,
           })
           .select('id')
           .single();
-        if (res.error) throw res.error;
-        contactId = res.data.id;
-      } else {
-        contactId = contact.id;
+        if (insertError) throw insertError;
+        contactId = newContact.id;
       }
 
       let { data: conv } = await admin
