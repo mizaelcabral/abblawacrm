@@ -237,16 +237,31 @@ export async function POST(request: Request) {
     }
   } catch (err: any) {
     console.error('[mcp] Error processing request:', err);
+    const message = err?.message?.includes('violates') || err?.message?.includes('column')
+      ? 'Erro de banco de dados ao processar a requisição.'
+      : (err?.message || 'Internal error');
     return NextResponse.json({
       jsonrpc: '2.0',
-      error: { code: -32603, message: err.message || 'Internal error' },
+      error: { code: -32603, message },
       id,
     });
   }
 }
 
-export async function handleToolCall(name: string, args: any, accountId: string, userId: string) {
+export async function handleToolCall(name: string, args: any, accountId: string, userId?: string) {
   const admin = supabaseAdmin();
+
+  // ponytail: resolve fallback creatorUserId if userId is absent/null
+  let creatorUserId = userId;
+  if (!creatorUserId) {
+    const { data: member } = await admin
+      .from('profiles')
+      .select('user_id')
+      .eq('account_id', accountId)
+      .limit(1)
+      .maybeSingle();
+    creatorUserId = member?.user_id;
+  }
 
   switch (name) {
     case 'list_contacts': {
@@ -306,12 +321,12 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         };
       }
 
-      // ponytail: insert into column name and user_id (MCP API key owner)
+      // ponytail: insert into column name and user_id (MCP API key owner or account member fallback)
       const { data, error } = await admin
         .from('contacts')
         .insert({
           account_id: accountId,
-          user_id: userId,
+          user_id: creatorUserId,
           name: contactName,
           phone: sanitizedPhone,
           email: email?.trim() || null,
@@ -453,7 +468,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           .from('contacts')
           .insert({
             account_id: accountId,
-            user_id: userId,
+            user_id: creatorUserId,
             name: `Cliente (${phone})`,
             phone: sanitizedPhone,
           })
