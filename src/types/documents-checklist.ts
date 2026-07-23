@@ -145,6 +145,7 @@ export interface ExternalProcess {
   valid_until?: string | null;
   external_reference?: string | null;
   notes?: string | null;
+  status_reason?: string | null;
   assigned_user_id?: string | null;
   created_by_user_id?: string | null;
   is_archived: boolean;

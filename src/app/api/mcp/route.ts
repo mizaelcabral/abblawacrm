@@ -454,10 +454,11 @@ export async function POST(request: Request) {
                   properties: {
                     id: { type: 'string', description: 'UUID do processo externo' },
                     status: { type: 'string', enum: ['draft', 'submitted', 'under_review', 'requirement', 'approved', 'denied', 'cancelled', 'expired'], description: 'Novo status' },
+                    status_reason: { type: 'string', description: 'Motivo obrigatório da transição (exigido se status=requirement, denied ou cancelled). Não reutiliza notas antigas.' },
                     protocol_number: { type: 'string', description: 'Número do protocolo externo (obrigatório se status=submitted)' },
                     requirement_due_at: { type: 'string', description: 'Prazo limite da exigência (ISO8601)' },
                     valid_until: { type: 'string', description: 'Validade do deferimento (ISO8601)' },
-                    notes: { type: 'string', description: 'Observações/motivo (obrigatório se status=requirement, denied ou cancelled)' },
+                    notes: { type: 'string', description: 'Observações administrativas gerais perenes do processo.' },
                     external_reference: { type: 'string', description: 'Chave ou link de acompanhamento externo' },
                     approved_document_id: { type: 'string', description: 'UUID de documento aprovado associado no CRM' },
                     assigned_user_id: { type: 'string', description: 'UUID do usuário responsável' }
@@ -723,6 +724,7 @@ async function formatExternalProcessResponse(admin: any, proc: any) {
     valid_until: proc.valid_until || null,
     external_reference: proc.external_reference || null,
     notes: proc.notes || null,
+    status_reason: proc.status_reason || null,
     created_at: proc.created_at,
     updated_at: proc.updated_at,
     ...(dealRes ? { deal: dealRes } : {}),
@@ -2261,6 +2263,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         requirement_due_at,
         valid_until,
         notes,
+        status_reason,
         external_reference,
         approved_document_id,
         assigned_user_id,
@@ -2275,10 +2278,36 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
       if (!existingProc) throw new Error('Processo externo não encontrado ou não pertence a esta conta.');
 
-      const updateData: Record<string, any> = {
-        updated_at: new Date().toISOString(),
-        last_status_at: new Date().toISOString(),
-      };
+      const isSameStatus = !status || status === existingProc.status;
+
+      // Verificar se houve alteração em algum campo administrativo
+      const isProtocolChanged = protocol_number !== undefined && protocol_number !== existingProc.protocol_number;
+      const isRefChanged = external_reference !== undefined && external_reference !== existingProc.external_reference;
+      const isNotesChanged = notes !== undefined && notes !== existingProc.notes;
+      const isDueChanged = requirement_due_at !== undefined && requirement_due_at !== existingProc.requirement_due_at;
+      const isValidUntilChanged = valid_until !== undefined && valid_until !== existingProc.valid_until;
+      const isDocChanged = approved_document_id !== undefined && approved_document_id !== existingProc.approved_document_id;
+      const isAssignedChanged = assigned_user_id !== undefined && assigned_user_id !== existingProc.assigned_user_id;
+
+      const hasOtherChanges = isProtocolChanged || isRefChanged || isNotesChanged || isDueChanged || isValidUntilChanged || isDocChanged || isAssignedChanged;
+
+      // Idempotência: mesmo status sem outros campos não altera timestamps nem cria histórico
+      if (isSameStatus && !hasOtherChanges) {
+        const formattedCurrent = await formatExternalProcessResponse(admin, existingProc);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                message: 'Processo já está neste status. Nenhuma alteração foi realizada.',
+                process: formattedCurrent,
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      const updateData: Record<string, any> = {};
 
       if (protocol_number !== undefined) updateData.protocol_number = protocol_number;
       if (external_reference !== undefined) updateData.external_reference = external_reference;
@@ -2312,7 +2341,8 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         updateData.approved_document_id = approved_document_id;
       }
 
-      if (status) {
+      // Transição de status propriamente dita
+      if (status && status !== existingProc.status) {
         const effectiveProtocol = protocol_number !== undefined ? protocol_number : existingProc.protocol_number;
 
         if (status === 'submitted') {
@@ -2330,42 +2360,41 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           }
         }
 
-        if (status === 'requirement') {
-          const effectiveNotes = notes !== undefined ? notes : existingProc.notes;
-          if (!effectiveNotes || effectiveNotes.trim().length < 3) {
-            throw new Error("Status 'requirement' exige a descrição da exigência informada em 'notes'.");
+        // Validação estrita de motivo novo no payload da requisição
+        if (status === 'requirement' || status === 'denied' || status === 'cancelled') {
+          if (!status_reason || status_reason.trim().length < 3) {
+            throw new Error(`Transição para status '${status}' exige obrigatoriamente um motivo específico fornecido em 'status_reason' no payload.`);
           }
+          updateData.status_reason = status_reason.trim();
+        } else if (status_reason !== undefined) {
+          updateData.status_reason = status_reason;
         }
 
         if (status === 'approved' || status === 'denied') {
           updateData.decision_at = new Date().toISOString();
-          if (status === 'denied') {
-            const effectiveNotes = notes !== undefined ? notes : existingProc.notes;
-            if (!effectiveNotes || effectiveNotes.trim().length < 3) {
-              throw new Error("Indeferimento/Recusa ('denied') exige justificativa informada em 'notes'.");
-            }
-          }
-        }
-
-        if (status === 'cancelled') {
-          const effectiveNotes = notes !== undefined ? notes : existingProc.notes;
-          if (!effectiveNotes || effectiveNotes.trim().length < 3) {
-            throw new Error("Cancelamento de processo exige o motivo informado em 'notes'.");
-          }
         }
 
         updateData.status = status;
+        updateData.last_status_at = new Date().toISOString();
       }
 
+      updateData.updated_at = new Date().toISOString();
+
+      // Proteção contra Concorrência: otimistic locking via updated_at
       const { data: updatedProc, error } = await admin
         .from('external_processes')
         .update(updateData)
         .eq('id', procId)
         .eq('account_id', accountId)
+        .eq('updated_at', existingProc.updated_at)
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
+
+      if (!updatedProc) {
+        throw new Error('Conflito de concorrência: o processo foi alterado por outra requisição simultânea. Tente novamente.');
+      }
 
       const formatted = await formatExternalProcessResponse(admin, updatedProc);
       return {
