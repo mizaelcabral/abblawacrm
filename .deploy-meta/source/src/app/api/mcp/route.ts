@@ -294,10 +294,10 @@ export async function handleToolCall(name: string, args: any, accountId: string,
   switch (name) {
     case 'list_contacts': {
       const query = args?.query || '';
-      // ponytail: contacts table column is name (not full_name)
+      // ponytail: data minimization — select only essential business fields
       let builder = admin
         .from('contacts')
-        .select('*')
+        .select('id, name, phone, email, company, created_at, updated_at')
         .eq('account_id', accountId)
         .order('name', { ascending: true })
         .limit(50);
