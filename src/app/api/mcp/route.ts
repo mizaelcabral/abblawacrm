@@ -364,7 +364,8 @@ export async function POST(request: Request) {
                     status: { type: 'string', enum: ['solicitado', 'recebido', 'em_analise', 'aprovado', 'recusado', 'vencido'], description: 'Novo status' },
                     rejection_reason: { type: 'string', description: 'Motivo da recusa (obrigatório se status=recusado)' },
                     valid_until: { type: 'string', description: 'Data limite de validade (ISO8601)' },
-                    display_name: { type: 'string', description: 'Nome de exibição do documento' }
+                    display_name: { type: 'string', description: 'Nome de exibição do documento' },
+                    notes: { type: 'string', description: 'Observações do documento' }
                   },
                   required: ['id']
                 }
@@ -471,6 +472,126 @@ export async function POST(request: Request) {
       id,
     });
   }
+}
+
+// ponytail: data minimization helpers for documents and checklists
+async function formatDocumentResponse(admin: any, doc: any) {
+  if (!doc) return null;
+
+  let contactRes: { id: string; name: string } | undefined = undefined;
+  if (doc.contact_id) {
+    const { data: contact } = await admin
+      .from('contacts')
+      .select('id, name')
+      .eq('id', doc.contact_id)
+      .maybeSingle();
+    if (contact) contactRes = { id: contact.id, name: contact.name };
+  }
+
+  let dealRes: { id: string; title: string } | undefined = undefined;
+  if (doc.deal_id) {
+    const { data: deal } = await admin
+      .from('deals')
+      .select('id, title')
+      .eq('id', doc.deal_id)
+      .maybeSingle();
+    if (deal) dealRes = { id: deal.id, title: deal.title };
+  }
+
+  let uploadedByName: string | undefined = undefined;
+  if (doc.uploaded_by_user_id) {
+    const { data: uProfile } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('user_id', doc.uploaded_by_user_id)
+      .maybeSingle();
+    if (uProfile) uploadedByName = uProfile.full_name;
+  }
+
+  let reviewedByName: string | undefined = undefined;
+  if (doc.reviewed_by_user_id) {
+    const { data: rProfile } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('user_id', doc.reviewed_by_user_id)
+      .maybeSingle();
+    if (rProfile) reviewedByName = rProfile.full_name;
+  }
+
+  return {
+    id: doc.id,
+    display_name: doc.display_name,
+    document_type: doc.document_type,
+    status: doc.status,
+    received_at: doc.received_at || null,
+    valid_until: doc.valid_until || null,
+    rejection_reason: doc.rejection_reason || null,
+    notes: doc.notes || null,
+    version: doc.version || 1,
+    reviewed_at: doc.reviewed_at || null,
+    created_at: doc.created_at,
+    updated_at: doc.updated_at,
+    ...(contactRes ? { contact: contactRes } : {}),
+    ...(dealRes ? { deal: dealRes } : {}),
+    ...(uploadedByName ? { uploaded_by_name: uploadedByName } : {}),
+    ...(reviewedByName ? { reviewed_by_name: reviewedByName } : {}),
+  };
+}
+
+async function formatChecklistResponse(admin: any, item: any) {
+  if (!item) return null;
+
+  let dealRes: { id: string; title: string } | undefined = undefined;
+  if (item.deal_id) {
+    const { data: deal } = await admin
+      .from('deals')
+      .select('id, title')
+      .eq('id', item.deal_id)
+      .maybeSingle();
+    if (deal) dealRes = { id: deal.id, title: deal.title };
+  }
+
+  let docRes: { id: string; display_name: string; document_type: string; status: string } | undefined = undefined;
+  if (item.document_id) {
+    const { data: doc } = await admin
+      .from('documents')
+      .select('id, display_name, document_type, status')
+      .eq('id', item.document_id)
+      .maybeSingle();
+    if (doc) {
+      docRes = {
+        id: doc.id,
+        display_name: doc.display_name,
+        document_type: doc.document_type,
+        status: doc.status,
+      };
+    }
+  }
+
+  let assignedUserRes: { name: string } | undefined = undefined;
+  if (item.assigned_user_id) {
+    const { data: aProfile } = await admin
+      .from('profiles')
+      .select('full_name')
+      .eq('user_id', item.assigned_user_id)
+      .maybeSingle();
+    if (aProfile) assignedUserRes = { name: aProfile.full_name };
+  }
+
+  return {
+    id: item.id,
+    title: item.title,
+    requirement_type: item.requirement_type,
+    is_required: item.is_required,
+    status: item.status,
+    due_date: item.due_date || null,
+    notes: item.notes || null,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+    ...(dealRes ? { deal: dealRes } : {}),
+    ...(docRes ? { document: docRes } : {}),
+    ...(assignedUserRes ? { assigned_user: assignedUserRes } : {}),
+  };
 }
 
 export async function handleToolCall(name: string, args: any, accountId: string, userId?: string) {
@@ -1577,7 +1698,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
     }
 
     case 'create_document_metadata': {
-      const { display_name, document_type, contact_id, deal_id, valid_until } = args;
+      const { display_name, document_type, contact_id, deal_id, valid_until, notes } = args;
 
       if (contact_id) {
         const { data: contact } = await admin
@@ -1608,6 +1729,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           contact_id: contact_id || null,
           deal_id: deal_id || null,
           valid_until: valid_until || null,
+          notes: notes || null,
           status: 'solicitado',
           version: 1,
           uploaded_by_user_id: creatorUserId,
@@ -1617,22 +1739,23 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
       if (error) throw error;
 
+      const formatted = await formatDocumentResponse(admin, doc);
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(doc, null, 2),
+            text: JSON.stringify(formatted, null, 2),
           },
         ],
       };
     }
 
     case 'update_document_metadata': {
-      const { id: docId, status, rejection_reason, valid_until, display_name } = args;
+      const { id: docId, status, rejection_reason, valid_until, display_name, notes } = args;
 
       const { data: existingDoc } = await admin
         .from('documents')
-        .select('id, status')
+        .select('*')
         .eq('id', docId)
         .eq('account_id', accountId)
         .maybeSingle();
@@ -1645,8 +1768,19 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
       if (display_name) updateData.display_name = display_name;
       if (valid_until !== undefined) updateData.valid_until = valid_until;
+      if (notes !== undefined) updateData.notes = notes;
 
       if (status) {
+        if (status === 'recebido' && !existingDoc.received_at) {
+          updateData.received_at = new Date().toISOString();
+        }
+
+        if (status === 'em_analise') {
+          if (!existingDoc.received_at && !updateData.received_at) {
+            throw new Error("Transição inválida: Documento precisa ter sido recebido (status 'recebido') antes de entrar em análise.");
+          }
+        }
+
         if (status === 'recusado') {
           if (!rejection_reason || rejection_reason.trim().length < 5) {
             throw new Error('Recusa exige um motivo (rejection_reason) detalhado com pelo menos 5 caracteres.');
@@ -1655,7 +1789,6 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         }
 
         if (status === 'aprovado' || status === 'recusado') {
-          // ponytail: reviewer identity is strictly derived from MCP session user, not client input
           updateData.reviewed_by_user_id = creatorUserId;
           updateData.reviewed_at = new Date().toISOString();
         }
@@ -1673,11 +1806,12 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
       if (error) throw error;
 
+      const formatted = await formatDocumentResponse(admin, updatedDoc);
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(updatedDoc, null, 2),
+            text: JSON.stringify(formatted, null, 2),
           },
         ],
       };
@@ -1686,10 +1820,9 @@ export async function handleToolCall(name: string, args: any, accountId: string,
     case 'list_document_metadata': {
       const { contact_id, deal_id, document_type, status } = args;
 
-      // ponytail: data minimization — select only essential document metadata fields, no raw file paths
       let query = admin
         .from('documents')
-        .select('id, account_id, contact_id, deal_id, document_type, display_name, status, received_at, valid_until, rejection_reason, version, current_version_id, uploaded_by_user_id, reviewed_by_user_id, reviewed_at, created_at, updated_at')
+        .select('*')
         .eq('account_id', accountId)
         .eq('is_archived', false)
         .order('created_at', { ascending: false });
@@ -1702,11 +1835,13 @@ export async function handleToolCall(name: string, args: any, accountId: string,
       const { data, error } = await query;
       if (error) throw error;
 
+      const formattedList = await Promise.all((data || []).map((doc: any) => formatDocumentResponse(admin, doc)));
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(data, null, 2),
+            text: JSON.stringify(formattedList, null, 2),
           },
         ],
       };
@@ -1753,11 +1888,12 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
       if (error) throw error;
 
+      const formatted = await formatChecklistResponse(admin, checklistItem);
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(checklistItem, null, 2),
+            text: JSON.stringify(formatted, null, 2),
           },
         ],
       };
@@ -1768,21 +1904,52 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
       const { data: existingItem } = await admin
         .from('checklist_items')
-        .select('id')
+        .select('*')
         .eq('id', itemId)
         .eq('account_id', accountId)
         .maybeSingle();
 
       if (!existingItem) throw new Error('Item de checklist não encontrado ou não pertence a esta conta.');
 
-      if (document_id) {
+      const targetDocId = document_id !== undefined ? document_id : existingItem.document_id;
+      const targetStatus = status || existingItem.status;
+      const targetNotes = notes !== undefined ? notes : existingItem.notes;
+
+      let linkedDoc: any = null;
+      if (targetDocId) {
         const { data: doc } = await admin
           .from('documents')
-          .select('id')
-          .eq('id', document_id)
+          .select('id, status')
+          .eq('id', targetDocId)
           .eq('account_id', accountId)
           .maybeSingle();
         if (!doc) throw new Error('Documento especificado não pertence a esta conta.');
+        linkedDoc = doc;
+      }
+
+      // Regras de coerência cruzada entre Checklist e Documento
+      if (targetStatus === 'in_review' && linkedDoc) {
+        if (linkedDoc.status === 'solicitado') {
+          throw new Error("Documento apenas em status 'solicitado' não pode sustentar um item de checklist em análise.");
+        }
+      }
+
+      if (targetStatus === 'approved' && existingItem.is_required && linkedDoc) {
+        if (linkedDoc.status !== 'aprovado') {
+          throw new Error("Item de checklist obrigatório exige documento em status 'aprovado' para ser concluído.");
+        }
+      }
+
+      if (targetStatus === 'rejected') {
+        if (!targetNotes || targetNotes.trim().length < 3) {
+          throw new Error("Rejeição de item de checklist exige observações/motivo informados em 'notes'.");
+        }
+      }
+
+      if (targetStatus === 'waived') {
+        if (!targetNotes || targetNotes.trim().length < 3) {
+          throw new Error("Dispenso/Isenção de requisito exige justificativa informada em 'notes'.");
+        }
       }
 
       const updateData: Record<string, any> = {
@@ -1804,11 +1971,12 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
       if (error) throw error;
 
+      const formatted = await formatChecklistResponse(admin, updatedItem);
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(updatedItem, null, 2),
+            text: JSON.stringify(formatted, null, 2),
           },
         ],
       };
@@ -1819,7 +1987,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
       let query = admin
         .from('checklist_items')
-        .select('id, account_id, deal_id, contact_id, title, requirement_type, is_required, status, due_date, assigned_user_id, document_id, notes, created_at, updated_at')
+        .select('*')
         .eq('account_id', accountId)
         .eq('is_archived', false)
         .order('created_at', { ascending: true });
@@ -1830,11 +1998,13 @@ export async function handleToolCall(name: string, args: any, accountId: string,
       const { data, error } = await query;
       if (error) throw error;
 
+      const formattedList = await Promise.all((data || []).map((item: any) => formatChecklistResponse(admin, item)));
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(data, null, 2),
+            text: JSON.stringify(formattedList, null, 2),
           },
         ],
       };

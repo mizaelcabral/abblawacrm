@@ -13,6 +13,7 @@ export interface CRMDocument {
   received_at?: string | null;
   valid_until?: string | null;
   rejection_reason?: string | null;
+  notes?: string | null;
   version: number;
   current_version_id?: string | null;
   uploaded_by_user_id?: string | null;
