@@ -162,6 +162,7 @@ export interface ExternalProcessStatusHistory {
   changed_by_user_id?: string | null;
   reason_or_notes?: string | null;
   origin: string;
+  transition_metadata?: Record<string, any> | null;
   created_at: string;
 }
 

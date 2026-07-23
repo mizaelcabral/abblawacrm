@@ -754,6 +754,7 @@ async function formatExternalProcessHistoryResponse(admin: any, historyItem: any
     previous_status: historyItem.previous_status || null,
     new_status: historyItem.new_status,
     reason_or_notes: historyItem.reason_or_notes || null,
+    transition_metadata: historyItem.transition_metadata || null,
     created_at: historyItem.created_at,
     ...(changedByName ? { changed_by_name: changedByName } : {}),
   };
@@ -2370,8 +2371,33 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           updateData.status_reason = status_reason;
         }
 
+        // CICLO DE VIDA DE CAMPOS CONDICIONAIS DE ESTADO:
+
+        // 1. Regra para requirement_due_at: ao SAIR de 'requirement', limpar no registro principal
+        if (existingProc.status === 'requirement' && status !== 'requirement') {
+          updateData.requirement_due_at = null;
+        }
+
+        // 2. Regra para decision_at:
+        // Entrar em 'approved' ou 'denied' -> grava decision_at = NOW()
+        // Reabrir (sair de 'approved'/'denied' para outro status) -> limpa decision_at = NULL no registro principal
         if (status === 'approved' || status === 'denied') {
           updateData.decision_at = new Date().toISOString();
+          if (status === 'approved' && valid_until) {
+            const validUntilDate = new Date(valid_until).getTime();
+            if (isNaN(validUntilDate) || validUntilDate <= Date.now()) {
+              throw new Error("Data de validade 'valid_until' deve ser uma data válida posterior ao momento da decisão.");
+            }
+          }
+        } else if (existingProc.status === 'approved' || existingProc.status === 'denied') {
+          updateData.decision_at = null;
+        }
+
+        // 3. Regra para valid_until:
+        // Validade só se aplica e permanece ativa em status 'approved'.
+        // Ao transitar para qualquer outro status diferente de 'approved', limpa valid_until = NULL no registro principal.
+        if (status !== 'approved') {
+          updateData.valid_until = null;
         }
 
         updateData.status = status;
