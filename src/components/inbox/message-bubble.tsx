@@ -206,12 +206,13 @@ function MessageContent({ message }: { message: Message }) {
             <video
               src={message.media_url}
               controls
-              className="max-h-64 max-w-60 rounded-lg"
+              preload="metadata"
+              className="max-h-64 max-w-60 rounded-lg bg-black object-contain"
             />
           ) : (
             <MediaUnavailable label="Video" />
           )}
-          {message.content_text && (
+          {message.content_text && message.content_text !== '[Vídeo]' && (
             <p className="mt-1 whitespace-pre-wrap break-words text-sm">
               {message.content_text}
             </p>

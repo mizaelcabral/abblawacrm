@@ -201,8 +201,24 @@ async function processIncomingMessage(config: any, messageData: any) {
   let mediaUrl: string | null = null;
   let filename: string | null = null;
 
-  const msgBody = messageData.message;
+  let msgBody = messageData.message;
   if (!msgBody) return;
+
+  // Unwrap potential message wrappers (ephemeral, viewOnce, etc.)
+  while (
+    msgBody?.viewOnceMessage?.message ||
+    msgBody?.viewOnceMessageV2?.message ||
+    msgBody?.viewOnceMessageV2Extension?.message ||
+    msgBody?.ephemeralMessage?.message ||
+    msgBody?.documentWithCaptionMessage?.message
+  ) {
+    msgBody =
+      msgBody.viewOnceMessage?.message ||
+      msgBody.viewOnceMessageV2?.message ||
+      msgBody.viewOnceMessageV2Extension?.message ||
+      msgBody.ephemeralMessage?.message ||
+      msgBody.documentWithCaptionMessage?.message;
+  }
 
   if (msgBody.conversation) {
     contentText = msgBody.conversation;
@@ -227,11 +243,31 @@ async function processIncomingMessage(config: any, messageData: any) {
     contentText = msgBody.documentMessage.caption || filename || '[Documento]';
   }
 
-  // 4) Handle Media Download if payload contains base64
-  // In Evolution API, if base64 is in the messageData, we upload it.
-  // Otherwise, we fetch it asynchronously from the Evolution API's getBase64FromMediaMessage endpoint.
-  let base64Data = messageData.base64 || messageData.message?.base64;
-  if (!base64Data && (contentType === 'image' || contentType === 'video' || contentType === 'audio' || contentType === 'document' || contentType === 'sticker')) {
+  // 4) Handle Media Download if payload contains base64 or direct URL
+  // In Evolution API, if base64 or direct URL is in messageData/msgBody, we use it.
+  // Otherwise, we fetch it asynchronously from Evolution API's getBase64FromMediaMessage endpoint.
+  let base64Data =
+    messageData.base64 ||
+    messageData.message?.base64 ||
+    msgBody.videoMessage?.base64 ||
+    msgBody.imageMessage?.base64 ||
+    msgBody.audioMessage?.base64 ||
+    msgBody.documentMessage?.base64 ||
+    msgBody.stickerMessage?.base64;
+
+  const directUrl =
+    messageData.mediaUrl ||
+    messageData.url ||
+    msgBody.videoMessage?.url ||
+    msgBody.imageMessage?.url ||
+    msgBody.audioMessage?.url ||
+    msgBody.documentMessage?.url;
+
+  if (!base64Data && directUrl && typeof directUrl === 'string' && directUrl.startsWith('http')) {
+    mediaUrl = directUrl;
+  }
+
+  if (!base64Data && !mediaUrl && (contentType === 'image' || contentType === 'video' || contentType === 'audio' || contentType === 'document' || contentType === 'sticker')) {
     try {
       console.log('[WhatsApp Web Webhook] Base64 missing from payload. Fetching from getBase64FromMediaMessage...');
       const token = decrypt(config.api_token);
@@ -242,20 +278,24 @@ async function processIncomingMessage(config: any, messageData: any) {
           apikey: token,
         },
         body: JSON.stringify({
-          message: {
-            key: {
-              id: messageId,
-            },
-          },
-          convertToMp4: false,
+          message: messageData,
+          convertToMp4: contentType === 'video',
         }),
       });
 
       if (res.ok) {
         const responseData = await res.json();
-        if (responseData.base64) {
-          base64Data = responseData.base64;
+        const fetchedBase64 =
+          typeof responseData.base64 === 'string' ? responseData.base64 :
+          typeof responseData.base64?.base64 === 'string' ? responseData.base64.base64 :
+          typeof responseData.base64Data === 'string' ? responseData.base64Data :
+          typeof responseData.media === 'string' ? responseData.media : null;
+
+        if (fetchedBase64) {
+          base64Data = fetchedBase64;
           console.log('[WhatsApp Web Webhook] Successfully fetched media base64 for message:', messageId);
+        } else if (responseData.mediaUrl || responseData.url) {
+          mediaUrl = responseData.mediaUrl || responseData.url;
         } else {
           console.warn('[WhatsApp Web Webhook] getBase64FromMediaMessage response missing base64 field:', responseData);
         }
@@ -274,10 +314,10 @@ async function processIncomingMessage(config: any, messageData: any) {
       let cleanBase64 = base64Data;
       if (!cleanBase64.includes(';base64,')) {
         let detectedMime = 'application/octet-stream';
-        if (contentType === 'image') detectedMime = 'image/jpeg';
-        else if (contentType === 'video') detectedMime = 'video/mp4';
-        else if (contentType === 'audio') detectedMime = 'audio/ogg';
-        else if (contentType === 'document') detectedMime = 'application/pdf';
+        if (contentType === 'image') detectedMime = msgBody.imageMessage?.mimetype || 'image/jpeg';
+        else if (contentType === 'video') detectedMime = msgBody.videoMessage?.mimetype || 'video/mp4';
+        else if (contentType === 'audio') detectedMime = msgBody.audioMessage?.mimetype || 'audio/ogg';
+        else if (contentType === 'document') detectedMime = msgBody.documentMessage?.mimetype || 'application/pdf';
         else if (contentType === 'sticker') detectedMime = 'image/webp';
         
         cleanBase64 = `data:${detectedMime};base64,${cleanBase64}`;
@@ -523,11 +563,14 @@ async function findOrCreateConversation(accountId: string, userId: string, conta
 
 async function uploadMediaFromBase64(accountId: string, base64Data: string, filename: string): Promise<string> {
   const base64Parts = base64Data.split(';base64,');
-  const mimeType = base64Parts[0].split(':')[1] || 'application/octet-stream';
+  const rawMime = base64Parts[0].includes(':') ? base64Parts[0].split(':')[1]?.split(';')[0] : 'application/octet-stream';
+  const mimeType = rawMime || 'application/octet-stream';
   const base64Bytes = base64Parts[1] || base64Data;
   const buffer = Buffer.from(base64Bytes, 'base64');
 
-  const ext = mimeType.split('/')[1] || 'bin';
+  let ext = mimeType.split('/')[1]?.split(';')[0] || 'bin';
+  if (ext === 'quicktime') ext = 'mov';
+  if (ext === '3gpp') ext = '3gp';
   const cleanFilename = filename.replace(/[^a-zA-Z0-9_-]+/g, '_');
   const now = Date.now();
   const storagePath = `account-${accountId}/${now}-${cleanFilename}.${ext}`;

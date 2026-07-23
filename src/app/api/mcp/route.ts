@@ -337,6 +337,82 @@ export async function POST(request: Request) {
                   },
                   required: ['phone', 'product_id']
                 }
+              },
+              {
+                name: 'create_document_metadata',
+                description: 'Registra metadados de um novo documento no CRM (sem upload de binário).',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    display_name: { type: 'string', description: 'Nome de exibição do documento' },
+                    document_type: { type: 'string', description: 'Tipo do documento (ex: receita_medica, laudo, comprovante)' },
+                    contact_id: { type: 'string', description: 'UUID do contato associado' },
+                    deal_id: { type: 'string', description: 'UUID do negócio associado' },
+                    valid_until: { type: 'string', description: 'Data limite de validade (ISO8601)' },
+                    notes: { type: 'string', description: 'Observações do documento' }
+                  },
+                  required: ['display_name', 'document_type']
+                }
+              },
+              {
+                name: 'update_document_metadata',
+                description: 'Atualiza o status ou metadados de um documento existente.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string', description: 'UUID do documento' },
+                    status: { type: 'string', enum: ['solicitado', 'recebido', 'em_analise', 'aprovado', 'recusado', 'vencido'], description: 'Novo status' },
+                    rejection_reason: { type: 'string', description: 'Motivo da recusa (obrigatório se status=recusado)' },
+                    valid_until: { type: 'string', description: 'Data limite de validade (ISO8601)' },
+                    display_name: { type: 'string', description: 'Nome de exibição do documento' }
+                  },
+                  required: ['id']
+                }
+              },
+              {
+                name: 'list_document_metadata',
+                description: 'Lista os metadados dos documentos da conta. Não expõe dados binários ou URLs públicas.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    contact_id: { type: 'string', description: 'Filtrar por UUID do contato' },
+                    deal_id: { type: 'string', description: 'Filtrar por UUID do negócio' },
+                    document_type: { type: 'string', description: 'Filtrar por tipo de documento' },
+                    status: { type: 'string', enum: ['solicitado', 'recebido', 'em_analise', 'aprovado', 'recusado', 'vencido'] }
+                  }
+                }
+              },
+              {
+                name: 'create_checklist_item',
+                description: 'Cria um novo item de checklist de requisitos para um Negócio (Deal).',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    deal_id: { type: 'string', description: 'UUID do negócio' },
+                    title: { type: 'string', description: 'Título/Requisito do checklist' },
+                    requirement_type: { type: 'string', description: 'Tipo do requisito (ex: receita_medica, laudo)' },
+                    is_required: { type: 'boolean', default: true },
+                    due_date: { type: 'string', description: 'Data limite do requisito (ISO8601)' },
+                    assigned_user_id: { type: 'string', description: 'UUID do usuário responsável' },
+                    notes: { type: 'string', description: 'Observações adicionais' }
+                  },
+                  required: ['deal_id', 'title', 'requirement_type']
+                }
+              },
+              {
+                name: 'update_checklist_item',
+                description: 'Atualiza o status, observaçoes ou vincula um documento a um item de checklist.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string', description: 'UUID do item de checklist' },
+                    status: { type: 'string', enum: ['pending', 'in_review', 'approved', 'rejected', 'waived'] },
+                    document_id: { type: 'string', description: 'UUID do documento a vincular' },
+                    notes: { type: 'string', description: 'Observações ou justificativa' },
+                    due_date: { type: 'string', description: 'Data limite do requisito (ISO8601)' }
+                  },
+                  required: ['id']
+                }
               }
             ],
           },
@@ -411,7 +487,14 @@ export async function handleToolCall(name: string, args: any, accountId: string,
   }
 
   // 3. Reject write operations if no valid deterministic author exists
-  const isWriteTool = name === 'create_contact' || name === 'send_whatsapp_message' || name === 'create_direct_charge';
+  const isWriteTool =
+    name === 'create_contact' ||
+    name === 'send_whatsapp_message' ||
+    name === 'create_direct_charge' ||
+    name === 'create_document_metadata' ||
+    name === 'update_document_metadata' ||
+    name === 'create_checklist_item' ||
+    name === 'update_checklist_item';
   if (!creatorUserId && isWriteTool) {
     throw new Error('Operação recusada: Não foi possível determinar o autor responsável pela integração MCP nesta conta.');
   }
@@ -1466,6 +1549,244 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           {
             type: 'text',
             text: JSON.stringify(updatedOrder, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'create_document_metadata': {
+      const { display_name, document_type, contact_id, deal_id, valid_until } = args;
+
+      if (contact_id) {
+        const { data: contact } = await admin
+          .from('contacts')
+          .select('id')
+          .eq('id', contact_id)
+          .eq('account_id', accountId)
+          .maybeSingle();
+        if (!contact) throw new Error('Contato especificado não pertence a esta conta.');
+      }
+
+      if (deal_id) {
+        const { data: deal } = await admin
+          .from('deals')
+          .select('id')
+          .eq('id', deal_id)
+          .eq('account_id', accountId)
+          .maybeSingle();
+        if (!deal) throw new Error('Negócio especificado não pertence a esta conta.');
+      }
+
+      const { data: doc, error } = await admin
+        .from('documents')
+        .insert({
+          account_id: accountId,
+          display_name,
+          document_type,
+          contact_id: contact_id || null,
+          deal_id: deal_id || null,
+          valid_until: valid_until || null,
+          status: 'solicitado',
+          version: 1,
+          uploaded_by_user_id: creatorUserId,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(doc, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'update_document_metadata': {
+      const { id: docId, status, rejection_reason, valid_until, display_name } = args;
+
+      const { data: existingDoc } = await admin
+        .from('documents')
+        .select('id, status')
+        .eq('id', docId)
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (!existingDoc) throw new Error('Documento não encontrado ou não pertence a esta conta.');
+
+      const updateData: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (display_name) updateData.display_name = display_name;
+      if (valid_until !== undefined) updateData.valid_until = valid_until;
+
+      if (status) {
+        if (status === 'recusado') {
+          if (!rejection_reason || rejection_reason.trim().length < 5) {
+            throw new Error('Recusa exige um motivo (rejection_reason) detalhado com pelo menos 5 caracteres.');
+          }
+          updateData.rejection_reason = rejection_reason.trim();
+        }
+
+        if (status === 'aprovado' || status === 'recusado') {
+          // ponytail: reviewer identity is strictly derived from MCP session user, not client input
+          updateData.reviewed_by_user_id = creatorUserId;
+          updateData.reviewed_at = new Date().toISOString();
+        }
+
+        updateData.status = status;
+      }
+
+      const { data: updatedDoc, error } = await admin
+        .from('documents')
+        .update(updateData)
+        .eq('id', docId)
+        .eq('account_id', accountId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(updatedDoc, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'list_document_metadata': {
+      const { contact_id, deal_id, document_type, status } = args;
+
+      // ponytail: data minimization — select only essential document metadata fields, no raw file paths
+      let query = admin
+        .from('documents')
+        .select('id, account_id, contact_id, deal_id, document_type, display_name, status, received_at, valid_until, rejection_reason, version, current_version_id, uploaded_by_user_id, reviewed_by_user_id, reviewed_at, created_at, updated_at')
+        .eq('account_id', accountId)
+        .eq('is_archived', false)
+        .order('created_at', { ascending: false });
+
+      if (contact_id) query = query.eq('contact_id', contact_id);
+      if (deal_id) query = query.eq('deal_id', deal_id);
+      if (document_type) query = query.eq('document_type', document_type);
+      if (status) query = query.eq('status', status);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(data, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'create_checklist_item': {
+      const { deal_id, title, requirement_type, is_required, due_date, assigned_user_id, notes } = args;
+
+      const { data: deal } = await admin
+        .from('deals')
+        .select('id, contact_id')
+        .eq('id', deal_id)
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (!deal) throw new Error('Negócio especificado não pertence a esta conta.');
+
+      if (assigned_user_id) {
+        const { data: assignedProfile } = await admin
+          .from('profiles')
+          .select('user_id')
+          .eq('user_id', assigned_user_id)
+          .eq('account_id', accountId)
+          .maybeSingle();
+        if (!assignedProfile) throw new Error('Usuário responsável especificado não pertence a esta conta.');
+      }
+
+      const { data: checklistItem, error } = await admin
+        .from('checklist_items')
+        .insert({
+          account_id: accountId,
+          deal_id,
+          contact_id: deal.contact_id || null,
+          title,
+          requirement_type,
+          is_required: is_required !== undefined ? is_required : true,
+          due_date: due_date || null,
+          assigned_user_id: assigned_user_id || null,
+          notes: notes || null,
+          status: 'pending',
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(checklistItem, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'update_checklist_item': {
+      const { id: itemId, status, document_id, notes, due_date } = args;
+
+      const { data: existingItem } = await admin
+        .from('checklist_items')
+        .select('id')
+        .eq('id', itemId)
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (!existingItem) throw new Error('Item de checklist não encontrado ou não pertence a esta conta.');
+
+      if (document_id) {
+        const { data: doc } = await admin
+          .from('documents')
+          .select('id')
+          .eq('id', document_id)
+          .eq('account_id', accountId)
+          .maybeSingle();
+        if (!doc) throw new Error('Documento especificado não pertence a esta conta.');
+      }
+
+      const updateData: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (status) updateData.status = status;
+      if (document_id !== undefined) updateData.document_id = document_id;
+      if (notes !== undefined) updateData.notes = notes;
+      if (due_date !== undefined) updateData.due_date = due_date;
+
+      const { data: updatedItem, error } = await admin
+        .from('checklist_items')
+        .update(updateData)
+        .eq('id', itemId)
+        .eq('account_id', accountId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(updatedItem, null, 2),
           },
         ],
       };

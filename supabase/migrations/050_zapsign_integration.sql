@@ -10,9 +10,10 @@ CREATE TABLE IF NOT EXISTS zapsign_config (
 
 -- Habilitar RLS para zapsign_config
 ALTER TABLE zapsign_config ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Tenants can manage their own zapsign_config" ON zapsign_config;
 CREATE POLICY "Tenants can manage their own zapsign_config" 
     ON zapsign_config FOR ALL 
-    USING (account_id = auth.uid() OR account_id IN (SELECT account_id FROM profiles WHERE user_id = auth.uid()));
+    USING (is_account_member(account_id));
 
 -- 2. Tabela de documentos ZapSign enviados
 CREATE TABLE IF NOT EXISTS zapsign_documents (
@@ -37,9 +38,10 @@ CREATE TABLE IF NOT EXISTS zapsign_documents (
 
 -- Habilitar RLS para zapsign_documents
 ALTER TABLE zapsign_documents ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Tenants can manage their own zapsign_documents" ON zapsign_documents;
 CREATE POLICY "Tenants can manage their own zapsign_documents" 
     ON zapsign_documents FOR ALL 
-    USING (account_id IN (SELECT account_id FROM profiles WHERE user_id = auth.uid()));
+    USING (is_account_member(account_id));
 
 -- Index para buscas rápidas
 CREATE INDEX IF NOT EXISTS idx_zapsign_docs_account ON zapsign_documents(account_id);
