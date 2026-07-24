@@ -1104,8 +1104,18 @@ export async function handleToolCall(name: string, args: any, accountId: string,
             });
           } else if (fieldDef.type === 'date') {
             const strVal = String(val).trim();
-            if (!strVal || isNaN(Date.parse(strVal))) {
-              throw new Error(`Data inválida para o campo "${fieldDef.name}" (${fieldDef.key}): "${val}"`);
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            let isValidDate = dateRegex.test(strVal);
+            if (isValidDate) {
+              const [y, m, d] = strVal.split('-').map((n) => parseInt(n, 10));
+              const obj = new Date(Date.UTC(y, m - 1, d));
+              isValidDate =
+                obj.getUTCFullYear() === y &&
+                obj.getUTCMonth() === m - 1 &&
+                obj.getUTCDate() === d;
+            }
+            if (!isValidDate) {
+              throw new Error(`Data inválida de calendário para o campo "${fieldDef.name}" (${fieldDef.key}): "${val}". Use o formato YYYY-MM-DD com uma data real.`);
             }
             customRowsToUpsert.push({
               contact_id,
