@@ -5,6 +5,22 @@ export type DeliveryMode = 'manual_link' | 'zapsign_email' | 'zapsign_whatsapp';
 export type FieldSourceType = 'contact_property' | 'custom_field' | 'fixed_value';
 export type FieldFormatType = 'uppercase' | 'lowercase' | 'digits_only' | 'date_ptbr';
 
+export const ALLOWED_CONTACT_PROPERTIES = new Set([
+  'name',
+  'cpf',
+  'birth_date',
+  'email',
+  'phone',
+  'postal_code',
+  'street',
+  'number',
+  'complement',
+  'neighborhood',
+  'city',
+  'state',
+  'country',
+]);
+
 export interface FieldMapping {
   zapsign_var: string;
   source_type: FieldSourceType;
@@ -55,7 +71,7 @@ export const createSignatureTemplateSchema = z.object({
   is_active: z.boolean().default(true),
   signatory_rule: z.enum(['contact_only', 'guardian_if_minor', 'guardian_only']).default('contact_only'),
   delivery_mode: z.enum(['manual_link', 'zapsign_email', 'zapsign_whatsapp']).default('manual_link'),
-  field_mappings: z.array(fieldMappingSchema).default([]),
+  field_mappings: z.array(fieldMappingSchema).max(50, 'Máximo 50 mapeamentos por modelo').default([]),
 });
 
 export const updateSignatureTemplateSchema = createSignatureTemplateSchema.partial();
