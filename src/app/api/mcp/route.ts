@@ -970,10 +970,21 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           groups[group] = {};
         }
         const key = field.field_key || field.field_name;
+        const rawVal = valueMap.get(field.id);
+
+        let typedVal: any = null;
+        if (rawVal !== undefined && rawVal !== null && rawVal.trim() !== '') {
+          if (field.field_type === 'boolean') {
+            typedVal = rawVal === 'true';
+          } else {
+            typedVal = rawVal;
+          }
+        }
+
         groups[group][key] = {
           label: field.field_name,
           type: field.field_type,
-          value: valueMap.get(field.id) ?? null,
+          value: typedVal,
         };
       });
 
@@ -1048,41 +1059,92 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         updates.company = newCompany ? newCompany.trim() : null;
       }
 
-      const { data: updatedContact, error: updateError } = await admin
-        .from('contacts')
-        .update(updates)
-        .eq('id', contact_id)
-        .select('id, name, phone, email, company, created_at, updated_at')
-        .single();
-
-      if (updateError) throw updateError;
+      // Pre-validate all custom field entries BEFORE touches to database
+      const invalidKeys: string[] = [];
+      const customRowsToUpsert: { contact_id: string; custom_field_id: string; value: string; updated_at: string; updated_by_user_id?: string | null }[] = [];
+      const customIdsToDelete: string[] = [];
 
       if (newCustomFields && typeof newCustomFields === 'object') {
         const { data: activeFields } = await admin
           .from('custom_fields')
-          .select('id, field_name, field_key')
+          .select('id, field_name, field_key, field_type')
           .eq('account_id', accountId)
           .eq('is_active', true);
 
-        const fieldLookup = new Map<string, string>();
+        const fieldMap = new Map<string, { id: string; name: string; key: string; type: string }>();
         (activeFields || []).forEach((f) => {
-          if (f.field_key) fieldLookup.set(f.field_key.toLowerCase(), f.id);
-          fieldLookup.set(f.field_name.toLowerCase(), f.id);
-          fieldLookup.set(f.id, f.id);
+          const item = { id: f.id, name: f.field_name, key: f.field_key || f.field_name, type: f.field_type };
+          if (f.field_key) fieldMap.set(f.field_key.toLowerCase(), item);
+          fieldMap.set(f.field_name.toLowerCase(), item);
+          fieldMap.set(f.id, item);
         });
 
-        const invalidKeys: string[] = [];
-        const customRowsToUpsert: { contact_id: string; custom_field_id: string; value: string; updated_at: string; updated_by_user_id?: string | null }[] = [];
-
         for (const [key, val] of Object.entries(newCustomFields)) {
-          const fieldId = fieldLookup.get(key.toLowerCase());
-          if (!fieldId) {
+          const fieldDef = fieldMap.get(key.toLowerCase());
+          if (!fieldDef) {
             invalidKeys.push(key);
+            continue;
+          }
+
+          if (val === null || val === undefined) {
+            customIdsToDelete.push(fieldDef.id);
+            continue;
+          }
+
+          if (fieldDef.type === 'boolean') {
+            if (typeof val !== 'boolean') {
+              throw new Error(`O campo booleano "${fieldDef.name}" (${fieldDef.key}) aceita apenas true ou false. Recebido: ${typeof val} (${JSON.stringify(val)})`);
+            }
+            customRowsToUpsert.push({
+              contact_id,
+              custom_field_id: fieldDef.id,
+              value: val ? 'true' : 'false',
+              updated_at: new Date().toISOString(),
+              updated_by_user_id: creatorUserId || null,
+            });
+          } else if (fieldDef.type === 'date') {
+            const strVal = String(val).trim();
+            if (!strVal || isNaN(Date.parse(strVal))) {
+              throw new Error(`Data inválida para o campo "${fieldDef.name}" (${fieldDef.key}): "${val}"`);
+            }
+            customRowsToUpsert.push({
+              contact_id,
+              custom_field_id: fieldDef.id,
+              value: strVal,
+              updated_at: new Date().toISOString(),
+              updated_by_user_id: creatorUserId || null,
+            });
+          } else if (fieldDef.type === 'email') {
+            const strVal = String(val).trim();
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!strVal || !emailRegex.test(strVal)) {
+              throw new Error(`E-mail inválido para o campo "${fieldDef.name}" (${fieldDef.key}): "${val}"`);
+            }
+            customRowsToUpsert.push({
+              contact_id,
+              custom_field_id: fieldDef.id,
+              value: strVal,
+              updated_at: new Date().toISOString(),
+              updated_by_user_id: creatorUserId || null,
+            });
+          } else if (fieldDef.type === 'phone') {
+            const strVal = String(val).trim();
+            const sanitized = sanitizePhoneForMeta(strVal);
+            if (!isValidE164(sanitized)) {
+              throw new Error(`Telefone inválido para o campo "${fieldDef.name}" (${fieldDef.key}): "${val}". Use formato E.164 (ex: +5511999999999)`);
+            }
+            customRowsToUpsert.push({
+              contact_id,
+              custom_field_id: fieldDef.id,
+              value: sanitized,
+              updated_at: new Date().toISOString(),
+              updated_by_user_id: creatorUserId || null,
+            });
           } else {
             customRowsToUpsert.push({
-              contact_id: contact_id,
-              custom_field_id: fieldId,
-              value: val !== null && val !== undefined ? String(val) : '',
+              contact_id,
+              custom_field_id: fieldDef.id,
+              value: String(val),
               updated_at: new Date().toISOString(),
               updated_by_user_id: creatorUserId || null,
             });
@@ -1092,12 +1154,31 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         if (invalidKeys.length > 0) {
           throw new Error(`Campos personalizados não encontrados ou desativados: ${invalidKeys.join(', ')}`);
         }
+      }
 
-        for (const row of customRowsToUpsert) {
-          await admin
-            .from('contact_custom_values')
-            .upsert(row, { onConflict: 'contact_id,custom_field_id' });
-        }
+      // Execute contacts update
+      const { data: updatedContact, error: updateError } = await admin
+        .from('contacts')
+        .update(updates)
+        .eq('id', contact_id)
+        .select('id, name, phone, email, company, created_at, updated_at')
+        .single();
+
+      if (updateError) throw updateError;
+
+      // Execute custom values deletes & upserts
+      for (const deleteFieldId of customIdsToDelete) {
+        await admin
+          .from('contact_custom_values')
+          .delete()
+          .eq('contact_id', contact_id)
+          .eq('custom_field_id', deleteFieldId);
+      }
+
+      for (const row of customRowsToUpsert) {
+        await admin
+          .from('contact_custom_values')
+          .upsert(row, { onConflict: 'contact_id,custom_field_id' });
       }
 
       return {

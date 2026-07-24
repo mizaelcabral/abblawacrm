@@ -139,6 +139,7 @@ export async function POST(request: Request) {
 
     const displayName = (displayNameInput || file.name).trim();
     const validUntil = validUntilInput ? new Date(validUntilInput).toISOString() : null;
+    const userNotes = (formData.get('notes') as string | null)?.trim() || null;
 
     // 7. Create logical document record
     const { data: doc, error: docError } = await admin
@@ -152,7 +153,8 @@ export async function POST(request: Request) {
         status: 'recebido',
         received_at: new Date().toISOString(),
         valid_until: validUntil,
-        rejection_reason: rejectionReason || null,
+        notes: userNotes,
+        rejection_reason: null,
         uploaded_by_user_id: user.id,
         version: 1,
       })
