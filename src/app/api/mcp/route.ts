@@ -2369,6 +2369,9 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           updateData.status_reason = status_reason.trim();
         } else if (status_reason !== undefined) {
           updateData.status_reason = status_reason;
+        } else {
+          // ponytail: ao transitar para um status que NÃO exige motivo (ex: under_review), limpa status_reason no registro principal
+          updateData.status_reason = null;
         }
 
         // CICLO DE VIDA DE CAMPOS CONDICIONAIS DE ESTADO:
