@@ -893,7 +893,7 @@ async function parseMessageContent(
         }
         return {
           ...empty,
-          contentText,
+          contentText: contentText || '[Mensagem de voz]',
           mediaUrl,
           mediaType: message.audio.mime_type,
         }

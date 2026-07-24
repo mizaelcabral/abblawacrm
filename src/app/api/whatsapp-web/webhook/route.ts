@@ -323,6 +323,7 @@ async function processIncomingMessage(config: any, messageData: any) {
         cleanBase64 = `data:${detectedMime};base64,${cleanBase64}`;
       }
 
+      base64Data = cleanBase64;
       mediaUrl = await uploadMediaFromBase64(config.account_id, cleanBase64, filename || 'media_file');
     } catch (err) {
       console.error('[WhatsApp Web Webhook] Failed to upload media:', err);

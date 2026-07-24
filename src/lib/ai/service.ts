@@ -7,12 +7,13 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY
  * Generate embedding vector for a given text using Gemini Embeddings API
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
-  if (!GEMINI_API_KEY) {
+  const geminiKey = process.env.GEMINI_API_KEY
+  if (!geminiKey) {
     throw new Error('GEMINI_API_KEY is not defined in environment variables.')
   }
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key=${geminiKey}`,
     {
       method: 'POST',
       headers: {
@@ -42,7 +43,9 @@ export async function generateEmbedding(text: string): Promise<number[]> {
  */
 export async function getRelevantContext(text: string, accountId: string): Promise<string> {
   try {
-    const embedding = await generateEmbedding(text)
+    // Strip audio transcription indicators for clean embedding vector search
+    const cleanQuery = text.replace(/^🎙️\s*\[Áudio Transcrito\]:\s*["']?|["']?$/gi, '').trim() || text
+    const embedding = await generateEmbedding(cleanQuery)
     const { data: matches, error } = await supabaseAdmin().rpc('match_knowledge_base', {
       query_embedding: embedding,
       match_threshold: 0.5,
@@ -72,29 +75,8 @@ export async function getAccountAIConfig(accountId: string) {
     .eq('id', accountId)
     .maybeSingle()
 
-  if (error || !data) {
-    const provider = 'gemini'
-    let defaultKey = undefined
-    if (provider === 'gemini') {
-      defaultKey = process.env.GEMINI_API_KEY
-    } else if (provider === 'openai') {
-      defaultKey = process.env.OPENAI_API_KEY
-    } else if (provider === 'anthropic') {
-      defaultKey = process.env.ANTHROPIC_API_KEY
-    } else if (provider === 'openrouter') {
-      defaultKey = process.env.OPENROUTER_API_KEY
-    }
-
-    return {
-      provider,
-      model: provider === 'gemini' ? 'gemini-2.5-flash' : provider === 'openai' ? 'gpt-4o' : provider === 'anthropic' ? 'claude-3-5-sonnet' : 'meta-llama/llama-3-8b-instruct',
-      apiKey: defaultKey,
-      apiUrl: null
-    }
-  }
-    
-  const provider = data.ai_provider || 'gemini'
-  let defaultKey = undefined
+  const provider = data?.ai_provider || 'gemini'
+  let defaultKey: string | undefined = undefined
   if (provider === 'gemini') {
     defaultKey = process.env.GEMINI_API_KEY
   } else if (provider === 'openai') {
@@ -105,11 +87,23 @@ export async function getAccountAIConfig(accountId: string) {
     defaultKey = process.env.OPENROUTER_API_KEY
   }
 
+  let decryptedKey: string | undefined = undefined
+  if (data?.ai_api_key) {
+    try {
+      decryptedKey = decrypt(data.ai_api_key)
+    } catch {
+      // Fallback for unencrypted/raw API keys stored directly in database
+      decryptedKey = data.ai_api_key
+    }
+  }
+
+  const finalKey = decryptedKey || defaultKey
+
   return {
     provider,
-    model: data.ai_model || (provider === 'gemini' ? 'gemini-2.5-flash' : provider === 'openai' ? 'gpt-4o' : provider === 'anthropic' ? 'claude-3-5-sonnet' : 'meta-llama/llama-3-8b-instruct'),
-    apiKey: data.ai_api_key ? decrypt(data.ai_api_key) : defaultKey,
-    apiUrl: data.ai_api_url || null
+    model: data?.ai_model || (provider === 'gemini' ? 'gemini-2.5-flash' : provider === 'openai' ? 'gpt-4o' : provider === 'anthropic' ? 'claude-3-5-sonnet' : 'meta-llama/llama-3-8b-instruct'),
+    apiKey: finalKey,
+    apiUrl: data?.ai_api_url || null
   }
 }
 
@@ -409,6 +403,7 @@ ${catalogContext ? `Catálogos de Produtos e Serviços da empresa disponíveis p
 
 Instruções críticas:
 - Responda de forma clara, natural e concisa.
+- Se a mensagem do usuário for uma transcrição de áudio (indicada por [Áudio Transcrito]), responda naturalmente ao conteúdo falado pelo usuário como se fosse uma mensagem normal de texto no WhatsApp.
 - Se o cliente perguntar sobre agendamento, reunião, consulta, horários ou contratar um serviço, forneça as informações do serviço e envie o LINK DE AGENDAMENTO correspondente.
 - Se o cliente demonstrar interesse em produtos, preços, comprar ou ver o catálogo do e-commerce, apresente o produto e forneça o LINK DIRETO do produto ou da loja virtual.
 - Se a resposta não puder ser derivada das informações fornecidas e for uma dúvida que necessite de suporte especializado, defina o campo "handoff" como true.
@@ -525,82 +520,124 @@ Instruções críticas:
 }
 
 /**
- * Transcribe audio using Gemini multimodal capabilities
- */
-/**
- * ponytail: transcribe audio using Gemini multimodal API or OpenAI Whisper fallback.
- * Accepts either base64 data string or HTTP media URL.
+ * Transcribe audio using Gemini multimodal API or OpenAI Whisper fallback.
+ * Accepts either base64 data string (with or without data URI scheme) or HTTP/HTTPS media URL.
  */
 export async function transcribeAudioUsingGemini(
   audioInput: string,
   accountId: string
 ): Promise<string | null> {
   try {
-    if (!audioInput) return null
+    if (!audioInput || typeof audioInput !== 'string') return null
 
     let cleanBase64 = audioInput.trim()
+    if (!cleanBase64) return null
+
     let mimeType = 'audio/ogg'
 
-    // If input is an HTTP URL, fetch it and convert to base64
+    // If input is an HTTP/HTTPS URL, fetch it and convert to base64
     if (cleanBase64.startsWith('http://') || cleanBase64.startsWith('https://')) {
       try {
         const res = await fetch(cleanBase64)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        if (!res.ok) throw new Error(`HTTP fetch failed with status ${res.status}`)
         const arrayBuf = await res.arrayBuffer()
         cleanBase64 = Buffer.from(arrayBuf).toString('base64')
-        const contentType = res.headers.get('content-type')
-        if (contentType && contentType.includes('/')) mimeType = contentType.split(';')[0]
+
+        let fetchedMime = res.headers.get('content-type')?.split(';')[0]?.trim()
+        if (!fetchedMime || fetchedMime === 'application/octet-stream' || fetchedMime === 'binary/octet-stream') {
+          const urlPath = audioInput.split('?')[0].toLowerCase()
+          if (urlPath.endsWith('.mp3')) fetchedMime = 'audio/mp3'
+          else if (urlPath.endsWith('.wav')) fetchedMime = 'audio/wav'
+          else if (urlPath.endsWith('.m4a')) fetchedMime = 'audio/m4a'
+          else if (urlPath.endsWith('.aac')) fetchedMime = 'audio/aac'
+          else if (urlPath.endsWith('.ogg') || urlPath.endsWith('.opus') || urlPath.endsWith('.oga')) fetchedMime = 'audio/ogg'
+          else if (urlPath.endsWith('.mp4')) fetchedMime = 'audio/mp4'
+          else if (urlPath.endsWith('.webm')) fetchedMime = 'audio/webm'
+        }
+        if (fetchedMime && fetchedMime.includes('/')) {
+          mimeType = fetchedMime
+        }
       } catch (fetchErr) {
         console.error('[transcribeAudioUsingGemini] Failed to fetch media URL:', fetchErr)
         return null
       }
     } else {
-      const mimeMatch = cleanBase64.match(/^data:([^;]+);base64,([\s\S]+)$/)
+      // Check if input is a Data URI scheme (e.g. data:audio/ogg;base64,...)
+      const mimeMatch = cleanBase64.match(/^data:([^;,]+)[^,]*;base64,([\s\S]+)$/i)
       if (mimeMatch) {
-        mimeType = mimeMatch[1]
+        mimeType = mimeMatch[1].trim()
         cleanBase64 = mimeMatch[2]
       }
+      // Sanitize raw base64 by stripping remaining whitespace
+      cleanBase64 = cleanBase64.replace(/\s+/g, '')
     }
 
     const config = await getAccountAIConfig(accountId)
-    // ponytail: fallback to system GEMINI_API_KEY if account provider is not gemini or key is missing
-    const geminiKey = (config.provider === 'gemini' && config.apiKey) ? config.apiKey : process.env.GEMINI_API_KEY
 
-    if (geminiKey) {
-      const modelName = 'gemini-2.5-flash'
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`
+    // Build Gemini key candidates list (account custom key first if provider is gemini, then system key)
+    const geminiKeyCandidates: string[] = []
+    if (config.provider === 'gemini' && config.apiKey) {
+      geminiKeyCandidates.push(config.apiKey)
+    }
+    if (process.env.GEMINI_API_KEY && !geminiKeyCandidates.includes(process.env.GEMINI_API_KEY)) {
+      geminiKeyCandidates.push(process.env.GEMINI_API_KEY)
+    }
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { inlineData: { mimeType, data: cleanBase64 } },
-                { text: 'Transcreva este áudio de forma literal e limpa em português.' }
-              ]
-            }
-          ]
+    // Try Gemini multimodal API transcription
+    for (const geminiKey of geminiKeyCandidates) {
+      try {
+        const modelName = 'gemini-2.5-flash'
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { inlineData: { mimeType, data: cleanBase64 } },
+                  { text: 'Transcreva este áudio de forma literal e limpa em português. Retorne apenas o texto transcrito.' }
+                ]
+              }
+            ]
+          })
         })
-      })
 
-      if (response.ok) {
-        const data = await response.json()
-        const transcription = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-        if (transcription.trim()) return transcription.trim()
-      } else {
-        const errorText = await response.text()
-        console.warn(`[transcribeAudioUsingGemini] Gemini request failed: ${response.status} - ${errorText}`)
+        if (response.ok) {
+          const data = await response.json()
+          const transcription = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+          if (transcription.trim()) {
+            return transcription.trim()
+          }
+        } else {
+          const errorText = await response.text()
+          console.warn(`[transcribeAudioUsingGemini] Gemini transcription failed (${response.status}): ${errorText}`)
+        }
+      } catch (geminiErr) {
+        console.warn('[transcribeAudioUsingGemini] Exception calling Gemini audio API:', geminiErr)
       }
     }
 
-    // ponytail: fallback to OpenAI Whisper if Gemini key fails or is unavailable
-    const openaiKey = config.provider === 'openai' && config.apiKey ? config.apiKey : process.env.OPENAI_API_KEY
-    if (openaiKey) {
+    // Build OpenAI Whisper key candidates list (account custom key first if provider is openai, then system key)
+    const openaiKeyCandidates: string[] = []
+    if (config.provider === 'openai' && config.apiKey) {
+      openaiKeyCandidates.push(config.apiKey)
+    }
+    if (process.env.OPENAI_API_KEY && !openaiKeyCandidates.includes(process.env.OPENAI_API_KEY)) {
+      openaiKeyCandidates.push(process.env.OPENAI_API_KEY)
+    }
+
+    // Try OpenAI Whisper API fallback
+    for (const openaiKey of openaiKeyCandidates) {
       try {
         const buffer = Buffer.from(cleanBase64, 'base64')
-        const ext = mimeType.includes('mp3') ? 'mp3' : mimeType.includes('wav') ? 'wav' : mimeType.includes('webm') ? 'webm' : 'ogg'
+        const ext = mimeType.includes('mp3') ? 'mp3' 
+                  : mimeType.includes('wav') ? 'wav' 
+                  : mimeType.includes('webm') ? 'webm' 
+                  : mimeType.includes('m4a') ? 'm4a' 
+                  : mimeType.includes('mp4') ? 'mp4' 
+                  : 'ogg'
         const formData = new FormData()
         const fileBlob = new Blob([buffer], { type: mimeType })
         formData.append('file', fileBlob, `audio.${ext}`)
@@ -615,7 +652,12 @@ export async function transcribeAudioUsingGemini(
 
         if (whisperRes.ok) {
           const whisperData = await whisperRes.json()
-          if (whisperData.text?.trim()) return whisperData.text.trim()
+          if (whisperData.text?.trim()) {
+            return whisperData.text.trim()
+          }
+        } else {
+          const whisperError = await whisperRes.text()
+          console.warn(`[transcribeAudioUsingGemini] Whisper request failed (${whisperRes.status}): ${whisperError}`)
         }
       } catch (whisperErr) {
         console.error('[transcribeAudioUsingGemini] Whisper fallback error:', whisperErr)
@@ -624,8 +666,7 @@ export async function transcribeAudioUsingGemini(
 
     return null
   } catch (error) {
-    console.error('[transcribeAudioUsingGemini] Error during audio transcription:', error)
+    console.error('[transcribeAudioUsingGemini] Unexpected error during audio transcription:', error)
     return null
   }
 }
-

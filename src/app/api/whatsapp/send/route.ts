@@ -207,6 +207,7 @@ export async function POST(request: Request) {
           } else if (message_type === 'audio') {
             method = 'sendAudio';
             bodyPayload.audio = media_url;
+            if (content_text) bodyPayload.caption = content_text;
           } else {
             bodyPayload.document = media_url;
             if (content_text) bodyPayload.caption = content_text;
@@ -508,7 +509,8 @@ export async function POST(request: Request) {
           evolutionMessageId = responseData.key?.id || responseData.message?.key?.id || '';
         } else if (isMediaKind) {
           // ponytail: derive mimetype based on message type and extension to guarantee delivery by Evolution API
-          const ext = (media_url.split('.').pop() || '').toLowerCase().split('?')[0];
+          const targetName = filename || media_url;
+          const ext = (targetName.split('.').pop() || '').toLowerCase().split('?')[0];
           let mimetype = 'application/octet-stream';
           let defaultExt = 'bin';
 
@@ -554,7 +556,7 @@ export async function POST(request: Request) {
 
               if (audioRes.ok) {
                 responseData = await audioRes.json();
-                evolutionMessageId = responseData.key?.id || responseData.message?.key?.id || '';
+                evolutionMessageId = responseData.key?.id || responseData.message?.key?.id || responseData.id || '';
               }
             } catch (audioErr) {
               console.warn('[WhatsApp Web] sendWhatsAppAudio endpoint failed, falling back to sendMedia:', audioErr);
