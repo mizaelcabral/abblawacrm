@@ -5,7 +5,14 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
-import type { Contact, Tag, ContactTag, ContactNote, CustomField, ContactCustomValue, Deal } from '@/types';
+import type {
+  Contact,
+  Tag,
+  ContactNote,
+  CustomField,
+  Deal,
+  DocumentItem,
+} from '@/types';
 import {
   Sheet,
   SheetContent,
@@ -20,7 +27,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Phone,
   Mail,
@@ -31,9 +37,14 @@ import {
   Plus,
   Trash2,
   Save,
-  X,
   DollarSign,
+  FileText,
+  Download,
+  AlertCircle,
+  Clock,
+  ShieldCheck,
 } from 'lucide-react';
+import { DocumentUploadDialog, DOCUMENT_TYPES } from './document-upload-dialog';
 
 interface ContactDetailViewProps {
   open: boolean;
@@ -49,7 +60,7 @@ export function ContactDetailView({
   onUpdated,
 }: ContactDetailViewProps) {
   const supabase = createClient();
-  const { accountId, defaultCurrency } = useAuth();
+  const { user, accountId, defaultCurrency } = useAuth();
 
   const [contact, setContact] = useState<Contact | null>(null);
   const [loading, setLoading] = useState(false);
@@ -82,6 +93,12 @@ export function ContactDetailView({
   // Deals tab
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loadingDeals, setLoadingDeals] = useState(false);
+
+  // Documents tab
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [documentUploadOpen, setDocumentUploadOpen] = useState(false);
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
 
   const fetchContact = useCallback(async () => {
     if (!contactId) return;
@@ -136,14 +153,20 @@ export function ContactDetailView({
     setLoadingCustom(true);
 
     const [fieldsRes, valuesRes] = await Promise.all([
-      supabase.from('custom_fields').select('*').order('field_name'),
+      supabase
+        .from('custom_fields')
+        .select('*')
+        .eq('is_active', true)
+        .order('group_name', { ascending: true })
+        .order('display_order', { ascending: true })
+        .order('field_name', { ascending: true }),
       supabase
         .from('contact_custom_values')
         .select('*')
         .eq('contact_id', contactId),
     ]);
 
-    if (fieldsRes.data) setCustomFields(fieldsRes.data);
+    if (fieldsRes.data) setCustomFields(fieldsRes.data as CustomField[]);
     if (valuesRes.data) {
       const map: Record<string, string> = {};
       valuesRes.data.forEach((v) => {
@@ -166,6 +189,21 @@ export function ContactDetailView({
     setLoadingDeals(false);
   }, [contactId, supabase]);
 
+  const fetchDocuments = useCallback(async () => {
+    if (!contactId) return;
+    setLoadingDocuments(true);
+
+    const { data } = await supabase
+      .from('documents')
+      .select('*, deal:deals(id, title), current_version:document_versions(*)')
+      .eq('contact_id', contactId)
+      .eq('is_archived', false)
+      .order('created_at', { ascending: false });
+
+    setDocuments((data as DocumentItem[]) || []);
+    setLoadingDocuments(false);
+  }, [contactId, supabase]);
+
   useEffect(() => {
     if (open && contactId) {
       fetchContact();
@@ -173,8 +211,9 @@ export function ContactDetailView({
       fetchNotes();
       fetchCustomFields();
       fetchDeals();
+      fetchDocuments();
     }
-  }, [open, contactId, fetchContact, fetchTags, fetchNotes, fetchCustomFields, fetchDeals]);
+  }, [open, contactId, fetchContact, fetchTags, fetchNotes, fetchCustomFields, fetchDeals, fetchDocuments]);
 
   async function copyPhone() {
     if (!contact?.phone) return;
@@ -246,10 +285,6 @@ export function ContactDetailView({
     if (!contactId || !newNote.trim()) return;
     setSavingNote(true);
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const user = session?.user;
     if (!user || !accountId) {
       toast.error('Não autenticado');
       setSavingNote(false);
@@ -292,7 +327,6 @@ export function ContactDetailView({
     setSavingCustom(true);
 
     try {
-      // Delete existing values and re-insert
       await supabase
         .from('contact_custom_values')
         .delete()
@@ -304,6 +338,8 @@ export function ContactDetailView({
           contact_id: contactId,
           custom_field_id: fieldId,
           value: val.trim(),
+          updated_at: new Date().toISOString(),
+          updated_by_user_id: user?.id || null,
         }));
 
       if (rows.length > 0) {
@@ -320,6 +356,23 @@ export function ContactDetailView({
     setSavingCustom(false);
   }
 
+  async function handleDownloadDocument(doc: DocumentItem) {
+    setDownloadingDocId(doc.id);
+    try {
+      const res = await fetch(`/api/documents/${doc.id}/download`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha ao gerar link seguro');
+
+      if (data.url) {
+        window.open(data.url, '_blank');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao acessar documento');
+    } finally {
+      setDownloadingDocId(null);
+    }
+  }
+
   function getInitials(name?: string | null) {
     if (!name) return '?';
     return name
@@ -330,20 +383,34 @@ export function ContactDetailView({
       .slice(0, 2);
   }
 
+  // Calculate incomplete custom fields
+  const activeFields = customFields.filter((f) => f.is_active !== false);
+  const incompleteCount = activeFields.filter(
+    (f) => !customValues[f.id] || !customValues[f.id].trim()
+  ).length;
+
+  // Group custom fields
+  const groupedFields: Record<string, CustomField[]> = {};
+  activeFields.forEach((f) => {
+    const group = f.group_name || 'Dados Gerais';
+    if (!groupedFields[group]) groupedFields[group] = [];
+    groupedFields[group].push(f);
+  });
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="bg-popover border-border text-popover-foreground sm:max-w-lg w-full p-0"
+        className="bg-popover border-border text-popover-foreground sm:max-w-lg w-full p-0 flex flex-col h-full"
       >
         {loading || !contact ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="size-6 animate-spin text-primary" />
           </div>
         ) : (
-          <div className="flex flex-col h-full">
+          <div className="flex flex-col h-full overflow-hidden">
             {/* Header */}
-            <SheetHeader className="p-4 border-b border-border/50">
+            <SheetHeader className="p-4 border-b border-border/50 shrink-0">
               <div className="flex items-center gap-3">
                 <Avatar className="size-12 bg-muted border border-border">
                   <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
@@ -355,7 +422,7 @@ export function ContactDetailView({
                     {contact.name || 'Desconhecido'}
                   </SheetTitle>
                   <SheetDescription className="text-muted-foreground text-xs mt-0.5">
-                    Detalhes do contato
+                    Detalhes e documentos do contato
                   </SheetDescription>
                   <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                     <button
@@ -389,34 +456,50 @@ export function ContactDetailView({
 
             {/* Tabs */}
             <Tabs defaultValue="details" className="flex-1 flex flex-col min-h-0">
-              <TabsList className="bg-muted/50 border-b border-border mx-4 mt-3">
+              <TabsList className="bg-muted/50 border-b border-border mx-4 mt-3 shrink-0 flex-wrap h-auto p-1">
                 <TabsTrigger
                   value="details"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="data-active:bg-muted data-active:text-primary text-muted-foreground text-xs py-1 px-2.5"
                 >
                   Detalhes
                 </TabsTrigger>
                 <TabsTrigger
                   value="tags"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="data-active:bg-muted data-active:text-primary text-muted-foreground text-xs py-1 px-2.5"
                 >
                   Tags
                 </TabsTrigger>
                 <TabsTrigger
                   value="notes"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="data-active:bg-muted data-active:text-primary text-muted-foreground text-xs py-1 px-2.5"
                 >
                   Observações
                 </TabsTrigger>
                 <TabsTrigger
                   value="custom"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="data-active:bg-muted data-active:text-primary text-muted-foreground text-xs py-1 px-2.5 relative"
                 >
-                  Campos Personalizados
+                  Dados Complementares
+                  {incompleteCount > 0 && (
+                    <span className="ml-1 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.2 text-[10px] font-semibold">
+                      {incompleteCount}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="documents"
+                  className="data-active:bg-muted data-active:text-primary text-muted-foreground text-xs py-1 px-2.5"
+                >
+                  Documentos
+                  {documents.length > 0 && (
+                    <span className="ml-1 text-[10px] text-muted-foreground">
+                      ({documents.length})
+                    </span>
+                  )}
                 </TabsTrigger>
                 <TabsTrigger
                   value="deals"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  className="data-active:bg-muted data-active:text-primary text-muted-foreground text-xs py-1 px-2.5"
                 >
                   Negócios
                 </TabsTrigger>
@@ -579,36 +662,98 @@ export function ContactDetailView({
                 </div>
               </TabsContent>
 
-              {/* Custom Fields Tab */}
+              {/* Custom Fields / Complementary Data Tab */}
               <TabsContent value="custom" className="flex-1 overflow-y-auto px-4 py-3">
                 {loadingCustom ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="size-5 animate-spin text-muted-foreground" />
                   </div>
-                ) : customFields.length === 0 ? (
+                ) : activeFields.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">
-                    Nenhum campo personalizado definido. Crie-os em Configurações.
+                    Nenhum campo personalizado ativo nesta conta. Crie ou ative campos em Configurações.
                   </p>
                 ) : (
-                  <div className="space-y-3">
-                    {customFields.map((field) => (
-                      <div key={field.id} className="space-y-1.5">
-                        <Label className="text-muted-foreground text-xs capitalize">
-                          {field.field_name}
-                        </Label>
-                        <Input
-                          value={customValues[field.id] ?? ''}
-                          onChange={(e) =>
-                            setCustomValues((prev) => ({
-                              ...prev,
-                              [field.id]: e.target.value,
-                            }))
-                          }
-                          placeholder={`Digitar ${field.field_name}...`}
-                          className="bg-muted border-border text-foreground h-8 text-sm placeholder:text-muted-foreground"
-                        />
+                  <div className="space-y-4">
+                    {incompleteCount > 0 && (
+                      <div className="rounded-md border border-amber-500/20 bg-amber-500/10 p-2.5 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                        <AlertCircle className="size-4 shrink-0" />
+                        <span>
+                          {incompleteCount} {incompleteCount === 1 ? 'campo pendente' : 'campos pendentes'} de preenchimento.
+                        </span>
+                      </div>
+                    )}
+
+                    {Object.entries(groupedFields).map(([groupName, groupFields]) => (
+                      <div key={groupName} className="space-y-2.5 rounded-lg border border-border bg-card p-3">
+                        <h4 className="text-xs font-semibold text-foreground border-b border-border pb-1.5">
+                          {groupName}
+                        </h4>
+                        <div className="space-y-2">
+                          {groupFields.map((field) => {
+                            const val = customValues[field.id] ?? '';
+                            const isIncomplete = !val.trim();
+
+                            return (
+                              <div key={field.id} className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-xs text-muted-foreground">
+                                    {field.field_name}
+                                  </Label>
+                                  {isIncomplete && (
+                                    <span className="text-[10px] text-amber-500 font-medium">
+                                      Incompleto
+                                    </span>
+                                  )}
+                                </div>
+
+                                {field.field_type === 'boolean' ? (
+                                  <select
+                                    value={val}
+                                    onChange={(e) =>
+                                      setCustomValues((prev) => ({
+                                        ...prev,
+                                        [field.id]: e.target.value,
+                                      }))
+                                    }
+                                    className="w-full h-8 rounded-md bg-muted border border-border px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                                  >
+                                    <option value="">Não informado</option>
+                                    <option value="true">Sim</option>
+                                    <option value="false">Não</option>
+                                  </select>
+                                ) : field.field_type === 'date' ? (
+                                  <Input
+                                    type="date"
+                                    value={val}
+                                    onChange={(e) =>
+                                      setCustomValues((prev) => ({
+                                        ...prev,
+                                        [field.id]: e.target.value,
+                                      }))
+                                    }
+                                    className="bg-muted border-border text-foreground h-8 text-xs"
+                                  />
+                                ) : (
+                                  <Input
+                                    type={field.field_type === 'email' ? 'email' : field.field_type === 'phone' ? 'tel' : 'text'}
+                                    value={val}
+                                    onChange={(e) =>
+                                      setCustomValues((prev) => ({
+                                        ...prev,
+                                        [field.id]: e.target.value,
+                                      }))
+                                    }
+                                    placeholder={`Digitar ${field.field_name.toLowerCase()}...`}
+                                    className="bg-muted border-border text-foreground h-8 text-xs placeholder:text-muted-foreground"
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     ))}
+
                     <Button
                       onClick={saveCustomFields}
                       disabled={savingCustom}
@@ -616,14 +761,123 @@ export function ContactDetailView({
                       size="sm"
                     >
                       {savingCustom ? (
-                        <Loader2 className="size-3.5 animate-spin" />
+                        <Loader2 className="size-3.5 animate-spin mr-1.5" />
                       ) : (
-                        <Save className="size-3.5" />
+                        <Save className="size-3.5 mr-1.5" />
                       )}
-                      Salvar Campos Personalizados
+                      Salvar Dados Complementares
                     </Button>
                   </div>
                 )}
+              </TabsContent>
+
+              {/* Documents Tab */}
+              <TabsContent value="documents" className="flex-1 overflow-y-auto px-4 py-3">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-medium text-foreground">Documentos do Contato</h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        Arquivos privados enviados pela equipe
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => setDocumentUploadOpen(true)}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-7"
+                    >
+                      <Plus className="size-3.5 mr-1" />
+                      Adicionar Documento
+                    </Button>
+                  </div>
+
+                  {loadingDocuments ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : documents.length === 0 ? (
+                    <div className="text-center py-8 border border-dashed border-border rounded-lg p-4">
+                      <FileText className="size-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+                      <p className="text-xs text-muted-foreground">
+                        Nenhum documento cadastrado neste contato.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {documents.map((doc) => {
+                        const typeLabel =
+                          DOCUMENT_TYPES.find((t) => t.value === doc.document_type)?.label ||
+                          doc.document_type;
+
+                        const isExpired =
+                          doc.valid_until && new Date(doc.valid_until) < new Date();
+
+                        return (
+                          <div
+                            key={doc.id}
+                            className="rounded-lg border border-border bg-muted/40 p-3 space-y-2"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="size-4 text-primary shrink-0" />
+                                  <span className="text-xs font-medium text-foreground truncate">
+                                    {doc.display_name}
+                                  </span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-muted-foreground">
+                                  <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">
+                                    {typeLabel}
+                                  </span>
+                                  {doc.deal && (
+                                    <span className="rounded bg-primary/10 text-primary px-1.5 py-0.5">
+                                      Negócio: {doc.deal.title}
+                                    </span>
+                                  )}
+                                  {doc.valid_until && (
+                                    <span
+                                      className={`flex items-center gap-1 ${
+                                        isExpired
+                                          ? 'text-red-500 font-semibold'
+                                          : 'text-muted-foreground'
+                                      }`}
+                                    >
+                                      <Clock className="size-3" />
+                                      Validade: {new Date(doc.valid_until).toLocaleDateString('pt-BR')}
+                                      {isExpired && ' (VENCIDO)'}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={downloadingDocId === doc.id}
+                                onClick={() => handleDownloadDocument(doc)}
+                                className="h-7 text-xs border-border shrink-0"
+                                title="Visualizar / Baixar documento com URL segura temporária"
+                              >
+                                {downloadingDocId === doc.id ? (
+                                  <Loader2 className="size-3 animate-spin mr-1" />
+                                ) : (
+                                  <Download className="size-3 mr-1 text-primary" />
+                                )}
+                                Visualizar
+                              </Button>
+                            </div>
+
+                            {doc.rejection_reason && (
+                              <p className="text-[11px] text-muted-foreground bg-muted p-1.5 rounded border border-border/50">
+                                <span className="font-semibold">Obs:</span> {doc.rejection_reason}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </TabsContent>
 
               {/* Deals Tab */}
@@ -684,6 +938,17 @@ export function ContactDetailView({
               </TabsContent>
             </Tabs>
           </div>
+        )}
+
+        {/* Upload Dialog */}
+        {contactId && (
+          <DocumentUploadDialog
+            open={documentUploadOpen}
+            onOpenChange={setDocumentUploadOpen}
+            contactId={contactId}
+            deals={deals}
+            onSuccess={fetchDocuments}
+          />
         )}
       </SheetContent>
     </Sheet>

@@ -125,8 +125,14 @@ export interface CustomField {
   account_id: string;
   field_name: string;
   field_type: string;
+  field_key?: string;
+  group_name?: string;
+  is_active?: boolean;
+  display_order?: number;
+  validation_regex?: string;
   field_options?: Record<string, unknown>;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface ContactCustomValue {
@@ -134,7 +140,43 @@ export interface ContactCustomValue {
   contact_id: string;
   custom_field_id: string;
   value?: string;
+  updated_at?: string;
+  updated_by_user_id?: string;
 }
+
+export type DocumentStatus = 'solicitado' | 'recebido' | 'em_analise' | 'aprovado' | 'recusado' | 'vencido';
+
+export interface DocumentItem {
+  id: string;
+  account_id: string;
+  contact_id?: string;
+  deal_id?: string;
+  document_type: string;
+  display_name: string;
+  status: DocumentStatus;
+  received_at?: string;
+  valid_until?: string;
+  rejection_reason?: string;
+  version: number;
+  current_version_id?: string;
+  uploaded_by_user_id?: string;
+  uploaded_by_contact_id?: string;
+  reviewed_by_user_id?: string;
+  reviewed_at?: string;
+  retention_until?: string;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+  deal?: { id: string; title: string };
+  current_version?: {
+    id: string;
+    file_path: string;
+    file_size: number;
+    mime_type: string;
+    created_at: string;
+  };
+}
+
 
 export interface ContactNote {
   id: string;

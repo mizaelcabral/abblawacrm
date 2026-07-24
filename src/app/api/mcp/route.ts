@@ -168,6 +168,36 @@ export async function POST(request: Request) {
                 }
               },
               {
+                name: 'get_contact',
+                description: 'Obtém detalhes de um contato pelo contact_id, organizando campos personalizados por grupo.',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    contact_id: { type: 'string', description: 'UUID do contato' }
+                  },
+                  required: ['contact_id']
+                }
+              },
+              {
+                name: 'update_contact',
+                description: 'Atualiza parcialmente os dados de um contato (nome, telefone, email, empresa, campos personalizados).',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    contact_id: { type: 'string', description: 'UUID do contato a ser atualizado' },
+                    name: { type: 'string', description: 'Novo nome do contato' },
+                    phone: { type: 'string', description: 'Novo número de telefone no formato internacional E.164' },
+                    email: { type: 'string', description: 'Novo e-mail do contato' },
+                    company: { type: 'string', description: 'Nova empresa do contato' },
+                    custom_fields: {
+                      type: 'object',
+                      description: 'Objeto chave-valor com os campos personalizados ativos a atualizar (ex: { "cpf": "123.456.789-00" })'
+                    }
+                  },
+                  required: ['contact_id']
+                }
+              },
+              {
                 name: 'list_tasks',
                 description: "List tasks. Supports optional status filter ('pending', 'in_progress', 'completed', 'review_required').",
                 inputSchema: {
@@ -798,6 +828,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
   // 3. Reject write operations if no valid deterministic author exists
   const isWriteTool =
     name === 'create_contact' ||
+    name === 'update_contact' ||
     name === 'send_whatsapp_message' ||
     name === 'create_direct_charge' ||
     name === 'create_document_metadata' ||
@@ -868,7 +899,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         };
       }
 
-      // ponytail: insert into column name and user_id (MCP API key owner or account member fallback)
+      // ponytail: data minimization — project only essential contact fields
       const { data, error } = await admin
         .from('contacts')
         .insert({
@@ -878,7 +909,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           phone: sanitizedPhone,
           email: email?.trim() || null,
         })
-        .select()
+        .select('id, name, phone, email, company, created_at, updated_at')
         .single();
 
       if (error) throw error;
@@ -887,7 +918,193 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         content: [
           {
             type: 'text',
-            text: `Contact created successfully:\n${JSON.stringify(data, null, 2)}`,
+            text: JSON.stringify(data, null, 2),
+          },
+        ],
+      };
+    }
+
+    case 'get_contact': {
+      const { contact_id } = args;
+      if (!contact_id) {
+        throw new Error('contact_id is required.');
+      }
+
+      // ponytail: fetch contact verifying account ownership and data minimization
+      const { data: contact } = await admin
+        .from('contacts')
+        .select('id, name, phone, email, company, created_at, updated_at')
+        .eq('id', contact_id)
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (!contact) {
+        throw new Error('Contact not found or belongs to another account.');
+      }
+
+      const [fieldsRes, valuesRes] = await Promise.all([
+        admin
+          .from('custom_fields')
+          .select('id, field_name, field_key, group_name, field_type, display_order')
+          .eq('account_id', accountId)
+          .eq('is_active', true)
+          .order('display_order', { ascending: true })
+          .order('field_name', { ascending: true }),
+        admin
+          .from('contact_custom_values')
+          .select('custom_field_id, value')
+          .eq('contact_id', contact_id),
+      ]);
+
+      const valueMap = new Map<string, string>();
+      (valuesRes.data || []).forEach((val) => {
+        if (val.value !== null && val.value !== undefined) {
+          valueMap.set(val.custom_field_id, val.value);
+        }
+      });
+
+      const groups: Record<string, Record<string, any>> = {};
+      (fieldsRes.data || []).forEach((field) => {
+        const group = field.group_name || 'Dados Gerais';
+        if (!groups[group]) {
+          groups[group] = {};
+        }
+        const key = field.field_key || field.field_name;
+        groups[group][key] = {
+          label: field.field_name,
+          type: field.field_type,
+          value: valueMap.get(field.id) ?? null,
+        };
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                contact,
+                custom_fields_by_group: groups,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+
+    case 'update_contact': {
+      const { contact_id, name: newName, phone: newPhone, email: newEmail, company: newCompany, custom_fields: newCustomFields } = args;
+      if (!contact_id) {
+        throw new Error('contact_id is required.');
+      }
+
+      const { data: existingContact } = await admin
+        .from('contacts')
+        .select('id')
+        .eq('id', contact_id)
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (!existingContact) {
+        throw new Error('Contact not found or belongs to another account.');
+      }
+
+      const updates: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (newName !== undefined) {
+        const trimmedName = (newName || '').trim();
+        if (!trimmedName) throw new Error('Contact name cannot be empty.');
+        updates.name = trimmedName;
+      }
+
+      if (newPhone !== undefined) {
+        const sanitizedPhone = sanitizePhoneForMeta(newPhone);
+        if (!isValidE164(sanitizedPhone)) {
+          throw new Error('Invalid phone format. Please use international E.164 format (e.g. +5511999999999)');
+        }
+        const { data: dup } = await admin
+          .from('contacts')
+          .select('id')
+          .eq('account_id', accountId)
+          .eq('phone', sanitizedPhone)
+          .neq('id', contact_id)
+          .maybeSingle();
+
+        if (dup) {
+          throw new Error('Another contact already exists with this phone number.');
+        }
+        updates.phone = sanitizedPhone;
+      }
+
+      if (newEmail !== undefined) {
+        updates.email = newEmail ? newEmail.trim() : null;
+      }
+
+      if (newCompany !== undefined) {
+        updates.company = newCompany ? newCompany.trim() : null;
+      }
+
+      const { data: updatedContact, error: updateError } = await admin
+        .from('contacts')
+        .update(updates)
+        .eq('id', contact_id)
+        .select('id, name, phone, email, company, created_at, updated_at')
+        .single();
+
+      if (updateError) throw updateError;
+
+      if (newCustomFields && typeof newCustomFields === 'object') {
+        const { data: activeFields } = await admin
+          .from('custom_fields')
+          .select('id, field_name, field_key')
+          .eq('account_id', accountId)
+          .eq('is_active', true);
+
+        const fieldLookup = new Map<string, string>();
+        (activeFields || []).forEach((f) => {
+          if (f.field_key) fieldLookup.set(f.field_key.toLowerCase(), f.id);
+          fieldLookup.set(f.field_name.toLowerCase(), f.id);
+          fieldLookup.set(f.id, f.id);
+        });
+
+        const invalidKeys: string[] = [];
+        const customRowsToUpsert: { contact_id: string; custom_field_id: string; value: string; updated_at: string; updated_by_user_id?: string | null }[] = [];
+
+        for (const [key, val] of Object.entries(newCustomFields)) {
+          const fieldId = fieldLookup.get(key.toLowerCase());
+          if (!fieldId) {
+            invalidKeys.push(key);
+          } else {
+            customRowsToUpsert.push({
+              contact_id: contact_id,
+              custom_field_id: fieldId,
+              value: val !== null && val !== undefined ? String(val) : '',
+              updated_at: new Date().toISOString(),
+              updated_by_user_id: creatorUserId || null,
+            });
+          }
+        }
+
+        if (invalidKeys.length > 0) {
+          throw new Error(`Campos personalizados não encontrados ou desativados: ${invalidKeys.join(', ')}`);
+        }
+
+        for (const row of customRowsToUpsert) {
+          await admin
+            .from('contact_custom_values')
+            .upsert(row, { onConflict: 'contact_id,custom_field_id' });
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(updatedContact, null, 2),
           },
         ],
       };
