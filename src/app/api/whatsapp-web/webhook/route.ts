@@ -263,13 +263,15 @@ async function processIncomingMessage(config: any, messageData: any) {
     msgBody.audioMessage?.url ||
     msgBody.documentMessage?.url;
 
-  if (!base64Data && directUrl && typeof directUrl === 'string' && directUrl.startsWith('http')) {
+  // ponytail: only use directUrl directly if it is already a hosted public URL (Supabase/App)
+  if (!base64Data && directUrl && typeof directUrl === 'string' && (directUrl.includes('supabase.co') || directUrl.includes('abblahub.com'))) {
     mediaUrl = directUrl;
   }
 
-  if (!base64Data && !mediaUrl && (contentType === 'image' || contentType === 'video' || contentType === 'audio' || contentType === 'document' || contentType === 'sticker')) {
+  // If base64Data is missing and mediaUrl is not already a hosted Supabase URL, fetch base64 from Evolution API
+  if (!base64Data && (!mediaUrl || mediaUrl.includes('whatsapp.net') || mediaUrl.includes('mmg.')) && (contentType === 'image' || contentType === 'video' || contentType === 'audio' || contentType === 'document' || contentType === 'sticker')) {
     try {
-      console.log('[WhatsApp Web Webhook] Base64 missing from payload. Fetching from getBase64FromMediaMessage...');
+      console.log('[WhatsApp Web Webhook] Fetching media base64 from Evolution API getBase64FromMediaMessage...');
       const token = decrypt(config.api_token);
       const res = await fetch(`${config.api_url}/chat/getBase64FromMediaMessage/${config.instance_name}`, {
         method: 'POST',

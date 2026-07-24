@@ -549,8 +549,6 @@ export async function POST(request: Request) {
                 body: JSON.stringify({
                   number: sanitizedPhone,
                   audio: media_url,
-                  delay: 1200,
-                  encoding: true,
                 }),
               });
 
