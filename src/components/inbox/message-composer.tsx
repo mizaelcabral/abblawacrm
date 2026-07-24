@@ -529,11 +529,9 @@ export function MessageComposer({
   // The encoded Ogg/Opus file from opus-recorder → upload as an audio
   // draft. WhatsApp renders Ogg/Opus as a playable voice note.
   const finalizeRecording = useCallback(
-    async (bytes: Uint8Array) => {
-      // Uint8Array is a valid BlobPart at runtime; the cast sidesteps the
-      // lib.dom ArrayBufferLike-vs-ArrayBuffer generic mismatch.
-      const file = new File([bytes as unknown as BlobPart], `voice-${Date.now()}.ogg`, {
-        type: "audio/ogg",
+    async (bytes: Uint8Array, mimeType: string = "audio/ogg", ext: string = "ogg") => {
+      const file = new File([bytes as unknown as BlobPart], `voice-${Date.now()}.${ext}`, {
+        type: mimeType,
       });
       if (file.size === 0) return; // cancelled / empty take
       if (file.size > MEDIA_MAX_BYTES_BY_KIND.audio) {
@@ -561,11 +559,16 @@ export function MessageComposer({
       return;
     }
     cancelledRef.current = false;
+    let stream: MediaStream | null = null;
     try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+
       // Lazy-load the encoder (≈400 KB worker) only when the user records
       const { default: Recorder } = await import("opus-recorder");
       const recorder = new Recorder({
         encoderPath: OPUS_ENCODER_PATH,
+        mediaStream: stream,
         numberOfChannels: 1,
         encoderApplication: 2048, // VOIP — tuned for speech
         encoderSampleRate: 48000,
@@ -573,7 +576,7 @@ export function MessageComposer({
       });
       recorder.ondataavailable = (bytes) => {
         if (cancelledRef.current) return;
-        void finalizeRecording(bytes);
+        void finalizeRecording(bytes, "audio/ogg", "ogg");
       };
       recorderRef.current = recorder;
       await recorder.start();
@@ -583,15 +586,22 @@ export function MessageComposer({
     } catch {
       // ponytail: fallback to native browser MediaRecorder API
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaStreamRef.current = stream;
+        if (!stream) {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaStreamRef.current = stream;
+        }
         audioChunksRef.current = [];
 
-        const mimeType = typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-          ? "audio/webm;codecs=opus"
-          : typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")
+        const isOggSupported = typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/ogg;codecs=opus");
+        const isWebmOpusSupported = typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm;codecs=opus");
+        const mimeType = isOggSupported
           ? "audio/ogg;codecs=opus"
+          : isWebmOpusSupported
+          ? "audio/webm;codecs=opus"
           : "audio/webm";
+
+        const ext = isOggSupported ? "ogg" : "webm";
+        const cleanMime = isOggSupported ? "audio/ogg" : "audio/webm";
 
         const mediaRecorder = new MediaRecorder(stream, { mimeType });
         mediaRecorderRef.current = mediaRecorder;
@@ -603,10 +613,13 @@ export function MessageComposer({
         };
 
         mediaRecorder.onstop = () => {
-          stream.getTracks().forEach((t) => t.stop());
+          if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+            mediaStreamRef.current = null;
+          }
           if (!cancelledRef.current && audioChunksRef.current.length > 0) {
-            const blob = new Blob(audioChunksRef.current, { type: mimeType });
-            void blob.arrayBuffer().then((ab) => finalizeRecording(new Uint8Array(ab)));
+            const blob = new Blob(audioChunksRef.current, { type: cleanMime });
+            void blob.arrayBuffer().then((ab) => finalizeRecording(new Uint8Array(ab), cleanMime, ext));
           }
         };
 

@@ -7,6 +7,8 @@ declare module "opus-recorder" {
     encoderPath?: string;
     /** Media track constraints, or `true` for default audio. */
     mediaTrackConstraints?: MediaTrackConstraints | boolean;
+    /** Existing MediaStream to record from. */
+    mediaStream?: MediaStream;
     /** 1 = mono, 2 = stereo. */
     numberOfChannels?: number;
     /** 2048 = Voice, 2049 = Full Band Audio, 2051 = Restricted Low Delay. */

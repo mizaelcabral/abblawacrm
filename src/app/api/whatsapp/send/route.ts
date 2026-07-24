@@ -522,8 +522,12 @@ export async function POST(request: Request) {
             mimetype = 'video/mp4';
             defaultExt = 'mp4';
           } else if (message_type === 'audio') {
-            mimetype = 'audio/ogg';
-            defaultExt = 'ogg';
+            defaultExt = ext || 'ogg';
+            if (ext === 'mp3') mimetype = 'audio/mpeg';
+            else if (ext === 'wav') mimetype = 'audio/wav';
+            else if (ext === 'm4a' || ext === 'mp4') mimetype = 'audio/mp4';
+            else if (ext === 'webm') mimetype = 'audio/webm';
+            else mimetype = 'audio/ogg; codecs=opus';
           } else if (message_type === 'document') {
             defaultExt = ext || 'pdf';
             if (ext === 'pdf') mimetype = 'application/pdf';
@@ -531,30 +535,58 @@ export async function POST(request: Request) {
             else if (ext === 'xls' || ext === 'xlsx') mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
           }
 
-          const derivedFileName = filename || `file.${defaultExt}`;
+          // ponytail: for audio voice notes on Evolution API, attempt sendWhatsAppAudio PTT endpoint first
+          if (message_type === 'audio') {
+            try {
+              const audioRes = await fetch(`${webConfig.api_url}/message/sendWhatsAppAudio/${webConfig.instance_name}`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  apikey: token,
+                },
+                body: JSON.stringify({
+                  number: sanitizedPhone,
+                  audio: media_url,
+                  delay: 1200,
+                  encoding: true,
+                }),
+              });
 
-          const res = await fetch(`${webConfig.api_url}/message/sendMedia/${webConfig.instance_name}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              apikey: token,
-            },
-            body: JSON.stringify({
-              number: sanitizedPhone,
-              media: media_url,
-              mediatype: message_type,
-              mimetype,
-              caption: content_text || '',
-              fileName: derivedFileName,
-            }),
-          });
-
-          if (!res.ok) {
-            const errText = await res.text();
-            throw new Error(`Evolution API sendMedia failed: ${res.status} - ${errText}`);
+              if (audioRes.ok) {
+                responseData = await audioRes.json();
+                evolutionMessageId = responseData.key?.id || responseData.message?.key?.id || '';
+              }
+            } catch (audioErr) {
+              console.warn('[WhatsApp Web] sendWhatsAppAudio endpoint failed, falling back to sendMedia:', audioErr);
+            }
           }
-          responseData = await res.json();
-          evolutionMessageId = responseData.key?.id || responseData.message?.key?.id || '';
+
+          if (!evolutionMessageId) {
+            const derivedFileName = filename || `file.${defaultExt}`;
+
+            const res = await fetch(`${webConfig.api_url}/message/sendMedia/${webConfig.instance_name}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                apikey: token,
+              },
+              body: JSON.stringify({
+                number: sanitizedPhone,
+                media: media_url,
+                mediatype: message_type,
+                mimetype,
+                caption: content_text || '',
+                fileName: derivedFileName,
+              }),
+            });
+
+            if (!res.ok) {
+              const errText = await res.text();
+              throw new Error(`Evolution API sendMedia failed: ${res.status} - ${errText}`);
+            }
+            responseData = await res.json();
+            evolutionMessageId = responseData.key?.id || responseData.message?.key?.id || '';
+          }
         } else {
           return NextResponse.json(
             { error: 'Mensagens de template não são suportadas em conexões de WhatsApp Web.' },
