@@ -64,19 +64,27 @@ export async function GET(
       return NextResponse.json({ error: 'Failed to generate secure download link' }, { status: 500 });
     }
 
-    // 5. Audit Log (fire and forget)
-    void admin.from('audit_logs').insert({
+    // 5. Mandatory Audit Log Insert before returning signed URL
+    const { error: auditError } = await admin.from('audit_logs').insert({
       account_id: profile.account_id,
       user_id: user.id,
       user_email: profile.email,
       action: 'document.download_url_generated',
-      target_type: 'documents',
+      target_type: 'document',
       target_id: doc.id,
       details: {
         display_name: doc.display_name,
         expires_in_seconds: 900,
       },
     });
+
+    if (auditError) {
+      console.error('[documents/download] Audit log failed:', auditError);
+      return NextResponse.json(
+        { error: 'Falha ao registrar auditoria de acesso ao documento' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       url: signedData.signedUrl,
