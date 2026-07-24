@@ -441,7 +441,7 @@ export async function POST(request: Request) {
                     notes: { type: 'string', description: 'Observações administrativas (sem dados sensíveis ou clínicos)' },
                     assigned_user_id: { type: 'string', description: 'UUID do usuário responsável' },
                     requirement_due_at: { type: 'string', description: 'Prazo para atendimento de exigência (ISO8601)' },
-                    valid_until: { type: 'string', description: 'Data de validade do parecer/autorização (ISO8601)' }
+                    valid_until: { type: 'string', description: 'Data de validade do parecer/autorização (ISO8601). Quando informada, deve ser obrigatoriamente uma data futura.' }
                   },
                   required: ['deal_id', 'process_type', 'authority_name']
                 }
@@ -457,7 +457,7 @@ export async function POST(request: Request) {
                     status_reason: { type: 'string', description: 'Motivo obrigatório da transição (exigido se status=requirement, denied ou cancelled). Não reutiliza notas antigas.' },
                     protocol_number: { type: 'string', description: 'Número do protocolo externo (obrigatório se status=submitted)' },
                     requirement_due_at: { type: 'string', description: 'Prazo limite da exigência (ISO8601)' },
-                    valid_until: { type: 'string', description: 'Validade do deferimento (ISO8601)' },
+                    valid_until: { type: 'string', description: 'Validade do deferimento (ISO8601). Quando informada, deve ser obrigatoriamente uma data futura.' },
                     notes: { type: 'string', description: 'Observações administrativas gerais perenes do processo.' },
                     external_reference: { type: 'string', description: 'Chave ou link de acompanhamento externo' },
                     approved_document_id: { type: 'string', description: 'UUID de documento aprovado associado no CRM' },
@@ -2219,6 +2219,13 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         if (!assignedProfile) throw new Error('Usuário responsável especificado não pertence a esta conta.');
       }
 
+      if (valid_until !== undefined && valid_until !== null) {
+        const valTime = new Date(valid_until).getTime();
+        if (isNaN(valTime) || valTime <= Date.now()) {
+          throw new Error("A data de validade ('valid_until') deve ser uma data futura válida (posterior ao momento atual).");
+        }
+      }
+
       const initialStatus = protocol_number ? 'submitted' : 'draft';
       const submittedAt = protocol_number ? new Date().toISOString() : null;
 
@@ -2278,6 +2285,14 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         .maybeSingle();
 
       if (!existingProc) throw new Error('Processo externo não encontrado ou não pertence a esta conta.');
+
+      // ponytail: Invariante de estado aprovado e validacao global de valid_until
+      if (valid_until !== undefined && valid_until !== null) {
+        const valTime = new Date(valid_until).getTime();
+        if (isNaN(valTime) || valTime <= Date.now()) {
+          throw new Error("A data de validade ('valid_until') deve ser uma data futura válida (posterior ao momento atual).");
+        }
+      }
 
       const isSameStatus = !status || status === existingProc.status;
 
