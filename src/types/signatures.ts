@@ -5,21 +5,9 @@ export type DeliveryMode = 'manual_link' | 'zapsign_email' | 'zapsign_whatsapp';
 export type FieldSourceType = 'contact_property' | 'custom_field' | 'fixed_value';
 export type FieldFormatType = 'uppercase' | 'lowercase' | 'digits_only' | 'date_ptbr';
 
-export const ALLOWED_CONTACT_PROPERTIES = new Set([
-  'name',
-  'cpf',
-  'birth_date',
-  'email',
-  'phone',
-  'postal_code',
-  'street',
-  'number',
-  'complement',
-  'neighborhood',
-  'city',
-  'state',
-  'country',
-]);
+// Strict allowlist for native columns on the contacts table ONLY.
+// Extended fields (cpf, birth_date, address, guardian_*, etc.) MUST be configured as custom_fields!
+export const ALLOWED_CONTACT_PROPERTIES = new Set(['name', 'phone', 'email', 'company']);
 
 export interface FieldMapping {
   zapsign_var: string;

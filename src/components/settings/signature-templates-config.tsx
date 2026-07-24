@@ -28,12 +28,19 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { SignatureTemplate, FieldMapping, ALLOWED_CONTACT_PROPERTIES } from '@/types/signatures';
 
+interface CustomFieldOption {
+  field_key: string;
+  label: string;
+  group_name: string;
+  field_type: string;
+}
+
 export function SignatureTemplatesConfig() {
   const { accountRole } = useAuth();
   const isAdmin = accountRole === 'owner' || accountRole === 'admin';
 
   const [templates, setTemplates] = useState<SignatureTemplate[]>([]);
-  const [customFieldKeys, setCustomFieldKeys] = useState<string[]>([]);
+  const [activeCustomFields, setActiveCustomFields] = useState<CustomFieldOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -52,18 +59,23 @@ export function SignatureTemplatesConfig() {
   const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const fetchTemplates = async () => {
+  const fetchInitialData = async () => {
     setLoading(true);
     setError(null);
     try {
       const [tplRes, cfRes] = await Promise.all([
         fetch('/api/signature-templates'),
-        fetch('/api/account/members'), // Or custom fields endpoint
+        fetch('/api/signature-templates/custom-fields'),
       ]);
 
       if (tplRes.ok) {
         const data = await tplRes.json();
         setTemplates(data.templates || []);
+      }
+
+      if (cfRes.ok) {
+        const cfData = await cfRes.json();
+        setActiveCustomFields(cfData.custom_fields || []);
       }
     } catch (err: any) {
       console.error('Error fetching signature templates:', err);
@@ -74,8 +86,10 @@ export function SignatureTemplatesConfig() {
   };
 
   useEffect(() => {
-    fetchTemplates();
+    fetchInitialData();
   }, []);
+
+  const activeCustomKeysSet = new Set(activeCustomFields.map((cf) => cf.field_key));
 
   const openCreateDialog = () => {
     setEditingTemplate(null);
@@ -87,7 +101,7 @@ export function SignatureTemplatesConfig() {
     setDeliveryMode('manual_link');
     setFieldMappings([
       { zapsign_var: 'NOME_PACIENTE', source_type: 'contact_property', source_key: 'name', is_required: true },
-      { zapsign_var: 'CPF_PACIENTE', source_type: 'contact_property', source_key: 'cpf', is_required: true },
+      { zapsign_var: 'CPF_PACIENTE', source_type: 'custom_field', source_key: 'cpf', is_required: true },
     ]);
     setFormError(null);
     setDialogOpen(true);
@@ -120,7 +134,20 @@ export function SignatureTemplatesConfig() {
 
   const handleMappingChange = (index: number, key: keyof FieldMapping, value: any) => {
     const updated = [...fieldMappings];
-    updated[index] = { ...updated[index], [key]: value };
+    const item = { ...updated[index], [key]: value };
+
+    // Reset default source_key when switching source_type
+    if (key === 'source_type') {
+      if (value === 'contact_property') {
+        item.source_key = 'name';
+      } else if (value === 'custom_field') {
+        item.source_key = activeCustomFields[0]?.field_key || 'cpf';
+      } else if (value === 'fixed_value') {
+        item.source_key = 'fixed';
+      }
+    }
+
+    updated[index] = item;
     setFieldMappings(updated);
   };
 
@@ -157,7 +184,7 @@ export function SignatureTemplatesConfig() {
       }
 
       setDialogOpen(false);
-      fetchTemplates();
+      fetchInitialData();
     } catch (err: any) {
       setFormError(err.message);
     } finally {
@@ -172,12 +199,20 @@ export function SignatureTemplatesConfig() {
         method: 'DELETE',
       });
       if (res.ok) {
-        fetchTemplates();
+        fetchInitialData();
       }
     } catch (err) {
       console.error('Error toggling template status:', err);
     }
   };
+
+  // Group custom fields by group_name for display in dropdowns
+  const customFieldsByGroup = activeCustomFields.reduce((acc, cf) => {
+    const group = cf.group_name || 'Gerais';
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(cf);
+    return acc;
+  }, {} as Record<string, CustomFieldOption[]>);
 
   return (
     <Card className="border-border/60">
@@ -188,7 +223,7 @@ export function SignatureTemplatesConfig() {
             Modelos de Assinatura Configurados
           </CardTitle>
           <CardDescription>
-            Gerencie os modelos da ZapSign e o mapeamento de variáveis para preenchimento automático.
+            Gerencie os modelos da ZapSign e o mapeamento dinâmico de variáveis com o CRM.
           </CardDescription>
         </div>
         {isAdmin && (
@@ -214,55 +249,66 @@ export function SignatureTemplatesConfig() {
             <Settings2 className="w-8 h-8 mx-auto opacity-50" />
             <p className="text-sm font-medium">Nenhum modelo de assinatura configurado.</p>
             <p className="text-xs">
-              Cadastre modelos da ZapSign para permitir o envio automatizado de procurações e contratos.
+              Cadastre modelos da ZapSign para permitir a geração de procurações e contratos.
             </p>
           </div>
         ) : (
           <div className="space-y-3">
-            {templates.map((tpl) => (
-              <div
-                key={tpl.id}
-                className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm">{tpl.template_name}</span>
-                    <Badge variant={tpl.is_active ? 'default' : 'secondary'} className="text-[10px]">
-                      {tpl.is_active ? 'Ativo' : 'Inativo'}
-                    </Badge>
-                    <Badge variant="outline" className="text-[10px] uppercase">
-                      {tpl.category}
-                    </Badge>
+            {templates.map((tpl) => {
+              const hasInvalidFields = tpl.field_mappings?.some(
+                (m) => m.source_type === 'custom_field' && !activeCustomKeysSet.has(m.source_key)
+              );
+
+              return (
+                <div
+                  key={tpl.id}
+                  className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{tpl.template_name}</span>
+                      <Badge variant={tpl.is_active ? 'default' : 'secondary'} className="text-[10px]">
+                        {tpl.is_active ? 'Ativo' : 'Inativo'}
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px] uppercase">
+                        {tpl.category}
+                      </Badge>
+                      {hasInvalidFields && (
+                        <Badge variant="destructive" className="text-[10px] gap-1">
+                          <AlertTriangle className="w-3 h-3" /> Campo Desativado
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-4">
+                      <span>ID Externo: <code className="bg-muted px-1 py-0.5 rounded">{tpl.template_id}</code></span>
+                      <span>Signatário: <strong>{tpl.signatory_rule}</strong></span>
+                      <span>Modo: <strong>{tpl.delivery_mode}</strong></span>
+                      <span>Campos: {tpl.field_mappings?.length || 0}</span>
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-4">
-                    <span>ID Externo: <code className="bg-muted px-1 py-0.5 rounded">{tpl.template_id}</code></span>
-                    <span>Signatário: <strong>{tpl.signatory_rule}</strong></span>
-                    <span>Modo: <strong>{tpl.delivery_mode}</strong></span>
-                    <span>Campos: {tpl.field_mappings?.length || 0}</span>
-                  </div>
+                  {isAdmin && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditDialog(tpl)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleToggleStatus(tpl)}
+                        className="h-8 w-8 p-0 text-destructive"
+                      >
+                        {tpl.is_active ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                {isAdmin && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEditDialog(tpl)}
-                      className="h-8 w-8 p-0"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleToggleStatus(tpl)}
-                      className="h-8 w-8 p-0 text-destructive"
-                    >
-                      {tpl.is_active ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </CardContent>
@@ -275,7 +321,7 @@ export function SignatureTemplatesConfig() {
               {editingTemplate ? 'Editar Modelo de Assinatura' : 'Novo Modelo de Assinatura'}
             </DialogTitle>
             <DialogDescription>
-              Configure a integração do modelo da ZapSign com as propriedades do contato e campos personalizados.
+              Configure o modelo da ZapSign e vincule as variáveis às colunas nativas do contato ou aos campos personalizados ativos.
             </DialogDescription>
           </DialogHeader>
 
@@ -349,72 +395,105 @@ export function SignatureTemplatesConfig() {
               <p className="text-xs text-muted-foreground italic">Nenhum mapeamento adicionado.</p>
             ) : (
               <div className="space-y-2">
-                {fieldMappings.map((mapping, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center border p-2 rounded-md bg-muted/30 text-xs">
-                    <div className="col-span-3">
-                      <Input
-                        placeholder="Variável ZapSign"
-                        className="h-8 text-xs font-mono"
-                        value={mapping.zapsign_var}
-                        onChange={(e) => handleMappingChange(idx, 'zapsign_var', e.target.value)}
-                      />
-                    </div>
-                    <div className="col-span-3">
-                      <select
-                        className="w-full border rounded h-8 text-xs bg-background px-1"
-                        value={mapping.source_type}
-                        onChange={(e: any) => handleMappingChange(idx, 'source_type', e.target.value)}
-                      >
-                        <option value="contact_property">Propriedade do Contato</option>
-                        <option value="custom_field">Campo Personalizado</option>
-                        <option value="fixed_value">Valor Fixo</option>
-                      </select>
-                    </div>
-                    <div className="col-span-4">
-                      {mapping.source_type === 'contact_property' ? (
+                {fieldMappings.map((mapping, idx) => {
+                  const isInvalidCustomField =
+                    mapping.source_type === 'custom_field' && !activeCustomKeysSet.has(mapping.source_key);
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`grid grid-cols-12 gap-2 items-center border p-2 rounded-md bg-muted/30 text-xs ${
+                        isInvalidCustomField ? 'border-destructive/60 bg-destructive/5' : ''
+                      }`}
+                    >
+                      <div className="col-span-3">
+                        <Input
+                          placeholder="Variável ZapSign"
+                          className="h-8 text-xs font-mono"
+                          value={mapping.zapsign_var}
+                          onChange={(e) => handleMappingChange(idx, 'zapsign_var', e.target.value)}
+                        />
+                      </div>
+                      <div className="col-span-3">
                         <select
                           className="w-full border rounded h-8 text-xs bg-background px-1"
-                          value={mapping.source_key}
-                          onChange={(e) => handleMappingChange(idx, 'source_key', e.target.value)}
+                          value={mapping.source_type}
+                          onChange={(e: any) => handleMappingChange(idx, 'source_type', e.target.value)}
                         >
-                          {Array.from(ALLOWED_CONTACT_PROPERTIES).map((prop) => (
-                            <option key={prop} value={prop}>
-                              {prop}
-                            </option>
-                          ))}
+                          <option value="contact_property">Coluna Nativa do Contato</option>
+                          <option value="custom_field">Campo Personalizado</option>
+                          <option value="fixed_value">Valor Fixo</option>
                         </select>
-                      ) : (
-                        <Input
-                          placeholder={mapping.source_type === 'custom_field' ? 'field_key (ex: cpf)' : 'Valor fixo'}
-                          className="h-8 text-xs"
-                          value={mapping.source_key}
-                          onChange={(e) => handleMappingChange(idx, 'source_key', e.target.value)}
-                        />
-                      )}
+                      </div>
+                      <div className="col-span-4">
+                        {mapping.source_type === 'contact_property' ? (
+                          <select
+                            className="w-full border rounded h-8 text-xs bg-background px-1"
+                            value={mapping.source_key}
+                            onChange={(e) => handleMappingChange(idx, 'source_key', e.target.value)}
+                          >
+                            {Array.from(ALLOWED_CONTACT_PROPERTIES).map((prop) => (
+                              <option key={prop} value={prop}>
+                                {prop} (Nativa)
+                              </option>
+                            ))}
+                          </select>
+                        ) : mapping.source_type === 'custom_field' ? (
+                          <select
+                            className={`w-full border rounded h-8 text-xs bg-background px-1 ${
+                              isInvalidCustomField ? 'border-destructive text-destructive font-semibold' : ''
+                            }`}
+                            value={mapping.source_key}
+                            onChange={(e) => handleMappingChange(idx, 'source_key', e.target.value)}
+                          >
+                            {isInvalidCustomField && (
+                              <option value={mapping.source_key}>
+                                ⚠️ {mapping.source_key} (Desativado/Inválido)
+                              </option>
+                            )}
+                            {Object.entries(customFieldsByGroup).map(([group, fields]) => (
+                              <optgroup key={group} label={group}>
+                                {fields.map((f) => (
+                                  <option key={f.field_key} value={f.field_key}>
+                                    {f.label} ({f.field_key})
+                                  </option>
+                                ))}
+                              </optgroup>
+                            ))}
+                          </select>
+                        ) : (
+                          <Input
+                            placeholder="Valor fixo"
+                            className="h-8 text-xs"
+                            value={mapping.default_value || ''}
+                            onChange={(e) => handleMappingChange(idx, 'default_value', e.target.value)}
+                          />
+                        )}
+                      </div>
+                      <div className="col-span-1 text-center">
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={mapping.is_required}
+                            onChange={(e) => handleMappingChange(idx, 'is_required', e.target.checked)}
+                          />
+                          <span className="text-[10px]">Obr</span>
+                        </label>
+                      </div>
+                      <div className="col-span-1 text-right">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveFieldMapping(idx)}
+                          className="h-7 w-7 p-0 text-destructive"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="col-span-1 text-center">
-                      <label className="flex items-center gap-1 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={mapping.is_required}
-                          onChange={(e) => handleMappingChange(idx, 'is_required', e.target.checked)}
-                        />
-                        <span className="text-[10px]">Obr</span>
-                      </label>
-                    </div>
-                    <div className="col-span-1 text-right">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveFieldMapping(idx)}
-                        className="h-7 w-7 p-0 text-destructive"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
