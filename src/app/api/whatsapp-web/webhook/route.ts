@@ -329,10 +329,12 @@ async function processIncomingMessage(config: any, messageData: any) {
     }
   }
 
-  if (contentType === 'audio' && base64Data) {
+  // ponytail: transcribe audio using base64Data or mediaUrl fallback
+  if (contentType === 'audio' && (base64Data || mediaUrl)) {
     try {
       console.log('[WhatsApp Web Webhook] Transcribing incoming audio...');
-      const transcription = await transcribeAudioUsingGemini(base64Data, config.account_id);
+      const audioSource = base64Data || mediaUrl;
+      const transcription = await transcribeAudioUsingGemini(audioSource, config.account_id);
       if (transcription) {
         console.log('[WhatsApp Web Webhook] Audio transcribed successfully:', transcription);
         contentText = `🎙️ [Áudio Transcrito]: "${transcription}"`;

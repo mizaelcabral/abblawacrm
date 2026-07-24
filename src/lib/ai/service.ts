@@ -527,65 +527,102 @@ Instruções críticas:
 /**
  * Transcribe audio using Gemini multimodal capabilities
  */
+/**
+ * ponytail: transcribe audio using Gemini multimodal API or OpenAI Whisper fallback.
+ * Accepts either base64 data string or HTTP media URL.
+ */
 export async function transcribeAudioUsingGemini(
-  audioBase64: string,
+  audioInput: string,
   accountId: string
 ): Promise<string | null> {
   try {
+    if (!audioInput) return null
+
+    let cleanBase64 = audioInput.trim()
+    let mimeType = 'audio/ogg'
+
+    // If input is an HTTP URL, fetch it and convert to base64
+    if (cleanBase64.startsWith('http://') || cleanBase64.startsWith('https://')) {
+      try {
+        const res = await fetch(cleanBase64)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const arrayBuf = await res.arrayBuffer()
+        cleanBase64 = Buffer.from(arrayBuf).toString('base64')
+        const contentType = res.headers.get('content-type')
+        if (contentType && contentType.includes('/')) mimeType = contentType.split(';')[0]
+      } catch (fetchErr) {
+        console.error('[transcribeAudioUsingGemini] Failed to fetch media URL:', fetchErr)
+        return null
+      }
+    } else {
+      const mimeMatch = cleanBase64.match(/^data:([^;]+);base64,([\s\S]+)$/)
+      if (mimeMatch) {
+        mimeType = mimeMatch[1]
+        cleanBase64 = mimeMatch[2]
+      }
+    }
+
     const config = await getAccountAIConfig(accountId)
+    // ponytail: fallback to system GEMINI_API_KEY if account provider is not gemini or key is missing
+    const geminiKey = (config.provider === 'gemini' && config.apiKey) ? config.apiKey : process.env.GEMINI_API_KEY
 
-    if (config.provider !== 'gemini' || !config.apiKey) {
-      console.warn(`[transcribeAudioUsingGemini] Account ${accountId} does not use Gemini or lacks API key.`)
-      return null
-    }
+    if (geminiKey) {
+      const modelName = 'gemini-2.5-flash'
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiKey}`
 
-    // Treat base64 to remove URI prefix if present
-    let mimeType = 'audio/ogg' // Default mimeType if none provided in URI
-    let cleanBase64 = audioBase64.trim()
-
-    const mimeMatch = cleanBase64.match(/^data:([^;]+);base64,([\s\S]+)$/)
-    if (mimeMatch) {
-      mimeType = mimeMatch[1]
-      cleanBase64 = mimeMatch[2]
-    }
-
-    const modelName = config.model.startsWith('models/') ? config.model.replace('models/', '') : config.model
-
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${config.apiKey}`
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                inlineData: {
-                  mimeType: mimeType,
-                  data: cleanBase64
-                }
-              },
-              {
-                text: 'Transcreva este áudio de forma literal e limpa em português.'
-              }
-            ]
-          }
-        ]
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { inlineData: { mimeType, data: cleanBase64 } },
+                { text: 'Transcreva este áudio de forma literal e limpa em português.' }
+              ]
+            }
+          ]
+        })
       })
-    })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`[transcribeAudioUsingGemini] Gemini request failed: ${response.status} - ${errorText}`)
-      return null
+      if (response.ok) {
+        const data = await response.json()
+        const transcription = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+        if (transcription.trim()) return transcription.trim()
+      } else {
+        const errorText = await response.text()
+        console.warn(`[transcribeAudioUsingGemini] Gemini request failed: ${response.status} - ${errorText}`)
+      }
     }
 
-    const data = await response.json()
-    const transcription = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-    return transcription.trim() || null
+    // ponytail: fallback to OpenAI Whisper if Gemini key fails or is unavailable
+    const openaiKey = config.provider === 'openai' && config.apiKey ? config.apiKey : process.env.OPENAI_API_KEY
+    if (openaiKey) {
+      try {
+        const buffer = Buffer.from(cleanBase64, 'base64')
+        const ext = mimeType.includes('mp3') ? 'mp3' : mimeType.includes('wav') ? 'wav' : mimeType.includes('webm') ? 'webm' : 'ogg'
+        const formData = new FormData()
+        const fileBlob = new Blob([buffer], { type: mimeType })
+        formData.append('file', fileBlob, `audio.${ext}`)
+        formData.append('model', 'whisper-1')
+        formData.append('language', 'pt')
+
+        const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${openaiKey}` },
+          body: formData
+        })
+
+        if (whisperRes.ok) {
+          const whisperData = await whisperRes.json()
+          if (whisperData.text?.trim()) return whisperData.text.trim()
+        }
+      } catch (whisperErr) {
+        console.error('[transcribeAudioUsingGemini] Whisper fallback error:', whisperErr)
+      }
+    }
+
+    return null
   } catch (error) {
     console.error('[transcribeAudioUsingGemini] Error during audio transcription:', error)
     return null

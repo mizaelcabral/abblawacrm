@@ -11,7 +11,7 @@ import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
 } from '@/lib/whatsapp/template-webhook'
-import { generateAIResponse } from '@/lib/ai/service'
+import { generateAIResponse, transcribeAudioUsingGemini } from '@/lib/ai/service'
 import { engineSendText } from '@/lib/automations/meta-send'
 import { verifyBillingAndUsage, incrementAIConsumption } from '@/lib/billing/guard'
 
@@ -545,7 +545,7 @@ async function processMessage(
 
   // Parse message content based on type
   const { contentText, mediaUrl, mediaType, interactiveReplyId } =
-    await parseMessageContent(message, accessToken)
+    await parseMessageContent(message, accessToken, accountId)
 
   // Resolve swipe-reply context if present. A missing parent is fine —
   // we just store NULL and the UI renders the message without a quote.
@@ -797,18 +797,12 @@ async function processMessage(
 
 async function parseMessageContent(
   message: WhatsAppMessage,
-  accessToken: string
+  accessToken: string,
+  accountId?: string
 ): Promise<{
   contentText: string | null
   mediaUrl: string | null
   mediaType: string | null
-  /**
-   * For interactive button / list replies: the stable id of the tapped
-   * option (whatever we put on the button when sending). Used by the
-   * Flows engine to advance the per-contact run; persisted to
-   * `messages.interactive_reply_id` so the inbox bubble can render the
-   * tap with the right affordance. Null for everything else.
-   */
   interactiveReplyId: string | null
 }> {
   // getMediaUrl signature is (mediaId, accessToken) — earlier code had
@@ -879,9 +873,28 @@ async function parseMessageContent(
 
     case 'audio':
       if (message.audio?.id) {
+        const mediaUrl = await verifyAndBuildUrl(message.audio.id)
+        let contentText: string | null = null
+        if (accountId && message.audio.id) {
+          try {
+            const metaMedia = await getMediaUrl({ mediaId: message.audio.id, accessToken })
+            const rawMedia = await downloadMedia({ downloadUrl: metaMedia.url, accessToken })
+            if (rawMedia && rawMedia.buffer) {
+              const base64 = rawMedia.buffer.toString('base64')
+              const dataUri = `data:${rawMedia.contentType || message.audio.mime_type || 'audio/ogg'};base64,${base64}`
+              const transcription = await transcribeAudioUsingGemini(dataUri, accountId)
+              if (transcription) {
+                contentText = `🎙️ [Áudio Transcrito]: "${transcription}"`
+              }
+            }
+          } catch (err) {
+            console.error('[Meta Webhook] Audio transcription failed:', err)
+          }
+        }
         return {
           ...empty,
-          mediaUrl: await verifyAndBuildUrl(message.audio.id),
+          contentText,
+          mediaUrl,
           mediaType: message.audio.mime_type,
         }
       }

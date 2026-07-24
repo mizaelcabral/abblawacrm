@@ -359,6 +359,10 @@ export function MessageComposer({
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const recorderRef = useRef<import("opus-recorder").default | null>(null);
+  // ponytail: refs for native MediaRecorder fallback
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const cancelledRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -386,6 +390,12 @@ export function MessageComposer({
       cancelledRef.current = true;
       // stop() releases the mic stream + audio context inside opus-recorder.
       void recorderRef.current?.stop().catch(() => {});
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        try { mediaRecorderRef.current.stop(); } catch {}
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(t => t.stop());
+      }
       removeStaged(draftRef.current?.path);
     };
   }, [clearTimer, removeStaged]);
@@ -546,13 +556,13 @@ export function MessageComposer({
 
   const startRecording = useCallback(async () => {
     if (inputsDisabled || busy || recording) return;
-    if (!navigator.mediaDevices?.getUserMedia || typeof AudioContext === "undefined") {
+    if (!navigator.mediaDevices?.getUserMedia) {
       toast.error("A gravação de voz não é suportada neste navegador.");
       return;
     }
+    cancelledRef.current = false;
     try {
-      // Lazy-load the encoder (≈400 KB worker) only when the user records,
-      // keeping it out of the main bundle.
+      // Lazy-load the encoder (≈400 KB worker) only when the user records
       const { default: Recorder } = await import("opus-recorder");
       const recorder = new Recorder({
         encoderPath: OPUS_ENCODER_PATH,
@@ -561,7 +571,6 @@ export function MessageComposer({
         encoderSampleRate: 48000,
         streamPages: false, // one callback with the complete file on stop
       });
-      cancelledRef.current = false;
       recorder.ondataavailable = (bytes) => {
         if (cancelledRef.current) return;
         void finalizeRecording(bytes);
@@ -572,9 +581,49 @@ export function MessageComposer({
       setRecordSeconds(0);
       timerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000);
     } catch {
-      void recorderRef.current?.stop().catch(() => {});
-      recorderRef.current = null;
-      toast.error("Acesso ao microfone negado ou indisponível.");
+      // ponytail: fallback to native browser MediaRecorder API
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStreamRef.current = stream;
+        audioChunksRef.current = [];
+
+        const mimeType = typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")
+          ? "audio/ogg;codecs=opus"
+          : "audio/webm";
+
+        const mediaRecorder = new MediaRecorder(stream, { mimeType });
+        mediaRecorderRef.current = mediaRecorder;
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            audioChunksRef.current.push(e.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          stream.getTracks().forEach((t) => t.stop());
+          if (!cancelledRef.current && audioChunksRef.current.length > 0) {
+            const blob = new Blob(audioChunksRef.current, { type: mimeType });
+            void blob.arrayBuffer().then((ab) => finalizeRecording(new Uint8Array(ab)));
+          }
+        };
+
+        mediaRecorder.start();
+        setRecording(true);
+        setRecordSeconds(0);
+        timerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000);
+      } catch (nativeErr) {
+        void recorderRef.current?.stop().catch(() => {});
+        recorderRef.current = null;
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+          mediaStreamRef.current = null;
+        }
+        mediaRecorderRef.current = null;
+        toast.error("Acesso ao microfone negado ou indisponível.");
+      }
     }
   }, [inputsDisabled, busy, recording, finalizeRecording]);
 
@@ -582,6 +631,9 @@ export function MessageComposer({
     clearTimer();
     setRecording(false);
     void recorderRef.current?.stop().catch(() => {});
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try { mediaRecorderRef.current.stop(); } catch {}
+    }
   }, [clearTimer]);
 
   const cancelRecording = useCallback(() => {
@@ -589,6 +641,9 @@ export function MessageComposer({
     clearTimer();
     setRecording(false);
     void recorderRef.current?.stop().catch(() => {});
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try { mediaRecorderRef.current.stop(); } catch {}
+    }
   }, [clearTimer]);
 
   // Auto-stop at the cap so a forgotten recording can't blow the

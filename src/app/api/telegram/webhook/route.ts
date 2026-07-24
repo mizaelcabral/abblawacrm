@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { isUniqueViolation } from '@/lib/contacts/dedupe';
-import { generateAIResponse } from '@/lib/ai/service';
+import { generateAIResponse, transcribeAudioUsingGemini } from '@/lib/ai/service';
 import { verifyBillingAndUsage, incrementAIConsumption } from '@/lib/billing/guard';
 
 // Admin client helper
@@ -128,6 +128,16 @@ async function processTelegramUpdate(accountId: string, payload: any) {
   if (fileId) {
     try {
       mediaUrl = await downloadAndUploadTelegramFile(accountId, botToken, fileId, filename || 'telegram_file', mimeType);
+      if (contentType === 'audio' && mediaUrl) {
+        try {
+          const transcription = await transcribeAudioUsingGemini(mediaUrl, accountId);
+          if (transcription) {
+            contentText = `🎙️ [Áudio Transcrito]: "${transcription}"`;
+          }
+        } catch (tErr) {
+          console.error('[telegram-webhook] Audio transcription failed:', tErr);
+        }
+      }
     } catch (err) {
       console.error('[telegram-webhook] Failed to handle media file:', err);
       contentText = contentText + ' (Falha ao carregar mídia)';
