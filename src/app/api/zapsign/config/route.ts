@@ -1,24 +1,26 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { createClient } from '@/lib/supabase/server';
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption';
 import { ZapSignClient } from '@/lib/zapsign/client';
+import { supabaseAdmin } from '@/lib/automations/admin-client';
 
 const MASKED_TOKEN = '••••••••••••••••';
 
-async function resolveAccountId(
+async function resolveProfile(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string
-): Promise<string | null> {
+): Promise<{ accountId: string; email: string } | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('account_id')
+    .select('account_id, email')
     .eq('user_id', userId)
     .maybeSingle();
   if (error || !data?.account_id) return null;
-  return data.account_id as string;
+  return { accountId: data.account_id as string, email: data.email as string };
 }
 
-// GET - Retrieve configuration and test connection
+// GET - Retrieve configuration status (without exposing secrets)
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -29,11 +31,11 @@ export async function GET() {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const accountId = await resolveAccountId(supabase, user.id);
-    if (!accountId) {
+    const profile = await resolveProfile(supabase, user.id);
+    if (!profile) {
       return NextResponse.json(
         { connected: false, message: 'Seu perfil não está vinculado a uma conta.' },
         { status: 200 }
@@ -43,7 +45,7 @@ export async function GET() {
     const { data: config, error: configError } = await supabase
       .from('zapsign_config')
       .select('*')
-      .eq('account_id', accountId)
+      .eq('account_id', profile.accountId)
       .maybeSingle();
 
     if (configError) {
@@ -70,14 +72,18 @@ export async function GET() {
       return NextResponse.json({
         connected: true,
         environment: config.environment,
+        delivery_mode: config.delivery_mode || 'manual_link',
         api_key: MASKED_TOKEN,
+        has_webhook_secret: Boolean(config.webhook_secret),
       });
     } catch (apiErr) {
       console.error('ZapSign API validation failed:', apiErr);
       return NextResponse.json({
         connected: false,
         environment: config.environment,
+        delivery_mode: config.delivery_mode || 'manual_link',
         api_key: MASKED_TOKEN,
+        has_webhook_secret: Boolean(config.webhook_secret),
         message: 'A chave da API parece inválida ou expirou.',
       });
     }
@@ -101,11 +107,11 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const accountId = await resolveAccountId(supabase, user.id);
-    if (!accountId) {
+    const profile = await resolveProfile(supabase, user.id);
+    if (!profile) {
       return NextResponse.json(
         { error: 'Seu perfil não está vinculado a uma conta.' },
         { status: 403 }
@@ -113,7 +119,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { api_key, environment } = body;
+    const { api_key, environment, delivery_mode, generate_new_webhook_secret } = body;
 
     if (!api_key) {
       return NextResponse.json({ error: 'API Key é obrigatória' }, { status: 400 });
@@ -123,15 +129,19 @@ export async function POST(request: Request) {
     const { data: existingConfig } = await supabase
       .from('zapsign_config')
       .select('*')
-      .eq('account_id', accountId)
+      .eq('account_id', profile.accountId)
       .maybeSingle();
 
     let finalKey = api_key;
+    let isKeyRotated = false;
+
     if (api_key === MASKED_TOKEN) {
       if (!existingConfig || !existingConfig.api_key) {
         return NextResponse.json({ error: 'API Key inválida' }, { status: 400 });
       }
       finalKey = decrypt(existingConfig.api_key);
+    } else {
+      isKeyRotated = Boolean(existingConfig?.api_key);
     }
 
     // Validate the key with ZapSign API before saving
@@ -147,10 +157,19 @@ export async function POST(request: Request) {
 
     const encryptedKey = encrypt(finalKey);
 
+    // Handle webhook secret generation/preservation
+    let finalWebhookSecret = existingConfig?.webhook_secret || null;
+    if (!finalWebhookSecret || generate_new_webhook_secret) {
+      const rawSecret = crypto.randomBytes(24).toString('hex');
+      finalWebhookSecret = encrypt(rawSecret);
+    }
+
     const upsertPayload = {
-      account_id: accountId,
+      account_id: profile.accountId,
       api_key: encryptedKey,
       environment: environment || 'production',
+      delivery_mode: delivery_mode || 'manual_link',
+      webhook_secret: finalWebhookSecret,
       updated_at: new Date().toISOString(),
     };
 
@@ -165,6 +184,22 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+
+    // Mandatory Audit Log
+    const admin = supabaseAdmin();
+    await admin.from('audit_logs').insert({
+      account_id: profile.accountId,
+      user_id: user.id,
+      user_email: profile.email,
+      action: isKeyRotated ? 'zapsign.connection_rotated' : 'zapsign.connection_configured',
+      target_type: 'zapsign_config',
+      target_id: profile.accountId,
+      details: {
+        environment: upsertPayload.environment,
+        delivery_mode: upsertPayload.delivery_mode,
+        key_rotated: isKeyRotated,
+      },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -73,8 +73,30 @@ export async function GET(request: Request) {
     const signed = allDocs?.filter((d) => d.status === 'signed').length || 0;
     const failed = allDocs?.filter((d) => ['refused', 'expired', 'cancelled'].includes(d.status)).length || 0;
 
+    const sanitizedDocuments = (documents || []).map((doc: any) => ({
+      id: doc.id,
+      request_id: doc.request_id || doc.id,
+      account_id: doc.account_id,
+      contact_id: doc.contact_id,
+      deal_id: doc.deal_id || null,
+      document_id: doc.document_id || null,
+      template_id: doc.template_id || null,
+      doc_name: doc.doc_name,
+      status: doc.status,
+      signer_name: doc.signer_name,
+      signer_email: doc.signer_email,
+      signer_phone: doc.signer_phone,
+      signatory_type: doc.signatory_type || 'contact',
+      signed_at: doc.signed_at,
+      rejection_reason: doc.rejection_reason || null,
+      created_at: doc.created_at,
+      updated_at: doc.updated_at,
+      can_open_signing_link: Boolean(doc.sign_url || doc.encrypted_sign_url),
+      contact: doc.contact,
+    }));
+
     return NextResponse.json({
-      documents: documents || [],
+      documents: sanitizedDocuments,
       metrics: {
         total,
         pending,
