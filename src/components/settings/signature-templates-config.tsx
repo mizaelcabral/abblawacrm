@@ -11,6 +11,9 @@ import {
   Loader2,
   AlertTriangle,
   Settings2,
+  RefreshCw,
+  ClipboardList,
+  Check,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,13 +29,26 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/use-auth';
-import { SignatureTemplate, FieldMapping, ALLOWED_CONTACT_PROPERTIES } from '@/types/signatures';
+import {
+  SignatureTemplate,
+  FieldMapping,
+  ALLOWED_CONTACT_PROPERTIES,
+  ALLOWED_SYSTEM_VALUES,
+} from '@/types/signatures';
 
 interface CustomFieldOption {
+  id: string;
   field_key: string;
   label: string;
   group_name: string;
   field_type: string;
+}
+
+interface BatchParseItem {
+  rawLine: string;
+  isValid: boolean;
+  errorReason?: string;
+  mapping?: FieldMapping;
 }
 
 export function SignatureTemplatesConfig() {
@@ -44,8 +60,9 @@ export function SignatureTemplatesConfig() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [refreshingFields, setRefreshingFields] = useState(false);
 
-  // Modal State
+  // Main Modal State
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<SignatureTemplate | null>(null);
 
@@ -58,6 +75,28 @@ export function SignatureTemplatesConfig() {
   const [deliveryMode, setDeliveryMode] = useState<'manual_link' | 'zapsign_email' | 'zapsign_whatsapp'>('manual_link');
   const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Batch Import Modal State
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [batchRawText, setBatchRawText] = useState('');
+  const [batchImportMode, setBatchImportMode] = useState<'append' | 'replace'>('append');
+  const [batchParsedItems, setBatchParsedItems] = useState<BatchParseItem[]>([]);
+  const [batchStep, setBatchStep] = useState<'input' | 'preview'>('input');
+
+  const fetchCustomFields = async () => {
+    setRefreshingFields(true);
+    try {
+      const res = await fetch('/api/signature-templates/custom-fields');
+      if (res.ok) {
+        const data = await res.json();
+        setActiveCustomFields(data.custom_fields || []);
+      }
+    } catch (err) {
+      console.error('Error fetching custom fields:', err);
+    } finally {
+      setRefreshingFields(false);
+    }
+  };
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -100,8 +139,8 @@ export function SignatureTemplatesConfig() {
     setSignatoryRule('contact_only');
     setDeliveryMode('manual_link');
     setFieldMappings([
-      { zapsign_var: 'NOME_PACIENTE', source_type: 'contact_property', source_key: 'name', is_required: true },
-      { zapsign_var: 'CPF_PACIENTE', source_type: 'custom_field', source_key: 'cpf', is_required: true },
+      { zapsign_var: 'Nome completo:', source_type: 'contact_property', source_key: 'name', is_required: true },
+      { zapsign_var: 'CPF:', source_type: 'custom_field', source_key: 'cpf', is_required: true },
     ]);
     setFormError(null);
     setDialogOpen(true);
@@ -122,9 +161,10 @@ export function SignatureTemplatesConfig() {
 
   const handleAddFieldMapping = () => {
     if (fieldMappings.length >= 50) return;
+    const defaultCustomKey = activeCustomFields[0]?.field_key || 'cpf';
     setFieldMappings([
       ...fieldMappings,
-      { zapsign_var: '', source_type: 'contact_property', source_key: 'name', is_required: false },
+      { zapsign_var: '', source_type: 'custom_field', source_key: defaultCustomKey, is_required: false },
     ]);
   };
 
@@ -136,12 +176,14 @@ export function SignatureTemplatesConfig() {
     const updated = [...fieldMappings];
     const item = { ...updated[index], [key]: value };
 
-    // Reset default source_key when switching source_type
+    // Set sensible default source_key when switching source_type
     if (key === 'source_type') {
       if (value === 'contact_property') {
         item.source_key = 'name';
       } else if (value === 'custom_field') {
         item.source_key = activeCustomFields[0]?.field_key || 'cpf';
+      } else if (value === 'system_value') {
+        item.source_key = 'contact_city_current_date_ptbr';
       } else if (value === 'fixed_value') {
         item.source_key = 'fixed';
       }
@@ -206,13 +248,143 @@ export function SignatureTemplatesConfig() {
     }
   };
 
-  // Group custom fields by group_name for display in dropdowns
+  // Group active custom fields by group_name for display in select dropdowns
   const customFieldsByGroup = activeCustomFields.reduce((acc, cf) => {
     const group = cf.group_name || 'Gerais';
     if (!acc[group]) acc[group] = [];
     acc[group].push(cf);
     return acc;
   }, {} as Record<string, CustomFieldOption[]>);
+
+  // --- BATCH IMPORT PARSER LOGIC ---
+  const handleParseBatchText = () => {
+    const rawText = batchRawText.trim();
+    if (!rawText) return;
+
+    // Check if user pasted JSON array
+    if (rawText.startsWith('[') && rawText.endsWith(']')) {
+      try {
+        const parsedJson = JSON.parse(rawText);
+        if (Array.isArray(parsedJson)) {
+          const items: BatchParseItem[] = parsedJson.map((item: any) => {
+            const varName = (item.zapsign_var || '').trim();
+            const sourceType = item.source_type;
+            const sourceKey = (item.source_key || '').trim();
+            const isReq = Boolean(item.is_required);
+
+            if (!varName) return { rawLine: JSON.stringify(item), isValid: false, errorReason: 'Nome da variável em branco.' };
+            if (!['contact_property', 'custom_field', 'system_value', 'fixed_value'].includes(sourceType)) {
+              return { rawLine: JSON.stringify(item), isValid: false, errorReason: `source_type inválido '${sourceType}'.` };
+            }
+            if (sourceType === 'contact_property' && !ALLOWED_CONTACT_PROPERTIES.has(sourceKey)) {
+              return { rawLine: JSON.stringify(item), isValid: false, errorReason: `contact_property '${sourceKey}' não permitida.` };
+            }
+            if (sourceType === 'custom_field' && !activeCustomKeysSet.has(sourceKey)) {
+              return { rawLine: JSON.stringify(item), isValid: false, errorReason: `custom_field '${sourceKey}' não existe ou está inativo.` };
+            }
+            if (sourceType === 'system_value' && !ALLOWED_SYSTEM_VALUES.has(sourceKey)) {
+              return { rawLine: JSON.stringify(item), isValid: false, errorReason: `system_value '${sourceKey}' não permitido.` };
+            }
+
+            return {
+              rawLine: JSON.stringify(item),
+              isValid: true,
+              mapping: {
+                zapsign_var: varName,
+                source_type: sourceType,
+                source_key: sourceKey,
+                is_required: isReq,
+                default_value: item.default_value,
+              },
+            };
+          });
+
+          setBatchParsedItems(items);
+          setBatchStep('preview');
+          return;
+        }
+      } catch (e) {
+        // Fallback to pipe parsing
+      }
+    }
+
+    // Pipe format parsing: VARIÁVEL | ORIGEM | CAMPO | OBRIGATÓRIO
+    const lines = rawText.split('\n').filter((l) => l.trim().length > 0);
+    const seenVars = new Set<string>();
+
+    const items: BatchParseItem[] = lines.map((line) => {
+      const parts = line.split('|').map((p) => p.trim());
+      if (parts.length < 3) {
+        return { rawLine: line, isValid: false, errorReason: 'Linha deve conter no mínimo 3 colunas separadas por pipe (|).' };
+      }
+
+      let varName = parts[0];
+      // Keep variable name clean (remove surrounding {{ and }} if present)
+      if (varName.startsWith('{{') && varName.endsWith('}}')) {
+        varName = varName.substring(2, varName.length - 2).trim();
+      }
+
+      const sourceType = parts[1] as any;
+      const sourceKey = parts[2];
+      const reqRaw = parts[3] ? parts[3].toLowerCase() : 'false';
+      const isReq = reqRaw === 'true' || reqRaw === '1' || reqRaw === 'sim';
+
+      if (!varName) return { rawLine: line, isValid: false, errorReason: 'Nome da variável é obrigatório.' };
+
+      if (seenVars.has(varName)) {
+        return { rawLine: line, isValid: false, errorReason: `Variável duplicada '{{${varName}}}' na colagem.` };
+      }
+      seenVars.add(varName);
+
+      if (!['contact_property', 'custom_field', 'system_value', 'fixed_value'].includes(sourceType)) {
+        return { rawLine: line, isValid: false, errorReason: `Origem inválida '${sourceType}'. Permitidas: contact_property, custom_field, system_value, fixed_value` };
+      }
+
+      if (sourceType === 'contact_property' && !ALLOWED_CONTACT_PROPERTIES.has(sourceKey)) {
+        return { rawLine: line, isValid: false, errorReason: `Coluna nativa '${sourceKey}' não permitida. Permitidas: name, phone, email, company` };
+      }
+
+      if (sourceType === 'custom_field' && !activeCustomKeysSet.has(sourceKey)) {
+        return { rawLine: line, isValid: false, errorReason: `Campo personalizado '${sourceKey}' não está ativo na conta.` };
+      }
+
+      if (sourceType === 'system_value' && !ALLOWED_SYSTEM_VALUES.has(sourceKey)) {
+        return { rawLine: line, isValid: false, errorReason: `system_value '${sourceKey}' não permitido. Permitido: contact_city_current_date_ptbr` };
+      }
+
+      return {
+        rawLine: line,
+        isValid: true,
+        mapping: {
+          zapsign_var: varName,
+          source_type: sourceType,
+          source_key: sourceKey,
+          is_required: isReq,
+        },
+      };
+    });
+
+    setBatchParsedItems(items);
+    setBatchStep('preview');
+  };
+
+  const handleApplyBatchImport = () => {
+    const validMappings = batchParsedItems.filter((i) => i.isValid && i.mapping).map((i) => i.mapping!);
+    if (validMappings.length === 0) return;
+
+    if (batchImportMode === 'replace') {
+      setFieldMappings(validMappings);
+    } else {
+      // Append non-duplicate mappings
+      const existingVars = new Set(fieldMappings.map((m) => m.zapsign_var));
+      const newToAppend = validMappings.filter((m) => !existingVars.has(m.zapsign_var));
+      setFieldMappings([...fieldMappings, ...newToAppend]);
+    }
+
+    setBatchModalOpen(false);
+    setBatchRawText('');
+    setBatchStep('input');
+  };
 
   return (
     <Card className="border-border/60">
@@ -313,9 +485,9 @@ export function SignatureTemplatesConfig() {
         )}
       </CardContent>
 
-      {/* Modal Dialog for Create/Edit */}
+      {/* Main Create/Edit Dialog - Wide Responsive Layout */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingTemplate ? 'Editar Modelo de Assinatura' : 'Novo Modelo de Assinatura'}
@@ -336,7 +508,7 @@ export function SignatureTemplatesConfig() {
             <div className="space-y-2">
               <Label>Nome Interno do Modelo</Label>
               <Input
-                placeholder="Ex: Procuração RDC 660"
+                placeholder="Ex: Procuração Anvisa Desertmoon"
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
               />
@@ -344,7 +516,7 @@ export function SignatureTemplatesConfig() {
             <div className="space-y-2">
               <Label>ID do Modelo na ZapSign (template_id)</Label>
               <Input
-                placeholder="Ex: tpl_abc123xyz"
+                placeholder="Ex: b416fa71-4466-4bb0-901a-6ea66b988d2f"
                 value={templateId}
                 onChange={(e) => setTemplateId(e.target.value)}
               />
@@ -383,12 +555,43 @@ export function SignatureTemplatesConfig() {
             </div>
           </div>
 
+          {/* Mappings Section */}
           <div className="space-y-3 pt-4 border-t">
             <div className="flex items-center justify-between">
-              <Label className="font-semibold text-sm">Mapeamento de Variáveis (de/para)</Label>
-              <Button type="button" variant="outline" size="sm" onClick={handleAddFieldMapping} className="gap-1">
-                <Plus className="w-3.5 h-3.5" /> Adicionar Campo
-              </Button>
+              <div className="flex items-center gap-2">
+                <Label className="font-semibold text-sm">Mapeamento de Variáveis (de/para)</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={fetchCustomFields}
+                  disabled={refreshingFields}
+                  title="Atualizar lista de campos personalizados"
+                  className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                >
+                  <RefreshCw className={`w-3 h-3 ${refreshingFields ? 'animate-spin' : ''}`} />
+                  Atualizar campos
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setBatchStep('input');
+                    setBatchRawText('');
+                    setBatchModalOpen(true);
+                  }}
+                  className="gap-1 text-xs"
+                >
+                  <ClipboardList className="w-3.5 h-3.5" /> Colar Vários Campos
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={handleAddFieldMapping} className="gap-1 text-xs">
+                  <Plus className="w-3.5 h-3.5" /> Adicionar Campo
+                </Button>
+              </div>
             </div>
 
             {fieldMappings.length === 0 ? (
@@ -402,33 +605,39 @@ export function SignatureTemplatesConfig() {
                   return (
                     <div
                       key={idx}
-                      className={`grid grid-cols-12 gap-2 items-center border p-2 rounded-md bg-muted/30 text-xs ${
+                      className={`grid grid-cols-12 gap-2 items-center border p-2.5 rounded-md bg-muted/20 text-xs ${
                         isInvalidCustomField ? 'border-destructive/60 bg-destructive/5' : ''
                       }`}
                     >
+                      {/* Column 1: Variable Name */}
                       <div className="col-span-3">
                         <Input
-                          placeholder="Variável ZapSign"
+                          placeholder="Variável (ex: CPF:)"
                           className="h-8 text-xs font-mono"
                           value={mapping.zapsign_var}
                           onChange={(e) => handleMappingChange(idx, 'zapsign_var', e.target.value)}
                         />
                       </div>
+
+                      {/* Column 2: Source Type */}
                       <div className="col-span-3">
                         <select
-                          className="w-full border rounded h-8 text-xs bg-background px-1"
+                          className="w-full border rounded h-8 text-xs bg-background px-2"
                           value={mapping.source_type}
                           onChange={(e: any) => handleMappingChange(idx, 'source_type', e.target.value)}
                         >
                           <option value="contact_property">Coluna Nativa do Contato</option>
                           <option value="custom_field">Campo Personalizado</option>
+                          <option value="system_value">Valor do Sistema</option>
                           <option value="fixed_value">Valor Fixo</option>
                         </select>
                       </div>
+
+                      {/* Column 3: Source Key Selector (Dropdown for custom_fields cleanly lists all active options below) */}
                       <div className="col-span-4">
                         {mapping.source_type === 'contact_property' ? (
                           <select
-                            className="w-full border rounded h-8 text-xs bg-background px-1"
+                            className="w-full border rounded h-8 text-xs bg-background px-2"
                             value={mapping.source_key}
                             onChange={(e) => handleMappingChange(idx, 'source_key', e.target.value)}
                           >
@@ -440,26 +649,39 @@ export function SignatureTemplatesConfig() {
                           </select>
                         ) : mapping.source_type === 'custom_field' ? (
                           <select
-                            className={`w-full border rounded h-8 text-xs bg-background px-1 ${
+                            className={`w-full border rounded h-8 text-xs bg-background px-2 ${
                               isInvalidCustomField ? 'border-destructive text-destructive font-semibold' : ''
                             }`}
                             value={mapping.source_key}
                             onChange={(e) => handleMappingChange(idx, 'source_key', e.target.value)}
                           >
+                            {/* If current mapping points to an invalid/deactivated custom_field, render warning option at top */}
                             {isInvalidCustomField && (
                               <option value={mapping.source_key}>
                                 ⚠️ {mapping.source_key} (Desativado/Inválido)
                               </option>
                             )}
+
+                            {/* Render ALL active custom field optgroups below so the user can easily select a valid option */}
                             {Object.entries(customFieldsByGroup).map(([group, fields]) => (
                               <optgroup key={group} label={group}>
                                 {fields.map((f) => (
-                                  <option key={f.field_key} value={f.field_key}>
+                                  <option key={f.id || f.field_key} value={f.field_key}>
                                     {f.label} ({f.field_key})
                                   </option>
                                 ))}
                               </optgroup>
                             ))}
+                          </select>
+                        ) : mapping.source_type === 'system_value' ? (
+                          <select
+                            className="w-full border rounded h-8 text-xs bg-background px-2"
+                            value={mapping.source_key}
+                            onChange={(e) => handleMappingChange(idx, 'source_key', e.target.value)}
+                          >
+                            <option value="contact_city_current_date_ptbr">
+                              Cidade + Data Atual (PT-BR)
+                            </option>
                           </select>
                         ) : (
                           <Input
@@ -470,8 +692,10 @@ export function SignatureTemplatesConfig() {
                           />
                         )}
                       </div>
+
+                      {/* Column 4: Required Flag */}
                       <div className="col-span-1 text-center">
-                        <label className="flex items-center gap-1 cursor-pointer">
+                        <label className="flex items-center gap-1 cursor-pointer justify-center">
                           <input
                             type="checkbox"
                             checked={mapping.is_required}
@@ -480,13 +704,15 @@ export function SignatureTemplatesConfig() {
                           <span className="text-[10px]">Obr</span>
                         </label>
                       </div>
+
+                      {/* Column 5: Delete */}
                       <div className="col-span-1 text-right">
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRemoveFieldMapping(idx)}
-                          className="h-7 w-7 p-0 text-destructive"
+                          className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
@@ -506,6 +732,138 @@ export function SignatureTemplatesConfig() {
               {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
               {editingTemplate ? 'Salvar Alterações' : 'Criar Modelo'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch Paste Modal ("Colar vários campos") */}
+      <Dialog open={batchModalOpen} onOpenChange={setBatchModalOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-primary" />
+              Colar Vários Campos em Lote
+            </DialogTitle>
+            <DialogDescription>
+              Cole as definições das variáveis (uma por linha) no formato pipe (<code className="bg-muted px-1">VARIÁVEL | ORIGEM | CAMPO | OBRIGATÓRIO</code>) ou JSON estruturado.
+            </DialogDescription>
+          </DialogHeader>
+
+          {batchStep === 'input' ? (
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>Conteúdo das Variáveis</Label>
+                <textarea
+                  rows={10}
+                  className="w-full text-xs font-mono border rounded-md p-3 bg-muted/20 focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder={`Exemplo (1 linha por variável):\n{{Nome completo:}} | contact_property | name | true\n{{CPF:}} | custom_field | cpf | true\n{{RG:}} | custom_field | rg | true\n{{Local e data:}} | system_value | contact_city_current_date_ptbr | true`}
+                  value={batchRawText}
+                  onChange={(e) => setBatchRawText(e.target.value)}
+                />
+              </div>
+
+              <div className="p-3 rounded bg-muted/40 text-xs space-y-1 text-muted-foreground">
+                <span className="font-semibold text-foreground">Origens Permitidas:</span>
+                <p><code className="text-primary font-mono">contact_property</code>: name, phone, email, company</p>
+                <p><code className="text-primary font-mono">custom_field</code>: cpf, rg, birth_date, address_line, city, state, postal_code, guardian_*</p>
+                <p><code className="text-primary font-mono">system_value</code>: contact_city_current_date_ptbr</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <div className="flex items-center justify-between text-xs border-b pb-2">
+                <span className="font-semibold">Resultado da Análise da Colagem</span>
+                <div className="flex gap-2">
+                  <Badge variant="outline" className="text-emerald-600 border-emerald-600/40">
+                    {batchParsedItems.filter((i) => i.isValid).length} Válidos
+                  </Badge>
+                  {batchParsedItems.some((i) => !i.isValid) && (
+                    <Badge variant="destructive">
+                      {batchParsedItems.filter((i) => !i.isValid).length} Erros
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {batchParsedItems.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-2 rounded border text-xs flex items-center justify-between font-mono ${
+                      item.isValid ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-destructive/5 border-destructive/30 text-destructive'
+                    }`}
+                  >
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 font-semibold">
+                        {item.isValid ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        ) : (
+                          <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />
+                        )}
+                        <span>{item.mapping?.zapsign_var || item.rawLine}</span>
+                      </div>
+                      {item.isValid && item.mapping && (
+                        <p className="text-[11px] text-muted-foreground">
+                          {item.mapping.source_type} &rarr; {item.mapping.source_key} (Obr: {item.mapping.is_required ? 'Sim' : 'Não'})
+                        </p>
+                      )}
+                      {!item.isValid && <p className="text-[11px] text-destructive">{item.errorReason}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2 border-t pt-3">
+                <Label className="text-xs font-semibold">Modo de Aplicação no Formulário</Label>
+                <div className="flex items-center gap-4 text-xs">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="batchMode"
+                      value="append"
+                      checked={batchImportMode === 'append'}
+                      onChange={() => setBatchImportMode('append')}
+                    />
+                    <span>Adicionar aos mapeamentos existentes (Padrão)</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="batchMode"
+                      value="replace"
+                      checked={batchImportMode === 'replace'}
+                      onChange={() => setBatchImportMode('replace')}
+                    />
+                    <span className="text-destructive font-medium">Substituir todos os mapeamentos atuais</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="pt-4 flex justify-between">
+            {batchStep === 'input' ? (
+              <>
+                <Button variant="outline" onClick={() => setBatchModalOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleParseBatchText} disabled={!batchRawText.trim()}>
+                  Analisar Colagem
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setBatchStep('input')}>
+                  Voltar ao Texto
+                </Button>
+                <Button
+                  onClick={handleApplyBatchImport}
+                  disabled={batchParsedItems.filter((i) => i.isValid).length === 0}
+                >
+                  Aplicar {batchParsedItems.filter((i) => i.isValid).length} Mapeamentos
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

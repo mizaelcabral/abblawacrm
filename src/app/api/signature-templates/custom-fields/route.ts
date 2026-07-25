@@ -29,19 +29,30 @@ export async function GET() {
     const admin = supabaseAdmin();
     const { data: customFields, error: cfError } = await admin
       .from('custom_fields')
-      .select('id, field_key, label, field_type, group_name, is_active, sort_order')
+      .select('id, field_key, field_name, field_type, group_name, is_active, display_order')
       .eq('account_id', profile.account_id)
       .eq('is_active', true)
       .order('group_name', { ascending: true })
-      .order('sort_order', { ascending: true });
+      .order('display_order', { ascending: true });
 
     if (cfError) {
       console.error('[signature-templates/custom-fields] Error fetching custom fields:', cfError);
       return NextResponse.json({ error: 'Falha ao buscar campos personalizados' }, { status: 500 });
     }
 
+    // Map field_name to label for frontend consistency
+    const mapped = (customFields || []).map((cf) => ({
+      id: cf.id,
+      field_key: cf.field_key,
+      label: cf.field_name || cf.field_key,
+      field_type: cf.field_type,
+      group_name: cf.group_name || 'Gerais',
+      is_active: cf.is_active,
+      display_order: cf.display_order,
+    }));
+
     return NextResponse.json({
-      custom_fields: customFields || [],
+      custom_fields: mapped,
     });
   } catch (err: any) {
     console.error('[signature-templates/custom-fields] Error in GET:', err);

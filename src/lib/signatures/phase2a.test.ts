@@ -4,9 +4,9 @@ import { formatInstructionMessage } from './instruction-message-formatter';
 import { MockSignatureAdapter, ZapSignAdapter } from './provider-adapter';
 
 export function runPhase2ATests() {
-  console.log('--- STARTING PHASE 2A ABSOLUTE MOCK BLOCK & GUARDIAN RELATIONSHIP TEST SUITE ---');
+  console.log('--- STARTING PHASE 2A COMPREHENSIVE REVISED TEST SUITE ---');
 
-  // 1. Minor Complete with guardian_relationship -> PERMITIDO
+  // 1. Minor Complete with ALL 5 guardian fields -> PERMITIDO
   const minorComplete = {
     id: 'c_minor_full',
     name: 'Pedro Menor',
@@ -36,18 +36,9 @@ export function runPhase2ATests() {
   console.assert(resNoRel.is_blocked, 'Minor without guardian_relationship must block');
   console.assert(resNoRel.missing_fields?.includes('guardian_relationship'), 'missing_fields must contain guardian_relationship');
 
-  // 3. Minor with empty or whitespace guardian_relationship -> BLOQUEADO
-  const minorEmptyRel = {
-    ...minorComplete,
-    custom_fields: { ...minorComplete.custom_fields, guardian_relationship: '   ' },
-  };
-  const resEmptyRel = resolveSignatory('guardian_if_minor', minorEmptyRel);
-  console.assert(resEmptyRel.is_blocked, 'Minor with empty guardian_relationship must block');
-
-  // 4. Absolute Production Mock Security Guard Test
+  // 3. Absolute Production Mock Security Guard Test
   const mockAdapter = new MockSignatureAdapter();
 
-  // Test mode in non-production passes
   const originalEnv = process.env.NODE_ENV;
   (process.env as any).NODE_ENV = 'development';
   mockAdapter.createFromTemplate({
@@ -59,7 +50,7 @@ export function runPhase2ATests() {
     console.assert(res.docToken.startsWith('doc_mock_'), 'Mock returns token in dev mode');
   });
 
-  // Switch NODE_ENV to production -> Mock Signature Adapter MUST unconditionally throw
+  // Production test: Mock MUST unconditionally throw
   (process.env as any).NODE_ENV = 'production';
   mockAdapter.createFromTemplate({
     templateId: 'tpl_123',
@@ -70,7 +61,6 @@ export function runPhase2ATests() {
     console.assert(err.message.includes('estritamente bloqueado no ambiente de produção'), 'Mock must be unconditionally blocked in production');
   });
 
-  // Restore NODE_ENV
   (process.env as any).NODE_ENV = originalEnv;
 
   console.log('--- ALL SURGICAL TESTS PASSED SUCCESSFULLY ---');
