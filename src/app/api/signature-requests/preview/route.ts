@@ -1,15 +1,27 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/client';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/automations/admin-client';
 import { resolveSignatory } from '@/lib/signatures/signatory-resolver';
 import { resolveSystemValue } from '@/lib/signatures/system-value-resolver';
 import { formatInstructionMessage } from '@/lib/signatures/instruction-message-formatter';
+import { getContactWithCustomFields } from '@/lib/signatures/contact-helper';
 import { ALLOWED_CONTACT_PROPERTIES } from '@/types/signatures';
 
-// POST /api/signature-requests/preview - Pure read-only preview with zero side effects
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function generateCorrelationId(): string {
+  const ts = Date.now().toString(36).toUpperCase();
+  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `PREVIEW-${ts}-${rand}`;
+}
+
+// POST /api/signature-requests/preview - Read-only preview with zero side effects
 export async function POST(request: Request) {
+  const correlationId = generateCorrelationId();
+
   try {
-    const supabase = await createClient();
+    const supabase = await createServerClient();
 
     const {
       data: { user },
@@ -17,70 +29,156 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+      return NextResponse.json(
+        { error: 'Não autorizado.', correlation_id: correlationId },
+        { status: 401 }
+      );
     }
 
-    const { data: profile } = await supabase
+    const admin = supabaseAdmin();
+
+    const { data: profile } = await admin
       .from('profiles')
       .select('account_id')
       .eq('user_id', user.id)
       .maybeSingle();
 
     if (!profile || !profile.account_id) {
-      return NextResponse.json({ error: 'Perfil sem conta ativa' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Perfil sem conta ativa.', correlation_id: correlationId },
+        { status: 403 }
+      );
     }
 
-    const body = await request.json();
-    const { contact_id, signature_template_id } = body;
+    const accountId = profile.account_id;
 
-    if (!contact_id || !signature_template_id) {
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
       return NextResponse.json(
-        { error: 'contact_id e signature_template_id são obrigatórios para a pré-visualização.' },
+        { error: 'Corpo da requisição inválido (JSON esperado).', correlation_id: correlationId },
         { status: 400 }
       );
     }
 
-    const admin = supabaseAdmin();
+    const { contact_id, signature_template_id, deal_id } = body;
 
-    // 1. Fetch Active Template
+    // 1. Contract & Format Audits
+    if (!contact_id) {
+      return NextResponse.json(
+        { error: 'O parâmetro contact_id é obrigatório.', correlation_id: correlationId },
+        { status: 400 }
+      );
+    }
+
+    if (!signature_template_id) {
+      return NextResponse.json(
+        { error: 'O parâmetro signature_template_id é obrigatório.', correlation_id: correlationId },
+        { status: 400 }
+      );
+    }
+
+    if (!UUID_REGEX.test(contact_id)) {
+      return NextResponse.json(
+        { error: `O contact_id enviado ('${contact_id}') é inválido. Formato UUID esperado.`, correlation_id: correlationId },
+        { status: 400 }
+      );
+    }
+
+    if (!UUID_REGEX.test(signature_template_id)) {
+      // Check if external template_id was sent instead of internal UUID
+      const { data: extCheck } = await admin
+        .from('signature_templates')
+        .select('id, template_name')
+        .eq('account_id', accountId)
+        .eq('template_id', signature_template_id)
+        .maybeSingle();
+
+      if (extCheck) {
+        return NextResponse.json(
+          {
+            error: `O ID enviado ('${signature_template_id}') é o template_id externo da ZapSign. Utilize o signature_template_id interno (UUID) do modelo '${extCheck.template_name}'.`,
+            correlation_id: correlationId,
+          },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json(
+        { error: `O signature_template_id enviado ('${signature_template_id}') é inválido. Formato UUID esperado.`, correlation_id: correlationId },
+        { status: 400 }
+      );
+    }
+
+    // 2. Fetch Active Internal Template
     const { data: template, error: tplErr } = await admin
       .from('signature_templates')
       .select('*')
       .eq('id', signature_template_id)
-      .eq('account_id', profile.account_id)
-      .eq('is_active', true)
+      .eq('account_id', accountId)
       .maybeSingle();
 
     if (tplErr || !template) {
       return NextResponse.json(
-        { error: 'Modelo de assinatura não encontrado ou desativado.' },
+        { error: 'Modelo de assinatura não encontrado nesta conta.', correlation_id: correlationId },
         { status: 404 }
       );
     }
 
-    // 2. Fetch Contact
-    const { data: contact, error: cErr } = await admin
-      .from('contacts')
-      .select('id, name, email, phone, company, custom_fields')
-      .eq('id', contact_id)
-      .eq('account_id', profile.account_id)
-      .single();
-
-    if (cErr || !contact) {
-      return NextResponse.json({ error: 'Contato não encontrado.' }, { status: 404 });
+    if (!template.is_active) {
+      return NextResponse.json(
+        { error: 'Este modelo de assinatura está desativado.', correlation_id: correlationId },
+        { status: 400 }
+      );
     }
 
-    // 3. Resolve Signatory
+    // 3. Fetch Contact with Aggregated Custom Fields
+    const contact = await getContactWithCustomFields(accountId, contact_id);
+
+    if (!contact) {
+      return NextResponse.json(
+        { error: 'Contato não encontrado nesta conta.', correlation_id: correlationId },
+        { status: 404 }
+      );
+    }
+
+    // 4. Deal Link Validation (if provided)
+    if (deal_id) {
+      if (!UUID_REGEX.test(deal_id)) {
+        return NextResponse.json(
+          { error: `O deal_id enviado ('${deal_id}') é inválido. Formato UUID esperado.`, correlation_id: correlationId },
+          { status: 400 }
+        );
+      }
+
+      const { data: deal, error: dealErr } = await admin
+        .from('deals')
+        .select('id, contact_id, account_id')
+        .eq('id', deal_id)
+        .eq('account_id', accountId)
+        .maybeSingle();
+
+      if (dealErr || !deal || deal.contact_id !== contact_id) {
+        return NextResponse.json(
+          { error: 'O negócio informado não pertence ao contato ou a esta conta.', correlation_id: correlationId },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 5. Resolve Signatory Rule
     const signatoryRes = resolveSignatory(template.signatory_rule, contact);
     if (signatoryRes.is_blocked || !signatoryRes.signatory) {
       return NextResponse.json({
         is_valid: false,
         block_reason: signatoryRes.block_reason,
         missing_fields: signatoryRes.missing_fields || [],
+        correlation_id: correlationId,
       });
     }
 
-    // 4. Evaluate Variables
+    // 6. Evaluate Variable Mappings (DOCX de/para)
     const customFields = contact.custom_fields || {};
     const variables: Array<{ de: string; para: string; is_required: boolean }> = [];
     const missingRequiredVariables: string[] = [];
@@ -101,7 +199,7 @@ export async function POST(request: Request) {
       } else if (mapping.source_type === 'system_value') {
         const sysRes = resolveSystemValue(mapping.source_key, customFields);
         if (sysRes.is_blocked || !sysRes.value) {
-          missingRequiredVariables.push(mapping.zapsign_var);
+          missingRequiredVariables.push(mapping.source_key || mapping.zapsign_var);
         } else {
           resolvedValue = sysRes.value;
         }
@@ -129,10 +227,11 @@ export async function POST(request: Request) {
         is_valid: false,
         block_reason: `Campos obrigatórios do documento não preenchidos: ${missingRequiredVariables.join(', ')}`,
         missing_fields: missingRequiredVariables,
+        correlation_id: correlationId,
       });
     }
 
-    // 5. Format Instruction Message Preview
+    // 7. Format Instruction Message Preview
     const firstName = contact.name ? contact.name.split(' ')[0] : 'Cliente';
     const formattedMsg = formatInstructionMessage({
       templateText: template.instruction_message_template,
@@ -141,15 +240,29 @@ export async function POST(request: Request) {
       privacyNoticeUrl: template.privacy_notice_url,
     });
 
+    // Sanitized Server Log (NO PII)
+    console.info(`[POST /api/signature-requests/preview] Success`, {
+      correlationId,
+      accountId,
+      userId: user.id,
+      templateId: template.id,
+      signatoryType: signatoryRes.signatory.signatory_type,
+      variablesCount: variables.length,
+    });
+
     return NextResponse.json({
       is_valid: true,
       template_name: template.template_name,
       signatory: signatoryRes.signatory,
       variables_count: variables.length,
       instruction_message: formattedMsg.message,
+      correlation_id: correlationId,
     });
   } catch (err: any) {
-    console.error('[POST /api/signature-requests/preview] Error:', err);
-    return NextResponse.json({ error: 'Erro ao gerar pré-visualização.' }, { status: 500 });
+    console.error(`[POST /api/signature-requests/preview] Server Error (${correlationId}):`, err.message || err);
+    return NextResponse.json(
+      { error: 'Não foi possível gerar a pré-visualização. Tente novamente mais tarde.', correlation_id: correlationId },
+      { status: 500 }
+    );
   }
 }

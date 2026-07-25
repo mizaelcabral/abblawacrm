@@ -3,6 +3,7 @@ import { encryptText, decryptText } from '@/lib/security/crypto';
 import { resolveSignatory } from './signatory-resolver';
 import { resolveSystemValue } from './system-value-resolver';
 import { formatInstructionMessage } from './instruction-message-formatter';
+import { getContactWithCustomFields } from './contact-helper';
 import { SignatureProviderAdapter, MockSignatureAdapter } from './provider-adapter';
 import { SignatureTemplate, ALLOWED_CONTACT_PROPERTIES } from '@/types/signatures';
 
@@ -68,15 +69,10 @@ export class SignatureRequestService {
       throw new Error('Modelo de assinatura não encontrado ou inativo para esta conta.');
     }
 
-    // 3. Fetch Contact & Custom Fields
-    const { data: contact, error: cErr } = await admin
-      .from('contacts')
-      .select('id, name, email, phone, company, custom_fields')
-      .eq('id', contactId)
-      .eq('account_id', accountId)
-      .single();
+    // 3. Fetch Contact & Relational Custom Fields
+    const contact = await getContactWithCustomFields(accountId, contactId);
 
-    if (cErr || !contact) {
+    if (!contact) {
       throw new Error('Contato não encontrado para esta conta.');
     }
 
@@ -315,7 +311,6 @@ export class SignatureRequestService {
     }
 
     // 2. Idempotency & State Machine Guards
-    // Enforce: 'signed' is terminal state, cannot regress
     if (doc.status === 'signed') {
       return { success: true, message: 'Evento ignorado: documento já está assinado.', status: 'signed', documentId: doc.document_id };
     }
@@ -407,7 +402,7 @@ export class SignatureRequestService {
         }
       }
 
-      // Link zapsign_documents.document_id and set status = 'signed' (Direct transition pending -> signed allowed!)
+      // Link zapsign_documents.document_id and set status = 'signed'
       await admin
         .from('zapsign_documents')
         .update({
