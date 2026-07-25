@@ -47,6 +47,8 @@ const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = [
   { label: "Fechados", value: "closed" },
 ];
 
+import { sortConversations } from "@/lib/conversations/sort";
+
 export function ConversationList({
   activeConversationId,
   onSelect,
@@ -58,18 +60,6 @@ export function ConversationList({
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [loading, setLoading] = useState(true);
 
-  // Keep the latest callback in a ref so the fetch effect below can
-  // have a stable, empty-dep identity. Previously the fetch useCallback
-  // depended on `onConversationsLoaded`, which depends on the parent's
-  // `deepLinkConvId` — so every URL change (including one the parent
-  // triggered via router.replace after a click) caused a fresh
-  // conversations fetch. That extra refetch was the trigger for the
-  // deep-link auto-select running a second time and wiping the active
-  // thread's messages.
-  // Mutation lives in an effect (not render) per React 19's refs rule;
-  // the fetch runs once on mount so it's fine to read the slightly
-  // older value — the very next render updates the ref for any
-  // subsequent async completion.
   const onConversationsLoadedRef = useRef(onConversationsLoaded);
   useEffect(() => {
     onConversationsLoadedRef.current = onConversationsLoaded;
@@ -83,12 +73,12 @@ export function ConversationList({
       const { data, error } = await supabase
         .from("conversations")
         .select("*, contact:contacts(*)")
-        .order("last_message_at", { ascending: false });
+        .order("last_message_at", { ascending: false, nullsFirst: false })
+        .order("updated_at", { ascending: false });
 
       if (cancelled) return;
 
       if (error) {
-        // Supabase errors have non-enumerable properties — log fields explicitly
         console.error("Failed to fetch conversations:", {
           message: error.message,
           details: error.details,
@@ -99,16 +89,13 @@ export function ConversationList({
         return;
       }
 
-      onConversationsLoadedRef.current(data ?? []);
+      onConversationsLoadedRef.current(sortConversations(data ?? []));
       setLoading(false);
     })();
 
     return () => {
       cancelled = true;
     };
-    // `resyncToken` is included so the parent can force a refetch when
-    // the realtime channel reconnects or the tab regains focus — catches
-    // up on any events sent while the WS was disconnected or throttled.
   }, [resyncToken]);
 
   const filtered = useMemo(() => {
@@ -130,7 +117,7 @@ export function ConversationList({
       });
     }
 
-    return result;
+    return sortConversations(result);
   }, [conversations, filter, search]);
 
   const handleSearchChange = useCallback(

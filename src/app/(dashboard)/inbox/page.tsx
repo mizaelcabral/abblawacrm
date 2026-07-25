@@ -12,14 +12,11 @@ import { toast } from "sonner";
 import { WifiOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { sortConversations } from "@/lib/conversations/sort";
+
 function InboxPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  /**
-   * `?c=<id>` deep-link support. Used when landing here from the
-   * dashboard's recent-conversations list so the right thread opens
-   * automatically instead of showing the empty center panel.
-   */
   const deepLinkConvId = searchParams.get("c");
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -31,56 +28,19 @@ function InboxPageContent() {
     null
   );
   const [bannerDismissed, setBannerDismissed] = useState(false);
-  /**
-   * Bumped whenever we want children (ConversationList, MessageThread)
-   * to refetch from the DB — used as a safety net against missed
-   * realtime events. Bumped on WS reconnect and on tab visibility →
-   * visible. The initial mount fetches don't depend on this; they fire
-   * once on conversationId-change as usual.
-   */
   const [resyncToken, setResyncToken] = useState(0);
 
-  // Fire the deep-link auto-select exactly once per URL — subsequent
-  // list refreshes (realtime, manual refetch) must not snap the user
-  // back to the deep-linked conversation if they've already clicked
-  // elsewhere.
   const autoSelectedForDeepLinkRef = useRef<string | null>(null);
-  // Keep track of the last URL conversation ID we processed/saw,
-  // to prevent race conditions during async Next.js router transitions.
   const lastUrlConvIdRef = useRef<string | null>(null);
-
-  // Tracks conversations whose hydrate fetch is currently in flight. The
-  // conv-INSERT and the first-message-INSERT events both call into
-  // hydrateConversation; the dedupe here keeps it at one refetch per
-  // new conversation even when both events arrive within milliseconds.
   const hydratingConvIdsRef = useRef<Set<string>>(new Set());
-
-  /**
-   * Synchronous mirror of the conversation ids currently in `conversations`
-   * state. Event handlers need to know "do we already have this conv?"
-   * without waiting for a setState updater to run — updaters fire during
-   * reconciliation, *after* the synchronous handler code returns, so a
-   * `let foundInList = false; setState(p => { foundInList = ...; return ... })`
-   * flag reads as `false` in the same tick (this exact bug shipped in #105
-   * and caused #106: every incoming message and every status flip fired a
-   * redundant DB hydrate, swamping the supabase client and starving the
-   * realtime channel). The ref is kept in sync via the effect below.
-   */
   const knownConvIdsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     const next = new Set<string>();
     for (const c of conversations) next.add(c.id);
     knownConvIdsRef.current = next;
   }, [conversations]);
 
-  // Pull the conversation row with its `contact` joined and merge it
-  // into state. Needed because Supabase Realtime payloads only carry the
-  // row's own columns — a brand-new conversation arrives without a
-  // contact, which surfaced as "Unknown" names, empty avatars, and
-  // (when the conv-INSERT event was delayed past the message-INSERT)
-  // conversations stuck on "No messages yet" until the user reloaded.
-  // Also self-heals if a realtime event was missed: callers can invoke
-  // this whenever they reference a conversation id they don't recognise.
   const hydrateConversation = useCallback(async (convId: string) => {
     if (hydratingConvIdsRef.current.has(convId)) return;
     hydratingConvIdsRef.current.add(convId);
@@ -92,8 +52,6 @@ function InboxPageContent() {
         .eq("id", convId)
         .maybeSingle();
       if (error) {
-        // Supabase errors have non-enumerable properties — log fields
-        // explicitly so the console message isn't just `{}`.
         console.error("Failed to hydrate conversation:", {
           message: error.message,
           details: error.details,
@@ -107,25 +65,20 @@ function InboxPageContent() {
       setConversations((prev) => {
         const existing = prev.find((c) => c.id === fetched.id);
         if (existing) {
-          // Already in state — keep its fields (a realtime UPDATE may
-          // have landed while the fetch was in flight and patched
-          // last_message_text / unread_count to fresher values than
-          // the row we just read). Only backfill `contact`, which the
-          // realtime payloads never carry.
-          return prev.map((c) =>
+          const updated = prev.map((c) =>
             c.id === fetched.id
               ? { ...c, contact: c.contact ?? fetched.contact }
               : c,
           );
+          return sortConversations(updated);
         }
-        return [fetched, ...prev];
+        return sortConversations([fetched, ...prev]);
       });
     } finally {
       hydratingConvIdsRef.current.delete(convId);
     }
   }, []);
 
-  // Check WhatsApp connection status on mount
   useEffect(() => {
     const checkConnection = async () => {
       const supabase = createClient();
@@ -136,12 +89,6 @@ function InboxPageContent() {
 
       if (!user) return;
 
-      // whatsapp_config is one-row-per-account post-multi-user, so
-      // the previous `.eq('user_id', user.id)` would miss the row
-      // for any teammate who didn't personally save the config —
-      // the "WhatsApp not connected" banner would show in the
-      // shared inbox even though the admin had it configured.
-      // Resolve account_id via the profile and query by that.
       const { data: profile } = await supabase
         .from("profiles")
         .select("account_id")
@@ -165,21 +112,17 @@ function InboxPageContent() {
     checkConnection();
   }, []);
 
-  // Handle realtime message events
   const handleMessageEvent = useCallback(
     (event: { eventType: string; new: Message; old: Partial<Message> }) => {
       const newMsg = event.new;
 
       if (event.eventType === "INSERT") {
-        // Add to messages if it belongs to active conversation
         if (
           activeConversation &&
           newMsg.conversation_id === activeConversation.id
         ) {
           setMessages((prev) => {
-            // Avoid duplicates
             if (prev.some((m) => m.id === newMsg.id)) return prev;
-            // Replace optimistic message if it exists
             const withoutOptimistic = prev.filter(
               (m) => !m.id.startsWith("temp-")
             );
@@ -187,14 +130,9 @@ function InboxPageContent() {
           });
         }
 
-        // Update conversation list preview. We need to know *synchronously*
-        // whether the conv is already in state to decide between patching
-        // the preview and triggering a hydrate — see the comment on
-        // knownConvIdsRef for why a closure flag inside the updater would
-        // always read false here.
         if (knownConvIdsRef.current.has(newMsg.conversation_id)) {
-          setConversations((prev) =>
-            prev.map((c) =>
+          setConversations((prev) => {
+            const updated = prev.map((c) =>
               c.id === newMsg.conversation_id
                 ? {
                     ...c,
@@ -206,20 +144,15 @@ function InboxPageContent() {
                         : c.unread_count + 1,
                   }
                 : c,
-            ),
-          );
+            );
+            return sortConversations(updated);
+          });
         } else {
-          // First time we're seeing this conv: the conv-INSERT event
-          // hasn't landed yet, or was missed. Hydrate from the DB so
-          // the row surfaces with its `contact` joined; the conv-UPDATE
-          // event the webhook emits right after the message INSERT will
-          // converge state when it arrives.
           hydrateConversation(newMsg.conversation_id);
         }
       }
 
       if (event.eventType === "UPDATE") {
-        // Update message status
         setMessages((prev) =>
           prev.map((m) => (m.id === newMsg.id ? { ...m, ...newMsg } : m))
         );
@@ -228,7 +161,6 @@ function InboxPageContent() {
     [activeConversation, hydrateConversation]
   );
 
-  // Handle realtime conversation events
   const handleConversationEvent = useCallback(
     (event: {
       eventType: string;
@@ -238,15 +170,10 @@ function InboxPageContent() {
       const conv = event.new;
 
       if (event.eventType === "INSERT") {
-        // Prepend immediately for snappy UX so the new conv shows in the
-        // list right away, then hydrate to fill in the `contact` join
-        // (realtime payloads never include joins). Skip both if we
-        // already have the row — that shouldn't happen normally, but
-        // out-of-order delivery would have us prepending a duplicate.
         if (!knownConvIdsRef.current.has(conv.id)) {
           setConversations((prev) => {
             if (prev.some((c) => c.id === conv.id)) return prev;
-            return [conv, ...prev];
+            return sortConversations([conv, ...prev]);
           });
           hydrateConversation(conv.id);
         }
@@ -254,14 +181,9 @@ function InboxPageContent() {
 
       if (event.eventType === "UPDATE") {
         if (knownConvIdsRef.current.has(conv.id)) {
-          // If this UPDATE is for the conv the user is currently viewing,
-          // suppress the incoming unread_count — the user is reading it
-          // RIGHT NOW, so any positive value would just flicker the badge
-          // back on for the ~100ms it takes for the reset effect's server
-          // UPDATE to round-trip. Non-active convs take the value as-is.
           const isActive = activeConversation?.id === conv.id;
-          setConversations((prev) =>
-            prev.map((c) =>
+          setConversations((prev) => {
+            const updated = prev.map((c) =>
               c.id === conv.id
                 ? {
                     ...c,
@@ -269,17 +191,13 @@ function InboxPageContent() {
                     unread_count: isActive ? 0 : conv.unread_count,
                   }
                 : c,
-            ),
-          );
+            );
+            return sortConversations(updated);
+          });
         } else {
-          // UPDATE arrived before the INSERT (or after a missed INSERT)
-          // — fetch the row so it surfaces with its contact joined. The
-          // patch contained in `conv` will already be reflected in what
-          // the hydrate fetch returns.
           hydrateConversation(conv.id);
         }
 
-        // Update active conversation if it changed
         if (activeConversation && conv.id === activeConversation.id) {
           setActiveConversation((prev) =>
             prev ? { ...prev, ...conv } : prev
