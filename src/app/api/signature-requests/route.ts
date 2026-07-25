@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if account has ZapSign credentials
+    // Check account ZapSign configuration & integration status BEFORE inserting anything or changing status to 'creating'
     const admin = supabaseAdmin();
     const { data: zapsignConfig } = await admin
       .from('zapsign_config')
@@ -53,21 +53,22 @@ export async function POST(request: Request) {
       .eq('account_id', profile.account_id)
       .maybeSingle();
 
-    // In Production or without explicit MOCK flag, require real ZapSign credentials
-    if (process.env.NODE_ENV === 'production' && process.env.SIGNATURE_MOCK_ENABLED !== 'true') {
-      if (!zapsignConfig || !zapsignConfig.is_active || !zapsignConfig.api_key) {
+    const isProductionEnv = process.env.NODE_ENV === 'production';
+
+    // In Production: Absolutely block creation until Phase 2B authorization & real credentials exist
+    if (isProductionEnv) {
+      if (!zapsignConfig || !zapsignConfig.is_active || !zapsignConfig.api_key || zapsignConfig.api_key.includes('••••')) {
         return NextResponse.json(
-          { error: 'Conexão com a ZapSign não configurada para esta conta. Acesse Configurações > ZapSign para cadastrar seu Token de API.' },
+          { error: 'Integração com a ZapSign não autorizada/configurada para esta conta (Fase 2B pendente). Nenhuma solicitação criada.' },
           { status: 400 }
         );
       }
     }
 
-    // Determine adapter
-    const isMockMode = process.env.NODE_ENV !== 'production' || process.env.SIGNATURE_MOCK_ENABLED === 'true';
-    const adapter = isMockMode
-      ? new MockSignatureAdapter()
-      : new ZapSignAdapter(zapsignConfig?.api_key || '');
+    // Determine adapter: MockSignatureAdapter throws in production unconditionally
+    const adapter = isProductionEnv
+      ? new ZapSignAdapter(zapsignConfig?.api_key || '', zapsignConfig?.is_active || false)
+      : new MockSignatureAdapter();
 
     const service = new SignatureRequestService(adapter);
 

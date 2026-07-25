@@ -35,21 +35,19 @@ export interface SignatureProviderAdapter {
 }
 
 /**
- * MockSignatureAdapter for Phase 2A local testing ONLY.
- * STRICTION: Strictly unavailable in production environment.
+ * MockSignatureAdapter for local development and unit tests ONLY.
+ * ABSOLUTE RULE: Unconditionally BLOCKED in production environment (NODE_ENV === 'production').
+ * No environment variable, query parameter, header, or account setting can enable this in production.
  */
 export class MockSignatureAdapter implements SignatureProviderAdapter {
-  private isAllowedInCurrentEnv(): boolean {
-    if (process.env.NODE_ENV === 'production' && process.env.SIGNATURE_MOCK_ENABLED !== 'true') {
-      return false;
+  private assertNotProduction(): void {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('O Provedor Mock de assinatura está estritamente bloqueado no ambiente de produção.');
     }
-    return true;
   }
 
   async createFromTemplate(params: CreateFromTemplateParams): Promise<ProviderCreateDocumentResult> {
-    if (!this.isAllowedInCurrentEnv()) {
-      throw new Error('O Provedor Mock de assinatura está desativado no ambiente de produção.');
-    }
+    this.assertNotProduction();
 
     const mockToken = `doc_mock_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const mockSignUrl = `https://app.zapsign.com.br/verificar/${mockToken}`;
@@ -75,9 +73,7 @@ export class MockSignatureAdapter implements SignatureProviderAdapter {
   }
 
   async getSignedFile(docToken: string): Promise<ProviderFileResult> {
-    if (!this.isAllowedInCurrentEnv()) {
-      throw new Error('O Provedor Mock de assinatura está desativado no ambiente de produção.');
-    }
+    this.assertNotProduction();
 
     const mockPdfHeader = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n';
     const pdfBuffer = Buffer.from(mockPdfHeader, 'utf-8');
@@ -91,26 +87,28 @@ export class MockSignatureAdapter implements SignatureProviderAdapter {
 }
 
 /**
- * ZapSignAdapter - Real ZapSign API Client (Blocked until Phase 2B configuration)
+ * ZapSignAdapter - Real ZapSign API Client (Requires explicit Phase 2B activation & valid credentials)
  */
 export class ZapSignAdapter implements SignatureProviderAdapter {
   private apiKey: string;
+  private isIntegrationActive: boolean;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, isIntegrationActive: boolean = false) {
     this.apiKey = apiKey;
+    this.isIntegrationActive = isIntegrationActive;
   }
 
   async createFromTemplate(params: CreateFromTemplateParams): Promise<ProviderCreateDocumentResult> {
-    if (!this.apiKey || this.apiKey === 'mock' || this.apiKey.includes('••••')) {
-      throw new Error('Credenciais da ZapSign não configuradas ou inválidas. Configure a chave de API em Configurações > ZapSign.');
+    if (!this.isIntegrationActive || !this.apiKey || this.apiKey === 'mock' || this.apiKey.includes('••••')) {
+      throw new Error('Integração com ZapSign não está ativada ou credenciais não foram configuradas. Fase 2B pendente.');
     }
-    throw new Error('Integração com ZapSign real aguardando autorização da Fase 2B.');
+    throw new Error('Integração com ZapSign real aguardando ativação explícita da Fase 2B.');
   }
 
   async getSignedFile(docToken: string): Promise<ProviderFileResult> {
-    if (!this.apiKey || this.apiKey === 'mock' || this.apiKey.includes('••••')) {
-      throw new Error('Credenciais da ZapSign não configuradas ou inválidas.');
+    if (!this.isIntegrationActive || !this.apiKey || this.apiKey === 'mock' || this.apiKey.includes('••••')) {
+      throw new Error('Integração com ZapSign não está ativada ou credenciais não foram configuradas.');
     }
-    throw new Error('Integração com ZapSign real aguardando autorização da Fase 2B.');
+    throw new Error('Integração com ZapSign real aguardando ativação explícita da Fase 2B.');
   }
 }

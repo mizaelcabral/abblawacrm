@@ -3,10 +3,10 @@ import { createClient } from '@/lib/supabase/server';
 import { SignatureRequestService } from '@/lib/signatures/signature-request-service';
 import { MockSignatureAdapter } from '@/lib/signatures/provider-adapter';
 
-// POST /api/signature-requests/webhook-mock - Simulates webhook event processing in local dev/tests ONLY
+// POST /api/signature-requests/webhook-mock - Unconditionally returning 404 in PRODUCTION
 export async function POST(request: Request) {
-  // Strict Production Protection: Always return 404 in production environment
-  if (process.env.NODE_ENV === 'production' && process.env.SIGNATURE_MOCK_ENABLED !== 'true') {
+  // ABSOLUTE PROTECTION: Unconditionally return 404 in production environment
+  if (process.env.NODE_ENV === 'production') {
     return NextResponse.json({ error: 'Endpoint não encontrado.' }, { status: 404 });
   }
 
