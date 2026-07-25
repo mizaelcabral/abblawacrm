@@ -5,12 +5,11 @@ import {
   FileCheck,
   Loader2,
   AlertTriangle,
-  Copy,
-  ExternalLink,
-  CheckCircle2,
   Lock,
   UserCheck,
   ShieldAlert,
+  Eye,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   Dialog,
@@ -23,7 +22,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SignatureTemplate } from '@/types/signatures';
-import { resolveSignatory } from '@/lib/signatures/signatory-resolver';
 
 interface CreateSignatureDialogProps {
   open: boolean;
@@ -40,29 +38,29 @@ interface CreateSignatureDialogProps {
 }
 
 export function CreateSignatureDialog({ open, onOpenChange, contact, dealId }: CreateSignatureDialogProps) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2>(1);
   const [templates, setTemplates] = useState<SignatureTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<SignatureTemplate | null>(null);
   const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Result state
-  const [requestId, setRequestId] = useState<string | null>(null);
-  const [status, setStatus] = useState<string>('pending');
-  const [signingLink, setSigningLink] = useState<string>('');
-  const [instructionMessage, setInstructionMessage] = useState<string>('');
-  const [copiedLink, setCopiedLink] = useState(false);
-  const [copiedMsg, setCopiedMsg] = useState(false);
+  // Preview Result State (Pure Read-Only)
+  const [previewResult, setPreviewResult] = useState<{
+    isValid: boolean;
+    blockReason?: string;
+    missingFields?: string[];
+    signatory?: any;
+    variablesCount?: number;
+    instructionMessage?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (open) {
       setStep(1);
       setError(null);
       setSelectedTemplate(null);
-      setRequestId(null);
-      setSigningLink('');
-      setInstructionMessage('');
+      setPreviewResult(null);
       fetchActiveTemplates();
     }
   }, [open]);
@@ -73,7 +71,6 @@ export function CreateSignatureDialog({ open, onOpenChange, contact, dealId }: C
       const res = await fetch('/api/signature-templates');
       if (res.ok) {
         const data = await res.json();
-        // Only active templates for operational users
         const activeOnly = (data.templates || []).filter((t: SignatureTemplate) => t.is_active);
         setTemplates(activeOnly);
         if (activeOnly.length > 0) {
@@ -88,10 +85,43 @@ export function CreateSignatureDialog({ open, onOpenChange, contact, dealId }: C
     }
   };
 
-  // Signatory preview
-  const signatoryResolution = selectedTemplate ? resolveSignatory(selectedTemplate.signatory_rule, contact) : null;
+  const handleFetchPreview = async (template: SignatureTemplate) => {
+    setSelectedTemplate(template);
+    setPreviewing(true);
+    setError(null);
 
-  // Masking functions for privacy
+    try {
+      // Calls Read-Only Preview endpoint (Zero DB side effects, Zero Idempotency consumption)
+      const res = await fetch('/api/signature-requests/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contact_id: contact.id,
+          signature_template_id: template.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Falha ao gerar pré-visualização.');
+      }
+
+      setPreviewResult({
+        isValid: data.is_valid,
+        blockReason: data.block_reason,
+        missingFields: data.missing_fields,
+        signatory: data.signatory,
+        variablesCount: data.variables_count,
+        instructionMessage: data.instruction_message,
+      });
+      setStep(2);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao pré-visualizar solicitação.');
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
   const maskCpf = (cpf?: string) => (cpf && cpf.length >= 11 ? `${cpf.substring(0, 3)}.***.***-${cpf.substring(9)}` : '***');
   const maskPhone = (phone?: string) => (phone && phone.length >= 8 ? `(${phone.substring(0, 2)}) *****-${phone.substring(phone.length - 4)}` : '***');
   const maskEmail = (email?: string) => {
@@ -100,78 +130,16 @@ export function CreateSignatureDialog({ open, onOpenChange, contact, dealId }: C
     return `${name.substring(0, 2)}***@${domain}`;
   };
 
-  const handleCreateRequest = async () => {
-    if (!selectedTemplate || !signatoryResolution || signatoryResolution.is_blocked) return;
-
-    setSubmitting(true);
-    setError(null);
-
-    // Generate unique idempotency key
-    const idempotencyKey = `idemp_${contact.id}_${selectedTemplate.id}_${Date.now()}`;
-
-    try {
-      // 1. Create Internal Signature Request
-      const reqRes = await fetch('/api/signature-requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contact_id: contact.id,
-          deal_id: dealId || null,
-          signature_template_id: selectedTemplate.id,
-          idempotency_key: idempotencyKey,
-        }),
-      });
-
-      const reqData = await reqRes.json();
-      if (!reqRes.ok) {
-        throw new Error(reqData.error || 'Falha ao criar solicitação de assinatura.');
-      }
-
-      const createdRequestId = reqData.request_id;
-      setRequestId(createdRequestId);
-      setStatus(reqData.status);
-
-      // 2. Obtain Access Link and Instruction Message via Protected Endpoint
-      const linkRes = await fetch(`/api/signature-requests/${createdRequestId}/access-link`, {
-        method: 'POST',
-      });
-
-      const linkData = await linkRes.json();
-      if (!linkRes.ok) {
-        throw new Error(linkData.error || 'Falha ao gerar link protegido.');
-      }
-
-      setSigningLink(linkData.signing_link);
-      setInstructionMessage(linkData.instruction_message);
-      setStep(3);
-    } catch (err: any) {
-      setError(err.message || 'Erro ao processar solicitação.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const copyToClipboard = (text: string, type: 'link' | 'msg') => {
-    navigator.clipboard.writeText(text);
-    if (type === 'link') {
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
-    } else {
-      setCopiedMsg(true);
-      setTimeout(() => setCopiedMsg(false), 2000);
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileCheck className="w-5 h-5 text-primary" />
-            Gerar Documento para Assinatura
+            Conferência e Pré-visualização do Documento
           </DialogTitle>
           <DialogDescription>
-            Gere a procuração e obtenha o link de assinatura exclusivo com instrução completa.
+            Confira o signatário e as variáveis do modelo sem gerar efeitos ou chamadas externas.
           </DialogDescription>
         </DialogHeader>
 
@@ -197,13 +165,13 @@ export function CreateSignatureDialog({ open, onOpenChange, contact, dealId }: C
             ) : (
               <div className="space-y-3">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Selecione o Modelo de Documento
+                  Selecione o Modelo de Documento para Pré-visualizar
                 </label>
                 <div className="grid grid-cols-1 gap-2">
                   {templates.map((tpl) => (
                     <div
                       key={tpl.id}
-                      onClick={() => setSelectedTemplate(tpl)}
+                      onClick={() => handleFetchPreview(tpl)}
                       className={`p-3 rounded-lg border cursor-pointer transition-all ${
                         selectedTemplate?.id === tpl.id
                           ? 'border-primary bg-primary/5 ring-1 ring-primary'
@@ -216,8 +184,8 @@ export function CreateSignatureDialog({ open, onOpenChange, contact, dealId }: C
                           {tpl.category}
                         </Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Regra: {tpl.signatory_rule} | Modo: {tpl.delivery_mode}
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                        <Eye className="w-3 h-3 text-primary" /> Clique para conferir dados e variáveis
                       </p>
                     </div>
                   ))}
@@ -229,162 +197,99 @@ export function CreateSignatureDialog({ open, onOpenChange, contact, dealId }: C
 
         {step === 2 && selectedTemplate && (
           <div className="space-y-4 py-2">
-            <div className="p-3 rounded bg-muted/40 text-xs space-y-1">
-              <span className="font-semibold text-foreground">Modelo Selecionado:</span>
-              <p>{selectedTemplate.template_name}</p>
+            <div className="p-3 rounded bg-muted/40 text-xs flex items-center justify-between">
+              <div>
+                <span className="font-semibold text-foreground">Modelo: {selectedTemplate.template_name}</span>
+                <p className="text-muted-foreground text-[11px]">ID Externo: {selectedTemplate.template_id}</p>
+              </div>
+              <Badge variant="secondary" className="text-[10px]">
+                Pré-visualização (Somente Leitura)
+              </Badge>
             </div>
 
             {/* Signatory Preview */}
             <div className="space-y-2">
-              <span className="text-xs font-semibold text-muted-foreground">Signatário Resolvido</span>
-              {signatoryResolution?.is_blocked ? (
+              <span className="text-xs font-semibold text-muted-foreground">Resultado da Conferência</span>
+              {!previewResult?.isValid ? (
                 <div className="p-3 rounded border border-destructive/50 bg-destructive/5 text-destructive text-xs space-y-2">
                   <div className="flex items-center gap-2 font-semibold">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
-                    Geração Bloqueada - Dados Ausentes no Cadastro
+                    Geração Bloqueada - Dados Incompletos no CRM
                   </div>
-                  <p>{signatoryResolution.block_reason}</p>
-                  {signatoryResolution.missing_fields && (
-                    <p className="font-mono bg-destructive/10 p-1.5 rounded">
-                      Campos pendentes: {signatoryResolution.missing_fields.join(', ')}
-                    </p>
+                  <p>{previewResult?.blockReason}</p>
+                  {previewResult?.missingFields && previewResult.missingFields.length > 0 && (
+                    <div className="font-mono bg-destructive/10 p-2 rounded text-[11px]">
+                      Campos ausentes: {previewResult.missingFields.join(', ')}
+                    </div>
                   )}
                 </div>
               ) : (
                 <div className="p-3 rounded border bg-card text-xs space-y-2">
                   <div className="flex items-center gap-2 text-emerald-600 font-semibold">
                     <UserCheck className="w-4 h-4" />
-                    {signatoryResolution?.signatory?.signatory_type === 'contact'
-                      ? 'Paciente (Próprio Contato)'
-                      : 'Responsável Legal (Menor de Idade)'}
+                    {previewResult.signatory?.signatory_type === 'contact'
+                      ? 'Signatário: Paciente (Próprio Contato)'
+                      : 'Signatário: Responsável Legal (Menor de Idade)'}
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-muted-foreground pt-1">
                     <div>
-                      Nome: <strong className="text-foreground">{signatoryResolution?.signatory?.name}</strong>
+                      Nome: <strong className="text-foreground">{previewResult.signatory?.name}</strong>
                     </div>
                     <div>
-                      CPF: <strong className="text-foreground">{maskCpf(signatoryResolution?.signatory?.cpf)}</strong>
+                      CPF: <strong className="text-foreground">{maskCpf(previewResult.signatory?.cpf)}</strong>
                     </div>
                     <div>
                       Telefone:{' '}
-                      <strong className="text-foreground">{maskPhone(signatoryResolution?.signatory?.phone)}</strong>
+                      <strong className="text-foreground">{maskPhone(previewResult.signatory?.phone)}</strong>
                     </div>
                     <div>
                       E-mail:{' '}
-                      <strong className="text-foreground">{maskEmail(signatoryResolution?.signatory?.email)}</strong>
+                      <strong className="text-foreground">{maskEmail(previewResult.signatory?.email)}</strong>
                     </div>
+                  </div>
+                  <div className="border-t pt-2 mt-2 text-[11px] text-muted-foreground flex items-center justify-between">
+                    <span>Variáveis preenchidas: <strong>{previewResult.variablesCount}</strong></span>
+                    <Badge variant="outline" className="text-emerald-600 border-emerald-600/40 text-[10px]">
+                      Pronto para Assinatura Real (Fase 2B)
+                    </Badge>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Data Privacy Note */}
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground border-t pt-2">
-              <Lock className="w-3.5 h-3.5 text-primary" />
-              Os dados sensíveis (CPF, RG) são mascarados na exibição para conformidade LGPD.
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="space-y-4 py-2">
-            <div className="p-3 rounded border bg-emerald-500/10 border-emerald-500/30 text-emerald-700 text-xs flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600" />
-              <div>
-                <p className="font-semibold">Solicitação de Assinatura Criada!</p>
-                <p className="text-[11px] opacity-90">Status: {status} | Request ID: {requestId}</p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground">Mensagem de Orientação Formata</label>
-              <textarea
-                rows={6}
-                readOnly
-                className="w-full text-xs font-mono border rounded p-2.5 bg-muted/30 focus:outline-none"
-                value={instructionMessage}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground">Link de Assinatura Protegido</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
+            {/* Instruction Message Preview */}
+            {previewResult?.instructionMessage && (
+              <div className="space-y-1 border-t pt-3">
+                <label className="text-xs font-semibold text-muted-foreground">Modelo de Mensagem Orientativa</label>
+                <textarea
+                  rows={4}
                   readOnly
-                  className="w-full text-xs font-mono border rounded px-2.5 bg-muted/50"
-                  value={signingLink}
+                  className="w-full text-xs font-mono border rounded p-2 bg-muted/20 focus:outline-none"
+                  value={previewResult.instructionMessage}
                 />
               </div>
+            )}
+
+            {/* Production Block Warning */}
+            <div className="p-3 rounded bg-amber-500/10 border border-amber-500/30 text-amber-700 text-xs flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600" />
+              <span>
+                As chamadas reais para a ZapSign estão bloqueadas até a configuração das credenciais de produção (Fase 2B).
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <Lock className="w-3.5 h-3.5 text-primary" />
+              Nenhum registro foi criado no banco de dados durante esta pré-visualização.
             </div>
           </div>
         )}
 
         <DialogFooter className="pt-4 flex justify-between">
-          {step === 1 && (
-            <>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancelar
-              </Button>
-              <Button
-                disabled={!selectedTemplate}
-                onClick={() => setStep(2)}
-              >
-                Conferir Dados
-              </Button>
-            </>
-          )}
-
           {step === 2 && (
-            <>
-              <Button variant="outline" onClick={() => setStep(1)}>
-                Voltar
-              </Button>
-              <Button
-                onClick={handleCreateRequest}
-                disabled={submitting || signatoryResolution?.is_blocked}
-              >
-                {submitting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                Confirmar e Gerar Assinatura
-              </Button>
-            </>
-          )}
-
-          {step === 3 && (
-            <div className="w-full space-y-2">
-              <div className="flex gap-2 justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => copyToClipboard(instructionMessage, 'msg')}
-                  className="gap-1 text-xs"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  {copiedMsg ? 'Mensagem Copiada!' : 'Copiar Mensagem e Link'}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => copyToClipboard(signingLink, 'link')}
-                  className="gap-1 text-xs"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  {copiedLink ? 'Link Copiado!' : 'Copiar Somente Link'}
-                </Button>
-
-                {signingLink && (
-                  <Button
-                    size="sm"
-                    onClick={() => window.open(signingLink, '_blank')}
-                    className="gap-1 text-xs"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    Abrir Página de Assinatura
-                  </Button>
-                )}
-              </div>
-            </div>
+            <Button variant="outline" onClick={() => setStep(1)} className="w-full">
+              Voltar aos Modelos
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>

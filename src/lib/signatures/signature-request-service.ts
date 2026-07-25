@@ -13,7 +13,6 @@ export interface CreateSignatureRequestParams {
   dealId?: string | null;
   signatureTemplateId: string;
   idempotencyKey: string;
-  adapter?: SignatureProviderAdapter;
 }
 
 export interface SignatureRequestResult {
@@ -25,7 +24,7 @@ export interface SignatureRequestResult {
 }
 
 /**
- * Core Signature Request Service (Phase 2A)
+ * Core Signature Request Service (Phase 2A & 2B Architecture)
  */
 export class SignatureRequestService {
   private adapter: SignatureProviderAdapter;
@@ -103,13 +102,15 @@ export class SignatureRequestService {
           resolvedValue = (contact as any)[mapping.source_key] || undefined;
         }
       } else if (mapping.source_type === 'custom_field') {
-        resolvedValue = customFields[mapping.source_key] !== undefined ? String(customFields[mapping.source_key]) : undefined;
+        resolvedValue = customFields[mapping.source_key] !== undefined && customFields[mapping.source_key] !== null
+          ? String(customFields[mapping.source_key])
+          : undefined;
       } else if (mapping.source_type === 'fixed_value') {
         resolvedValue = mapping.default_value;
       } else if (mapping.source_type === 'system_value') {
         const sysRes = resolveSystemValue(mapping.source_key, customFields);
         if (sysRes.is_blocked || !sysRes.value) {
-          missingRequiredVariables.push(mapping.zapsign_var);
+          missingRequiredVariables.push(mapping.source_key || mapping.zapsign_var);
         } else {
           resolvedValue = sysRes.value;
         }
@@ -117,7 +118,7 @@ export class SignatureRequestService {
 
       if (!resolvedValue || !resolvedValue.trim()) {
         if (mapping.is_required) {
-          missingRequiredVariables.push(mapping.zapsign_var);
+          missingRequiredVariables.push(mapping.source_key || mapping.zapsign_var);
         } else if (mapping.default_value) {
           resolvedValue = mapping.default_value;
         }
@@ -160,7 +161,7 @@ export class SignatureRequestService {
     const requestId = newDoc.id;
 
     try {
-      // 7. Execute Adapter (Mock in Phase 2A)
+      // 7. Execute Adapter
       const providerRes = await this.adapter.createFromTemplate({
         templateId: template.template_id,
         documentName: `${template.template_name} - ${contact.name}`,
@@ -178,7 +179,6 @@ export class SignatureRequestService {
 
       // 8. Encrypt Sensitive Sign URL and Token
       const encryptedSignUrl = encryptText(providerRes.signUrl);
-      const encryptedToken = encryptText(providerRes.docToken);
 
       // 9. Update DB Record to Status: 'pending'
       await admin
@@ -292,7 +292,7 @@ export class SignatureRequestService {
   }
 
   /**
-   * Process Simulated Webhook Events (Idempotent state machine & PDF import)
+   * Process Webhook Events (Idempotent state machine & PDF import)
    */
   async processWebhookEvent(params: {
     eventType: 'doc_signed' | 'doc_refused' | 'doc_expired' | 'doc_created';
@@ -314,16 +314,13 @@ export class SignatureRequestService {
       throw new Error(`Solicitação de assinatura com doc_token '${docToken}' não encontrada nesta conta.`);
     }
 
-    // 2. Idempotency Check: State machine guards (signed is terminal, cannot regress to pending)
-    if (doc.status === 'signed' && eventType !== 'doc_signed') {
-      return { success: true, message: 'Evento ignorado: documento já está assinado.', status: doc.status };
+    // 2. Idempotency & State Machine Guards
+    // Enforce: 'signed' is terminal state, cannot regress
+    if (doc.status === 'signed') {
+      return { success: true, message: 'Evento ignorado: documento já está assinado.', status: 'signed', documentId: doc.document_id };
     }
 
     if (eventType === 'doc_signed') {
-      if (doc.status === 'signed') {
-        return { success: true, message: 'Documento já processado como assinado anteriormente.', status: 'signed' };
-      }
-
       // Import PDF from Adapter
       const fileRes = await this.adapter.getSignedFile(docToken);
 
@@ -331,7 +328,7 @@ export class SignatureRequestService {
         throw new Error('Arquivo PDF retornado é inválido ou corrompido.');
       }
 
-      const storagePath = `${accountId}/signatures/${doc.id}/procuracao_assinada.pdf`;
+      const storagePath = `${accountId}/signatures/${doc.id}/v1/procuracao_assinada.pdf`;
 
       // Upload to protected-documents storage bucket
       const { error: storageErr } = await admin.storage
@@ -346,18 +343,20 @@ export class SignatureRequestService {
         throw new Error('Falha ao armazenar o PDF assinado no bucket de documentos protegidos.');
       }
 
-      // Create Document in public.documents
-      const { data: newDocument, error: docInsErr } = await admin
+      // Check existing document
+      const { data: existingDoc } = await admin
         .from('documents')
-        .select('id')
+        .select('id, current_version_id')
         .eq('account_id', accountId)
         .eq('contact_id', doc.contact_id)
         .eq('file_path', storagePath)
         .maybeSingle();
 
-      let documentId = newDocument?.id;
+      let documentId = existingDoc?.id;
+      let versionId = existingDoc?.current_version_id;
 
       if (!documentId) {
+        // Create Document row
         const { data: createdDoc, error: insErr } = await admin
           .from('documents')
           .insert({
@@ -377,14 +376,27 @@ export class SignatureRequestService {
 
         documentId = createdDoc.id;
 
-        // Insert Document Version
-        await admin.from('document_versions').insert({
-          document_id: documentId,
-          version_number: 1,
-          file_path: storagePath,
-          file_size: fileRes.pdfBuffer.length,
-          mime_type: 'application/pdf',
-        });
+        // Create Document Version row
+        const { data: createdVer, error: verErr } = await admin
+          .from('document_versions')
+          .insert({
+            document_id: documentId,
+            version_number: 1,
+            file_path: storagePath,
+            file_size: fileRes.pdfBuffer.length,
+            mime_type: 'application/pdf',
+          })
+          .select('id')
+          .single();
+
+        if (!verErr && createdVer) {
+          versionId = createdVer.id;
+          // Update documents.current_version_id
+          await admin
+            .from('documents')
+            .update({ current_version_id: versionId })
+            .eq('id', documentId);
+        }
 
         // Link Deal if present
         if (doc.deal_id) {
@@ -395,7 +407,7 @@ export class SignatureRequestService {
         }
       }
 
-      // Update zapsign_documents status to 'signed' and link document_id
+      // Link zapsign_documents.document_id and set status = 'signed' (Direct transition pending -> signed allowed!)
       await admin
         .from('zapsign_documents')
         .update({

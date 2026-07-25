@@ -3,8 +3,13 @@ import { createClient } from '@/lib/supabase/server';
 import { SignatureRequestService } from '@/lib/signatures/signature-request-service';
 import { MockSignatureAdapter } from '@/lib/signatures/provider-adapter';
 
-// POST /api/signature-requests/webhook-mock - Simulates webhook event processing in Phase 2A
+// POST /api/signature-requests/webhook-mock - Simulates webhook event processing in local dev/tests ONLY
 export async function POST(request: Request) {
+  // Strict Production Protection: Always return 404 in production environment
+  if (process.env.NODE_ENV === 'production' && process.env.SIGNATURE_MOCK_ENABLED !== 'true') {
+    return NextResponse.json({ error: 'Endpoint não encontrado.' }, { status: 404 });
+  }
+
   try {
     const supabase = await createClient();
 

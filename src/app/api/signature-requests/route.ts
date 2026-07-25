@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { supabaseAdmin } from '@/lib/automations/admin-client';
 import { SignatureRequestService } from '@/lib/signatures/signature-request-service';
-import { MockSignatureAdapter } from '@/lib/signatures/provider-adapter';
+import { MockSignatureAdapter, ZapSignAdapter } from '@/lib/signatures/provider-adapter';
 
 // POST /api/signature-requests - Create a new idempotent signature request
 export async function POST(request: Request) {
@@ -44,8 +45,31 @@ export async function POST(request: Request) {
       );
     }
 
-    // In Phase 2A, we strictly use MockSignatureAdapter
-    const service = new SignatureRequestService(new MockSignatureAdapter());
+    // Check if account has ZapSign credentials
+    const admin = supabaseAdmin();
+    const { data: zapsignConfig } = await admin
+      .from('zapsign_config')
+      .select('api_key, is_active')
+      .eq('account_id', profile.account_id)
+      .maybeSingle();
+
+    // In Production or without explicit MOCK flag, require real ZapSign credentials
+    if (process.env.NODE_ENV === 'production' && process.env.SIGNATURE_MOCK_ENABLED !== 'true') {
+      if (!zapsignConfig || !zapsignConfig.is_active || !zapsignConfig.api_key) {
+        return NextResponse.json(
+          { error: 'Conexão com a ZapSign não configurada para esta conta. Acesse Configurações > ZapSign para cadastrar seu Token de API.' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Determine adapter
+    const isMockMode = process.env.NODE_ENV !== 'production' || process.env.SIGNATURE_MOCK_ENABLED === 'true';
+    const adapter = isMockMode
+      ? new MockSignatureAdapter()
+      : new ZapSignAdapter(zapsignConfig?.api_key || '');
+
+    const service = new SignatureRequestService(adapter);
 
     const result = await service.createRequest({
       accountId: profile.account_id,

@@ -27,6 +27,7 @@ export interface ContactForSignatoryResolution {
 /**
  * Resolves the signatory (contact vs guardian) according to template rules and minor status (is_minor).
  * All guardian fields and is_minor are resolved exclusively from custom_fields JSON!
+ * STRICT: Absolutely ZERO automatic fallback from missing guardian fields to patient data when is_minor = true.
  */
 export function resolveSignatory(
   rule: SignatoryRule,
@@ -80,15 +81,17 @@ export function resolveSignatory(
       };
     }
 
-    // Patient is minor (is_minor === true) -> Require Guardian custom_fields
+    // Patient is minor (is_minor === true) -> Strictly require Guardian custom_fields (NO fallback to patient!)
     const missingGuardianFields: string[] = [];
-    if (!custom.guardian_name) missingGuardianFields.push('guardian_name');
-    if (!custom.guardian_cpf) missingGuardianFields.push('guardian_cpf');
+    if (!custom.guardian_name || !String(custom.guardian_name).trim()) missingGuardianFields.push('guardian_name');
+    if (!custom.guardian_cpf || !String(custom.guardian_cpf).trim()) missingGuardianFields.push('guardian_cpf');
+    if (!custom.guardian_phone || !String(custom.guardian_phone).trim()) missingGuardianFields.push('guardian_phone');
+    if (!custom.guardian_email || !String(custom.guardian_email).trim()) missingGuardianFields.push('guardian_email');
 
     if (missingGuardianFields.length > 0) {
       return {
         is_blocked: true,
-        block_reason: 'Paciente menor de idade exige o preenchimento dos dados do responsável legal.',
+        block_reason: 'Paciente menor de idade exige o preenchimento completo dos dados do responsável legal (nome, CPF, telefone e e-mail).',
         missing_fields: missingGuardianFields,
       };
     }
@@ -97,23 +100,25 @@ export function resolveSignatory(
       is_blocked: false,
       signatory: {
         signatory_type: 'guardian',
-        name: String(custom.guardian_name),
-        email: custom.guardian_email ? String(custom.guardian_email) : (contact.email || undefined),
-        phone: custom.guardian_phone ? String(custom.guardian_phone) : (contact.phone || undefined),
-        cpf: String(custom.guardian_cpf),
+        name: String(custom.guardian_name).trim(),
+        email: String(custom.guardian_email).trim(),
+        phone: String(custom.guardian_phone).trim(),
+        cpf: String(custom.guardian_cpf).trim(),
       },
     };
   }
 
   if (rule === 'guardian_only') {
     const missingGuardianFields: string[] = [];
-    if (!custom.guardian_name) missingGuardianFields.push('guardian_name');
-    if (!custom.guardian_cpf) missingGuardianFields.push('guardian_cpf');
+    if (!custom.guardian_name || !String(custom.guardian_name).trim()) missingGuardianFields.push('guardian_name');
+    if (!custom.guardian_cpf || !String(custom.guardian_cpf).trim()) missingGuardianFields.push('guardian_cpf');
+    if (!custom.guardian_phone || !String(custom.guardian_phone).trim()) missingGuardianFields.push('guardian_phone');
+    if (!custom.guardian_email || !String(custom.guardian_email).trim()) missingGuardianFields.push('guardian_email');
 
     if (missingGuardianFields.length > 0) {
       return {
         is_blocked: true,
-        block_reason: 'O modelo exige obrigatoriamente os dados do responsável legal.',
+        block_reason: 'O modelo exige obrigatoriamente os dados completos do responsável legal.',
         missing_fields: missingGuardianFields,
       };
     }
@@ -122,10 +127,10 @@ export function resolveSignatory(
       is_blocked: false,
       signatory: {
         signatory_type: 'guardian',
-        name: String(custom.guardian_name),
-        email: custom.guardian_email ? String(custom.guardian_email) : (contact.email || undefined),
-        phone: custom.guardian_phone ? String(custom.guardian_phone) : (contact.phone || undefined),
-        cpf: String(custom.guardian_cpf),
+        name: String(custom.guardian_name).trim(),
+        email: String(custom.guardian_email).trim(),
+        phone: String(custom.guardian_phone).trim(),
+        cpf: String(custom.guardian_cpf).trim(),
       },
     };
   }
