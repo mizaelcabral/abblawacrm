@@ -14,6 +14,8 @@ import {
   RefreshCw,
   ClipboardList,
   Check,
+  HelpCircle,
+  X,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -75,6 +77,7 @@ export function SignatureTemplatesConfig() {
   const [deliveryMode, setDeliveryMode] = useState<'manual_link' | 'zapsign_email' | 'zapsign_whatsapp'>('manual_link');
   const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Batch Import Modal State
   const [batchModalOpen, setBatchModalOpen] = useState(false);
@@ -143,6 +146,7 @@ export function SignatureTemplatesConfig() {
       { zapsign_var: 'CPF:', source_type: 'custom_field', source_key: 'cpf', is_required: true },
     ]);
     setFormError(null);
+    setHasUnsavedChanges(false);
     setDialogOpen(true);
   };
 
@@ -156,7 +160,19 @@ export function SignatureTemplatesConfig() {
     setDeliveryMode(tpl.delivery_mode);
     setFieldMappings(tpl.field_mappings || []);
     setFormError(null);
+    setHasUnsavedChanges(false);
     setDialogOpen(true);
+  };
+
+  const handleAttemptClose = () => {
+    if (hasUnsavedChanges) {
+      if (confirm('Existem alterações não salvas no modelo. Deseja realmente fechar sem salvar?')) {
+        setDialogOpen(false);
+        setHasUnsavedChanges(false);
+      }
+    } else {
+      setDialogOpen(false);
+    }
   };
 
   const handleAddFieldMapping = () => {
@@ -166,17 +182,18 @@ export function SignatureTemplatesConfig() {
       ...fieldMappings,
       { zapsign_var: '', source_type: 'custom_field', source_key: defaultCustomKey, is_required: false },
     ]);
+    setHasUnsavedChanges(true);
   };
 
   const handleRemoveFieldMapping = (index: number) => {
     setFieldMappings(fieldMappings.filter((_, i) => i !== index));
+    setHasUnsavedChanges(true);
   };
 
   const handleMappingChange = (index: number, key: keyof FieldMapping, value: any) => {
     const updated = [...fieldMappings];
     const item = { ...updated[index], [key]: value };
 
-    // Set sensible default source_key when switching source_type
     if (key === 'source_type') {
       if (value === 'contact_property') {
         item.source_key = 'name';
@@ -191,6 +208,7 @@ export function SignatureTemplatesConfig() {
 
     updated[index] = item;
     setFieldMappings(updated);
+    setHasUnsavedChanges(true);
   };
 
   const handleSave = async () => {
@@ -225,6 +243,7 @@ export function SignatureTemplatesConfig() {
         throw new Error(data.error || 'Falha ao salvar modelo.');
       }
 
+      setHasUnsavedChanges(false);
       setDialogOpen(false);
       fetchInitialData();
     } catch (err: any) {
@@ -248,7 +267,6 @@ export function SignatureTemplatesConfig() {
     }
   };
 
-  // Group active custom fields by group_name for display in select dropdowns
   const customFieldsByGroup = activeCustomFields.reduce((acc, cf) => {
     const group = cf.group_name || 'Gerais';
     if (!acc[group]) acc[group] = [];
@@ -261,7 +279,6 @@ export function SignatureTemplatesConfig() {
     const rawText = batchRawText.trim();
     if (!rawText) return;
 
-    // Check if user pasted JSON array
     if (rawText.startsWith('[') && rawText.endsWith(']')) {
       try {
         const parsedJson = JSON.parse(rawText);
@@ -303,12 +320,9 @@ export function SignatureTemplatesConfig() {
           setBatchStep('preview');
           return;
         }
-      } catch (e) {
-        // Fallback to pipe parsing
-      }
+      } catch (e) {}
     }
 
-    // Pipe format parsing: VARIÁVEL | ORIGEM | CAMPO | OBRIGATÓRIO
     const lines = rawText.split('\n').filter((l) => l.trim().length > 0);
     const seenVars = new Set<string>();
 
@@ -319,7 +333,6 @@ export function SignatureTemplatesConfig() {
       }
 
       let varName = parts[0];
-      // Keep variable name clean (remove surrounding {{ and }} if present)
       if (varName.startsWith('{{') && varName.endsWith('}}')) {
         varName = varName.substring(2, varName.length - 2).trim();
       }
@@ -375,12 +388,12 @@ export function SignatureTemplatesConfig() {
     if (batchImportMode === 'replace') {
       setFieldMappings(validMappings);
     } else {
-      // Append non-duplicate mappings
       const existingVars = new Set(fieldMappings.map((m) => m.zapsign_var));
       const newToAppend = validMappings.filter((m) => !existingVars.has(m.zapsign_var));
       setFieldMappings([...fieldMappings, ...newToAppend]);
     }
 
+    setHasUnsavedChanges(true);
     setBatchModalOpen(false);
     setBatchRawText('');
     setBatchStep('input');
@@ -388,18 +401,18 @@ export function SignatureTemplatesConfig() {
 
   return (
     <Card className="border-border/60">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+      <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4">
         <div>
           <CardTitle className="text-lg font-medium flex items-center gap-2">
-            <FileText className="w-5 h-5 text-primary" />
+            <FileText className="w-5 h-5 text-primary shrink-0" />
             Modelos de Assinatura Configurados
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs sm:text-sm">
             Gerencie os modelos da ZapSign e o mapeamento dinâmico de variáveis com o CRM.
           </CardDescription>
         </div>
         {isAdmin && (
-          <Button onClick={openCreateDialog} size="sm" className="gap-2">
+          <Button onClick={openCreateDialog} size="sm" className="gap-2 shrink-0">
             <Plus className="w-4 h-4" />
             Novo Modelo
           </Button>
@@ -407,20 +420,20 @@ export function SignatureTemplatesConfig() {
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="flex items-center justify-center p-8 text-muted-foreground">
-            <Loader2 className="w-6 h-6 animate-spin mr-2" />
+          <div className="flex items-center justify-center p-8 text-muted-foreground text-sm">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" />
             Carregando modelos de assinatura...
           </div>
         ) : error ? (
           <div className="p-4 rounded-lg bg-destructive/10 text-destructive text-sm flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4" />
+            <AlertTriangle className="w-4 h-4 shrink-0" />
             {error}
           </div>
         ) : templates.length === 0 ? (
           <div className="text-center p-8 border border-dashed rounded-lg text-muted-foreground space-y-3">
             <Settings2 className="w-8 h-8 mx-auto opacity-50" />
             <p className="text-sm font-medium">Nenhum modelo de assinatura configurado.</p>
-            <p className="text-xs">
+            <p className="text-xs max-w-md mx-auto">
               Cadastre modelos da ZapSign para permitir a geração de procurações e contratos.
             </p>
           </div>
@@ -434,11 +447,11 @@ export function SignatureTemplatesConfig() {
               return (
                 <div
                   key={tpl.id}
-                  className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors gap-3"
                 >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">{tpl.template_name}</span>
+                  <div className="space-y-1.5 min-w-0 w-full sm:w-auto">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-sm truncate">{tpl.template_name}</span>
                       <Badge variant={tpl.is_active ? 'default' : 'secondary'} className="text-[10px]">
                         {tpl.is_active ? 'Ativo' : 'Inativo'}
                       </Badge>
@@ -446,25 +459,26 @@ export function SignatureTemplatesConfig() {
                         {tpl.category}
                       </Badge>
                       {hasInvalidFields && (
-                        <Badge variant="destructive" className="text-[10px] gap-1">
+                        <Badge variant="destructive" className="text-[10px] gap-1 shrink-0">
                           <AlertTriangle className="w-3 h-3" /> Campo Desativado
                         </Badge>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-4">
-                      <span>ID Externo: <code className="bg-muted px-1 py-0.5 rounded">{tpl.template_id}</code></span>
+                    <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1">
+                      <span>ID: <code className="bg-muted px-1.5 py-0.5 rounded font-mono">{tpl.template_id}</code></span>
                       <span>Signatário: <strong>{tpl.signatory_rule}</strong></span>
                       <span>Modo: <strong>{tpl.delivery_mode}</strong></span>
-                      <span>Campos: {tpl.field_mappings?.length || 0}</span>
+                      <span>Mapeamentos: {tpl.field_mappings?.length || 0}</span>
                     </div>
                   </div>
                   {isAdmin && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => openEditDialog(tpl)}
                         className="h-8 w-8 p-0"
+                        title="Editar modelo"
                       >
                         <Edit2 className="w-4 h-4" />
                       </Button>
@@ -473,6 +487,7 @@ export function SignatureTemplatesConfig() {
                         size="sm"
                         onClick={() => handleToggleStatus(tpl)}
                         className="h-8 w-8 p-0 text-destructive"
+                        title={tpl.is_active ? 'Desativar modelo' : 'Ativar modelo'}
                       >
                         {tpl.is_active ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
                       </Button>
@@ -485,380 +500,502 @@ export function SignatureTemplatesConfig() {
         )}
       </CardContent>
 
-      {/* Main Create/Edit Dialog - Wide Responsive Layout */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingTemplate ? 'Editar Modelo de Assinatura' : 'Novo Modelo de Assinatura'}
-            </DialogTitle>
-            <DialogDescription>
-              Configure o modelo da ZapSign e vincule as variáveis às colunas nativas do contato ou aos campos personalizados ativos.
-            </DialogDescription>
+      {/* --- REDESIGNED MAIN DIALOG ---
+          Override sm:max-w-sm locally with w-[96vw] max-w-[1100px] sm:max-w-[1100px] max-h-[90vh]
+          Pinned Header & Footer, Scrollable Central Form Body, Responsive 3-Section Layout */}
+      <Dialog open={dialogOpen} onOpenChange={handleAttemptClose}>
+        <DialogContent
+          showCloseButton={false}
+          className="w-[96vw] max-w-[1100px] sm:max-w-[1100px] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-xl border bg-background shadow-2xl"
+        >
+          {/* Fixed Header */}
+          <DialogHeader className="p-5 sm:p-6 pb-4 border-b bg-muted/20 shrink-0 flex flex-row items-center justify-between gap-4">
+            <div className="space-y-1 min-w-0">
+              <DialogTitle className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary shrink-0" />
+                {editingTemplate ? 'Editar Modelo de Assinatura' : 'Novo Modelo de Assinatura'}
+              </DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm text-muted-foreground truncate">
+                Configure o modelo externo da ZapSign e mapeie suas variáveis com o CRM.
+              </DialogDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={handleAttemptClose}
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+              title="Fechar"
+            >
+              <X className="w-4 h-4" />
+            </Button>
           </DialogHeader>
 
-          {formError && (
-            <div className="p-3 rounded bg-destructive/10 text-destructive text-sm flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              {formError}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="space-y-2">
-              <Label>Nome Interno do Modelo</Label>
-              <Input
-                placeholder="Ex: Procuração Anvisa Desertmoon"
-                value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>ID do Modelo na ZapSign (template_id)</Label>
-              <Input
-                placeholder="Ex: b416fa71-4466-4bb0-901a-6ea66b988d2f"
-                value={templateId}
-                onChange={(e) => setTemplateId(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Categoria</Label>
-              <Input
-                placeholder="Ex: procuracao, contrato"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Regra do Signatário</Label>
-              <select
-                className="w-full border rounded-md p-2 text-sm bg-background"
-                value={signatoryRule}
-                onChange={(e: any) => setSignatoryRule(e.target.value)}
-              >
-                <option value="contact_only">Somente o Contato</option>
-                <option value="guardian_if_minor">Responsável se Menor de Idade (is_minor=true)</option>
-                <option value="guardian_only">Somente o Responsável Legal</option>
-              </select>
-            </div>
-            <div className="space-y-2 col-span-2">
-              <Label>Modo de Envio Padrão</Label>
-              <select
-                className="w-full border rounded-md p-2 text-sm bg-background"
-                value={deliveryMode}
-                onChange={(e: any) => setDeliveryMode(e.target.value)}
-              >
-                <option value="manual_link">Apenas Link Manual (Cópia pela equipe)</option>
-                <option value="zapsign_email">E-mail Automático pela ZapSign</option>
-                <option value="zapsign_whatsapp">WhatsApp Automático pela ZapSign</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Mappings Section */}
-          <div className="space-y-3 pt-4 border-t">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Label className="font-semibold text-sm">Mapeamento de Variáveis (de/para)</Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={fetchCustomFields}
-                  disabled={refreshingFields}
-                  title="Atualizar lista de campos personalizados"
-                  className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
-                >
-                  <RefreshCw className={`w-3 h-3 ${refreshingFields ? 'animate-spin' : ''}`} />
-                  Atualizar campos
-                </Button>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setBatchStep('input');
-                    setBatchRawText('');
-                    setBatchModalOpen(true);
-                  }}
-                  className="gap-1 text-xs"
-                >
-                  <ClipboardList className="w-3.5 h-3.5" /> Colar Vários Campos
-                </Button>
-                <Button type="button" variant="outline" size="sm" onClick={handleAddFieldMapping} className="gap-1 text-xs">
-                  <Plus className="w-3.5 h-3.5" /> Adicionar Campo
-                </Button>
-              </div>
-            </div>
-
-            {fieldMappings.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">Nenhum mapeamento adicionado.</p>
-            ) : (
-              <div className="space-y-2">
-                {fieldMappings.map((mapping, idx) => {
-                  const isInvalidCustomField =
-                    mapping.source_type === 'custom_field' && !activeCustomKeysSet.has(mapping.source_key);
-
-                  return (
-                    <div
-                      key={idx}
-                      className={`grid grid-cols-12 gap-2 items-center border p-2.5 rounded-md bg-muted/20 text-xs ${
-                        isInvalidCustomField ? 'border-destructive/60 bg-destructive/5' : ''
-                      }`}
-                    >
-                      {/* Column 1: Variable Name */}
-                      <div className="col-span-3">
-                        <Input
-                          placeholder="Variável (ex: CPF:)"
-                          className="h-8 text-xs font-mono"
-                          value={mapping.zapsign_var}
-                          onChange={(e) => handleMappingChange(idx, 'zapsign_var', e.target.value)}
-                        />
-                      </div>
-
-                      {/* Column 2: Source Type */}
-                      <div className="col-span-3">
-                        <select
-                          className="w-full border rounded h-8 text-xs bg-background px-2"
-                          value={mapping.source_type}
-                          onChange={(e: any) => handleMappingChange(idx, 'source_type', e.target.value)}
-                        >
-                          <option value="contact_property">Coluna Nativa do Contato</option>
-                          <option value="custom_field">Campo Personalizado</option>
-                          <option value="system_value">Valor do Sistema</option>
-                          <option value="fixed_value">Valor Fixo</option>
-                        </select>
-                      </div>
-
-                      {/* Column 3: Source Key Selector (Dropdown for custom_fields cleanly lists all active options below) */}
-                      <div className="col-span-4">
-                        {mapping.source_type === 'contact_property' ? (
-                          <select
-                            className="w-full border rounded h-8 text-xs bg-background px-2"
-                            value={mapping.source_key}
-                            onChange={(e) => handleMappingChange(idx, 'source_key', e.target.value)}
-                          >
-                            {Array.from(ALLOWED_CONTACT_PROPERTIES).map((prop) => (
-                              <option key={prop} value={prop}>
-                                {prop} (Nativa)
-                              </option>
-                            ))}
-                          </select>
-                        ) : mapping.source_type === 'custom_field' ? (
-                          <select
-                            className={`w-full border rounded h-8 text-xs bg-background px-2 ${
-                              isInvalidCustomField ? 'border-destructive text-destructive font-semibold' : ''
-                            }`}
-                            value={mapping.source_key}
-                            onChange={(e) => handleMappingChange(idx, 'source_key', e.target.value)}
-                          >
-                            {/* If current mapping points to an invalid/deactivated custom_field, render warning option at top */}
-                            {isInvalidCustomField && (
-                              <option value={mapping.source_key}>
-                                ⚠️ {mapping.source_key} (Desativado/Inválido)
-                              </option>
-                            )}
-
-                            {/* Render ALL active custom field optgroups below so the user can easily select a valid option */}
-                            {Object.entries(customFieldsByGroup).map(([group, fields]) => (
-                              <optgroup key={group} label={group}>
-                                {fields.map((f) => (
-                                  <option key={f.id || f.field_key} value={f.field_key}>
-                                    {f.label} ({f.field_key})
-                                  </option>
-                                ))}
-                              </optgroup>
-                            ))}
-                          </select>
-                        ) : mapping.source_type === 'system_value' ? (
-                          <select
-                            className="w-full border rounded h-8 text-xs bg-background px-2"
-                            value={mapping.source_key}
-                            onChange={(e) => handleMappingChange(idx, 'source_key', e.target.value)}
-                          >
-                            <option value="contact_city_current_date_ptbr">
-                              Cidade + Data Atual (PT-BR)
-                            </option>
-                          </select>
-                        ) : (
-                          <Input
-                            placeholder="Valor fixo"
-                            className="h-8 text-xs"
-                            value={mapping.default_value || ''}
-                            onChange={(e) => handleMappingChange(idx, 'default_value', e.target.value)}
-                          />
-                        )}
-                      </div>
-
-                      {/* Column 4: Required Flag */}
-                      <div className="col-span-1 text-center">
-                        <label className="flex items-center gap-1 cursor-pointer justify-center">
-                          <input
-                            type="checkbox"
-                            checked={mapping.is_required}
-                            onChange={(e) => handleMappingChange(idx, 'is_required', e.target.checked)}
-                          />
-                          <span className="text-[10px]">Obr</span>
-                        </label>
-                      </div>
-
-                      {/* Column 5: Delete */}
-                      <div className="col-span-1 text-right">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveFieldMapping(idx)}
-                          className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
+          {/* Scrollable Form Body */}
+          <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 min-w-0">
+            {formError && (
+              <div className="p-3.5 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-xs sm:text-sm flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span className="font-medium">{formError}</span>
               </div>
             )}
+
+            {/* SECTION 1: Identificação do Modelo */}
+            <div className="space-y-4">
+              <div className="border-b pb-2">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">1</span>
+                  Identificação do Modelo
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Informe o nome interno no CRM e o ID do modelo cadastrado na ZapSign.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5 min-w-0">
+                  <Label htmlFor="tpl-name" className="text-xs font-medium">Nome Interno do Modelo *</Label>
+                  <Input
+                    id="tpl-name"
+                    placeholder="Ex: Procuração Anvisa Desertmoon"
+                    className="h-9 text-xs"
+                    value={templateName}
+                    onChange={(e) => {
+                      setTemplateName(e.target.value);
+                      setHasUnsavedChanges(true);
+                    }}
+                  />
+                </div>
+                <div className="space-y-1.5 min-w-0">
+                  <Label htmlFor="tpl-id" className="text-xs font-medium">ID na ZapSign (template_id) *</Label>
+                  <Input
+                    id="tpl-id"
+                    placeholder="Ex: b416fa71-4466-4bb0-901a-6ea66b988d2f"
+                    className="h-9 text-xs font-mono"
+                    value={templateId}
+                    onChange={(e) => {
+                      setTemplateId(e.target.value);
+                      setHasUnsavedChanges(true);
+                    }}
+                  />
+                </div>
+                <div className="space-y-1.5 min-w-0">
+                  <Label htmlFor="tpl-cat" className="text-xs font-medium">Categoria</Label>
+                  <Input
+                    id="tpl-cat"
+                    placeholder="Ex: procuracao, contrato"
+                    className="h-9 text-xs"
+                    value={category}
+                    onChange={(e) => {
+                      setCategory(e.target.value);
+                      setHasUnsavedChanges(true);
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 2: Regras de Assinatura e Envio */}
+            <div className="space-y-4">
+              <div className="border-b pb-2">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">2</span>
+                  Regras de Assinatura e Envio
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Defina quem deve assinar o documento e o modo de entrega dos links.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5 min-w-0">
+                  <Label htmlFor="signatory-rule" className="text-xs font-medium">Regra do Signatário</Label>
+                  <select
+                    id="signatory-rule"
+                    className="w-full border rounded-md h-9 text-xs bg-background px-3 focus:outline-none focus:ring-1 focus:ring-primary"
+                    value={signatoryRule}
+                    onChange={(e: any) => {
+                      setSignatoryRule(e.target.value);
+                      setHasUnsavedChanges(true);
+                    }}
+                  >
+                    <option value="contact_only">Somente o Contato / Paciente</option>
+                    <option value="guardian_if_minor">Responsável Legal se Menor (is_minor=true)</option>
+                    <option value="guardian_only">Somente o Responsável Legal</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5 min-w-0">
+                  <Label htmlFor="delivery-mode" className="text-xs font-medium">Modo de Envio Padrão</Label>
+                  <select
+                    id="delivery-mode"
+                    className="w-full border rounded-md h-9 text-xs bg-background px-3 focus:outline-none focus:ring-1 focus:ring-primary"
+                    value={deliveryMode}
+                    onChange={(e: any) => {
+                      setDeliveryMode(e.target.value);
+                      setHasUnsavedChanges(true);
+                    }}
+                  >
+                    <option value="manual_link">Apenas Link Manual (Cópia pela equipe)</option>
+                    <option value="zapsign_email">E-mail Automático pela ZapSign</option>
+                    <option value="zapsign_whatsapp">WhatsApp Automático pela ZapSign</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 3: Mapeamento de Variáveis */}
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b pb-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">3</span>
+                    Mapeamento de Variáveis (de/para)
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Associe cada variável <code className="bg-muted px-1 rounded">{`{{variavel}}`}</code> do modelo aos campos do contato.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto shrink-0">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={fetchCustomFields}
+                    disabled={refreshingFields}
+                    title="Atualizar lista de campos personalizados ativos"
+                    className="h-8 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${refreshingFields ? 'animate-spin' : ''}`} />
+                    <span>Atualizar campos</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setBatchStep('input');
+                      setBatchRawText('');
+                      setBatchModalOpen(true);
+                    }}
+                    className="h-8 gap-1.5 text-xs"
+                  >
+                    <ClipboardList className="w-3.5 h-3.5" />
+                    <span>Colar Vários Campos</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    onClick={handleAddFieldMapping}
+                    className="h-8 gap-1.5 text-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Adicionar Campo</span>
+                  </Button>
+                </div>
+              </div>
+
+              {fieldMappings.length === 0 ? (
+                <div className="p-6 text-center border border-dashed rounded-lg text-muted-foreground space-y-1">
+                  <p className="text-xs font-medium">Nenhum mapeamento de variável cadastrado neste modelo.</p>
+                  <p className="text-[11px]">Clique em "Adicionar Campo" ou "Colar Vários Campos" para começar.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {/* Header Row for Desktop */}
+                  <div className="hidden md:grid md:grid-cols-12 gap-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <div className="col-span-3">Variável ZapSign</div>
+                    <div className="col-span-3">Origem do Dado</div>
+                    <div className="col-span-4">Campo de Origem</div>
+                    <div className="col-span-1 text-center">Obrig.</div>
+                    <div className="col-span-1 text-right">Ação</div>
+                  </div>
+
+                  {/* Mapping Rows - Responsive Grid on Desktop, Card on Mobile */}
+                  {fieldMappings.map((mapping, idx) => {
+                    const isInvalidCustomField =
+                      mapping.source_type === 'custom_field' && !activeCustomKeysSet.has(mapping.source_key);
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-3 rounded-lg border bg-card/60 transition-colors space-y-2 md:space-y-0 md:grid md:grid-cols-12 md:gap-3 md:items-center ${
+                          isInvalidCustomField ? 'border-destructive/60 bg-destructive/5' : 'hover:border-border'
+                        }`}
+                      >
+                        {/* 1. Variable Name */}
+                        <div className="md:col-span-3 min-w-0">
+                          <span className="md:hidden text-[10px] font-semibold text-muted-foreground uppercase">Variável ZapSign</span>
+                          <Input
+                            placeholder="Ex: Nome completo:"
+                            className="h-8 text-xs font-mono w-full min-w-0"
+                            value={mapping.zapsign_var}
+                            onChange={(e) => handleMappingChange(idx, 'zapsign_var', e.target.value)}
+                          />
+                        </div>
+
+                        {/* 2. Source Type */}
+                        <div className="md:col-span-3 min-w-0">
+                          <span className="md:hidden text-[10px] font-semibold text-muted-foreground uppercase">Origem</span>
+                          <select
+                            className="w-full border rounded h-8 text-xs bg-background px-2 focus:outline-none focus:ring-1 focus:ring-primary min-w-0 truncate"
+                            value={mapping.source_type}
+                            onChange={(e: any) => handleMappingChange(idx, 'source_type', e.target.value)}
+                          >
+                            <option value="contact_property">Coluna Nativa do Contato</option>
+                            <option value="custom_field">Campo Personalizado</option>
+                            <option value="system_value">Valor do Sistema</option>
+                            <option value="fixed_value">Valor Fixo</option>
+                          </select>
+                        </div>
+
+                        {/* 3. Source Key / Selector */}
+                        <div className="md:col-span-4 min-w-0">
+                          <span className="md:hidden text-[10px] font-semibold text-muted-foreground uppercase">Campo Selecionado</span>
+                          {mapping.source_type === 'contact_property' ? (
+                            <select
+                              className="w-full border rounded h-8 text-xs bg-background px-2 focus:outline-none focus:ring-1 focus:ring-primary min-w-0 truncate"
+                              value={mapping.source_key}
+                              onChange={(e) => handleMappingChange(idx, 'source_key', e.target.value)}
+                            >
+                              {Array.from(ALLOWED_CONTACT_PROPERTIES).map((prop) => (
+                                <option key={prop} value={prop}>
+                                  {prop} (Nativa)
+                                </option>
+                              ))}
+                            </select>
+                          ) : mapping.source_type === 'custom_field' ? (
+                            <select
+                              className={`w-full border rounded h-8 text-xs bg-background px-2 focus:outline-none focus:ring-1 focus:ring-primary min-w-0 truncate ${
+                                isInvalidCustomField ? 'border-destructive text-destructive font-semibold' : ''
+                              }`}
+                              value={mapping.source_key}
+                              onChange={(e) => handleMappingChange(idx, 'source_key', e.target.value)}
+                            >
+                              {isInvalidCustomField && (
+                                <option value={mapping.source_key}>
+                                  ⚠️ {mapping.source_key} (Desativado/Inválido)
+                                </option>
+                              )}
+                              {Object.entries(customFieldsByGroup).map(([group, fields]) => (
+                                <optgroup key={group} label={group}>
+                                  {fields.map((f) => (
+                                    <option key={f.id || f.field_key} value={f.field_key}>
+                                      {f.label} ({f.field_key})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ))}
+                            </select>
+                          ) : mapping.source_type === 'system_value' ? (
+                            <select
+                              className="w-full border rounded h-8 text-xs bg-background px-2 focus:outline-none focus:ring-1 focus:ring-primary min-w-0 truncate"
+                              value={mapping.source_key}
+                              onChange={(e) => handleMappingChange(idx, 'source_key', e.target.value)}
+                            >
+                              <option value="contact_city_current_date_ptbr">
+                                Cidade + Data Atual (PT-BR)
+                              </option>
+                            </select>
+                          ) : (
+                            <Input
+                              placeholder="Valor fixo estático"
+                              className="h-8 text-xs w-full min-w-0"
+                              value={mapping.default_value || ''}
+                              onChange={(e) => handleMappingChange(idx, 'default_value', e.target.value)}
+                            />
+                          )}
+                        </div>
+
+                        {/* 4. Required & Delete Action */}
+                        <div className="flex items-center justify-between md:contents pt-1 md:pt-0">
+                          <div className="md:col-span-1 text-center min-w-0">
+                            <label className="flex items-center gap-1.5 cursor-pointer justify-start md:justify-center">
+                              <input
+                                type="checkbox"
+                                className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                                checked={mapping.is_required}
+                                onChange={(e) => handleMappingChange(idx, 'is_required', e.target.checked)}
+                              />
+                              <span className="text-xs font-medium md:text-[11px]">Obriga.</span>
+                            </label>
+                          </div>
+
+                          <div className="md:col-span-1 text-right min-w-0 shrink-0">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveFieldMapping(idx)}
+                              className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
+                              title="Remover mapeamento"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
-          <DialogFooter className="pt-4">
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+          {/* Fixed Footer */}
+          <DialogFooter className="p-4 sm:px-6 border-t bg-muted/20 shrink-0 flex flex-row items-center justify-end gap-3">
+            <Button variant="outline" onClick={handleAttemptClose} size="sm">
               Cancelar
             </Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+            <Button onClick={handleSave} disabled={saving} size="sm" className="gap-2">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               {editingTemplate ? 'Salvar Alterações' : 'Criar Modelo'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Batch Paste Modal ("Colar vários campos") */}
+      {/* --- REDESIGNED BATCH PASTE MODAL ---
+          w-[96vw] max-w-[850px] sm:max-w-[850px] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden */}
       <Dialog open={batchModalOpen} onOpenChange={setBatchModalOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ClipboardList className="w-5 h-5 text-primary" />
-              Colar Vários Campos em Lote
-            </DialogTitle>
-            <DialogDescription>
-              Cole as definições das variáveis (uma por linha) no formato pipe (<code className="bg-muted px-1">VARIÁVEL | ORIGEM | CAMPO | OBRIGATÓRIO</code>) ou JSON estruturado.
-            </DialogDescription>
+        <DialogContent
+          showCloseButton={false}
+          className="w-[96vw] max-w-[850px] sm:max-w-[850px] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden rounded-xl border bg-background shadow-2xl"
+        >
+          <DialogHeader className="p-5 sm:p-6 pb-4 border-b bg-muted/20 shrink-0 flex flex-row items-center justify-between gap-4">
+            <div className="space-y-1 min-w-0">
+              <DialogTitle className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                <ClipboardList className="w-5 h-5 text-primary shrink-0" />
+                Colar Vários Campos em Lote
+              </DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm text-muted-foreground truncate">
+                Cole múltiplas linhas no formato pipe ou JSON estruturado.
+              </DialogDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setBatchModalOpen(false)}
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+            >
+              <X className="w-4 h-4" />
+            </Button>
           </DialogHeader>
 
-          {batchStep === 'input' ? (
-            <div className="space-y-4 py-2">
-              <div className="space-y-2">
-                <Label>Conteúdo das Variáveis</Label>
-                <textarea
-                  rows={10}
-                  className="w-full text-xs font-mono border rounded-md p-3 bg-muted/20 focus:outline-none focus:ring-1 focus:ring-primary"
-                  placeholder={`Exemplo (1 linha por variável):\n{{Nome completo:}} | contact_property | name | true\n{{CPF:}} | custom_field | cpf | true\n{{RG:}} | custom_field | rg | true\n{{Local e data:}} | system_value | contact_city_current_date_ptbr | true`}
-                  value={batchRawText}
-                  onChange={(e) => setBatchRawText(e.target.value)}
-                />
-              </div>
+          <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 min-w-0">
+            {batchStep === 'input' ? (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Conteúdo das Variáveis (Pipe ou JSON)</Label>
+                  <textarea
+                    rows={10}
+                    className="w-full text-xs font-mono border rounded-lg p-3 bg-muted/10 focus:outline-none focus:ring-1 focus:ring-primary min-w-0 resize-y"
+                    placeholder={`Formato Pipe (1 linha por variável):\n{{Nome completo:}} | contact_property | name | true\n{{CPF:}} | custom_field | cpf | true\n{{RG:}} | custom_field | rg | true\n{{Local e data:}} | system_value | contact_city_current_date_ptbr | true`}
+                    value={batchRawText}
+                    onChange={(e) => setBatchRawText(e.target.value)}
+                  />
+                </div>
 
-              <div className="p-3 rounded bg-muted/40 text-xs space-y-1 text-muted-foreground">
-                <span className="font-semibold text-foreground">Origens Permitidas:</span>
-                <p><code className="text-primary font-mono">contact_property</code>: name, phone, email, company</p>
-                <p><code className="text-primary font-mono">custom_field</code>: cpf, rg, birth_date, address_line, city, state, postal_code, guardian_*</p>
-                <p><code className="text-primary font-mono">system_value</code>: contact_city_current_date_ptbr</p>
+                <div className="p-3 rounded-lg bg-muted/30 border text-xs space-y-1 text-muted-foreground">
+                  <span className="font-semibold text-foreground">Sintaxe Esperada:</span>
+                  <p><code className="text-primary font-mono font-semibold">VARIÁVEL | ORIGEM | CAMPO | OBRIGATÓRIO</code></p>
+                  <p className="text-[11px]">Origens permitidas: <code className="font-mono text-foreground">contact_property</code>, <code className="font-mono text-foreground">custom_field</code>, <code className="font-mono text-foreground">system_value</code>, <code className="font-mono text-foreground">fixed_value</code></p>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="space-y-4 py-2">
-              <div className="flex items-center justify-between text-xs border-b pb-2">
-                <span className="font-semibold">Resultado da Análise da Colagem</span>
-                <div className="flex gap-2">
-                  <Badge variant="outline" className="text-emerald-600 border-emerald-600/40">
-                    {batchParsedItems.filter((i) => i.isValid).length} Válidos
-                  </Badge>
-                  {batchParsedItems.some((i) => !i.isValid) && (
-                    <Badge variant="destructive">
-                      {batchParsedItems.filter((i) => !i.isValid).length} Erros
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between text-xs border-b pb-2">
+                  <span className="font-semibold text-foreground">Resultado da Análise da Colagem</span>
+                  <div className="flex gap-2">
+                    <Badge variant="outline" className="text-emerald-600 border-emerald-600/40">
+                      {batchParsedItems.filter((i) => i.isValid).length} Válidos
                     </Badge>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {batchParsedItems.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-2 rounded border text-xs flex items-center justify-between font-mono ${
-                      item.isValid ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-destructive/5 border-destructive/30 text-destructive'
-                    }`}
-                  >
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5 font-semibold">
-                        {item.isValid ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        ) : (
-                          <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />
-                        )}
-                        <span>{item.mapping?.zapsign_var || item.rawLine}</span>
-                      </div>
-                      {item.isValid && item.mapping && (
-                        <p className="text-[11px] text-muted-foreground">
-                          {item.mapping.source_type} &rarr; {item.mapping.source_key} (Obr: {item.mapping.is_required ? 'Sim' : 'Não'})
-                        </p>
-                      )}
-                      {!item.isValid && <p className="text-[11px] text-destructive">{item.errorReason}</p>}
-                    </div>
+                    {batchParsedItems.some((i) => !i.isValid) && (
+                      <Badge variant="destructive">
+                        {batchParsedItems.filter((i) => !i.isValid).length} Erros
+                      </Badge>
+                    )}
                   </div>
-                ))}
-              </div>
+                </div>
 
-              <div className="space-y-2 border-t pt-3">
-                <Label className="text-xs font-semibold">Modo de Aplicação no Formulário</Label>
-                <div className="flex items-center gap-4 text-xs">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="batchMode"
-                      value="append"
-                      checked={batchImportMode === 'append'}
-                      onChange={() => setBatchImportMode('append')}
-                    />
-                    <span>Adicionar aos mapeamentos existentes (Padrão)</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="batchMode"
-                      value="replace"
-                      checked={batchImportMode === 'replace'}
-                      onChange={() => setBatchImportMode('replace')}
-                    />
-                    <span className="text-destructive font-medium">Substituir todos os mapeamentos atuais</span>
-                  </label>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {batchParsedItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-2.5 rounded-lg border text-xs flex items-center justify-between font-mono ${
+                        item.isValid
+                          ? 'bg-emerald-500/5 border-emerald-500/30 text-foreground'
+                          : 'bg-destructive/5 border-destructive/30 text-destructive'
+                      }`}
+                    >
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="flex items-center gap-2 font-semibold truncate">
+                          {item.isValid ? (
+                            <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                          ) : (
+                            <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+                          )}
+                          <span className="truncate">{item.mapping?.zapsign_var || item.rawLine}</span>
+                        </div>
+                        {item.isValid && item.mapping && (
+                          <p className="text-[11px] text-muted-foreground truncate">
+                            {item.mapping.source_type} &rarr; {item.mapping.source_key} (Obr: {item.mapping.is_required ? 'Sim' : 'Não'})
+                          </p>
+                        )}
+                        {!item.isValid && <p className="text-[11px] text-destructive">{item.errorReason}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-2 border-t pt-3">
+                  <Label className="text-xs font-semibold">Modo de Aplicação no Formulário</Label>
+                  <div className="flex flex-col sm:flex-row gap-3 text-xs">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="batchMode"
+                        value="append"
+                        checked={batchImportMode === 'append'}
+                        onChange={() => setBatchImportMode('append')}
+                      />
+                      <span>Adicionar aos mapeamentos existentes (Padrão)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="batchMode"
+                        value="replace"
+                        checked={batchImportMode === 'replace'}
+                        onChange={() => setBatchImportMode('replace')}
+                      />
+                      <span className="text-destructive font-medium">Substituir todos os mapeamentos atuais</span>
+                    </label>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          <DialogFooter className="pt-4 flex justify-between">
+          <DialogFooter className="p-4 sm:px-6 border-t bg-muted/20 shrink-0 flex flex-row items-center justify-end gap-3">
             {batchStep === 'input' ? (
               <>
-                <Button variant="outline" onClick={() => setBatchModalOpen(false)}>
+                <Button variant="outline" onClick={() => setBatchModalOpen(false)} size="sm">
                   Cancelar
                 </Button>
-                <Button onClick={handleParseBatchText} disabled={!batchRawText.trim()}>
+                <Button onClick={handleParseBatchText} disabled={!batchRawText.trim()} size="sm">
                   Analisar Colagem
                 </Button>
               </>
             ) : (
               <>
-                <Button variant="outline" onClick={() => setBatchStep('input')}>
+                <Button variant="outline" onClick={() => setBatchStep('input')} size="sm">
                   Voltar ao Texto
                 </Button>
                 <Button
                   onClick={handleApplyBatchImport}
                   disabled={batchParsedItems.filter((i) => i.isValid).length === 0}
+                  size="sm"
                 >
                   Aplicar {batchParsedItems.filter((i) => i.isValid).length} Mapeamentos
                 </Button>
