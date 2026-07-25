@@ -2,7 +2,17 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/automations/admin-client';
 
-// GET /api/signature-templates/custom-fields - Returns active custom fields grouped by group_name
+function slugifyKey(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+// GET /api/signature-templates/custom-fields - Returns active custom fields for the authenticated account
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -37,23 +47,41 @@ export async function GET() {
 
     if (cfError) {
       console.error('[signature-templates/custom-fields] Error fetching custom fields:', cfError);
-      return NextResponse.json({ error: 'Falha ao buscar campos personalizados' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Falha ao buscar campos personalizados' },
+        { status: 500 }
+      );
     }
 
-    // Map field_name to label for frontend consistency
-    const mapped = (customFields || []).map((cf) => ({
-      id: cf.id,
-      field_key: cf.field_key,
-      label: cf.field_name || cf.field_key,
-      field_type: cf.field_type,
-      group_name: cf.group_name || 'Gerais',
-      is_active: cf.is_active,
-      display_order: cf.display_order,
-    }));
+    // Map & sanitize field_key guarantees
+    const mapped = (customFields || [])
+      .map((cf) => {
+        const resolvedKey = cf.field_key && cf.field_key.trim() !== ''
+          ? cf.field_key.trim()
+          : slugifyKey(cf.field_name || 'campo');
 
-    return NextResponse.json({
-      custom_fields: mapped,
-    });
+        return {
+          id: cf.id,
+          field_key: resolvedKey,
+          label: cf.field_name || resolvedKey,
+          field_type: cf.field_type || 'text',
+          group_name: cf.group_name || 'Gerais',
+          is_active: Boolean(cf.is_active),
+          display_order: cf.display_order ?? 99,
+        };
+      })
+      .filter((cf) => cf.field_key && cf.field_key.length > 0);
+
+    return NextResponse.json(
+      { custom_fields: mapped },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      }
+    );
   } catch (err: any) {
     console.error('[signature-templates/custom-fields] Error in GET:', err);
     return NextResponse.json(

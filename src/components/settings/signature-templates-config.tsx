@@ -14,7 +14,6 @@ import {
   RefreshCw,
   ClipboardList,
   Check,
-  HelpCircle,
   X,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -89,10 +88,15 @@ export function SignatureTemplatesConfig() {
   const fetchCustomFields = async () => {
     setRefreshingFields(true);
     try {
-      const res = await fetch('/api/signature-templates/custom-fields');
+      const res = await fetch(`/api/signature-templates/custom-fields?t=${Date.now()}`, {
+        cache: 'no-store',
+      });
       if (res.ok) {
         const data = await res.json();
-        setActiveCustomFields(data.custom_fields || []);
+        const validFields = (data.custom_fields || []).filter(
+          (cf: CustomFieldOption) => cf.field_key && cf.field_key.trim() !== ''
+        );
+        setActiveCustomFields(validFields);
       }
     } catch (err) {
       console.error('Error fetching custom fields:', err);
@@ -106,8 +110,8 @@ export function SignatureTemplatesConfig() {
     setError(null);
     try {
       const [tplRes, cfRes] = await Promise.all([
-        fetch('/api/signature-templates'),
-        fetch('/api/signature-templates/custom-fields'),
+        fetch(`/api/signature-templates?t=${Date.now()}`, { cache: 'no-store' }),
+        fetch(`/api/signature-templates/custom-fields?t=${Date.now()}`, { cache: 'no-store' }),
       ]);
 
       if (tplRes.ok) {
@@ -117,7 +121,10 @@ export function SignatureTemplatesConfig() {
 
       if (cfRes.ok) {
         const cfData = await cfRes.json();
-        setActiveCustomFields(cfData.custom_fields || []);
+        const validFields = (cfData.custom_fields || []).filter(
+          (cf: CustomFieldOption) => cf.field_key && cf.field_key.trim() !== ''
+        );
+        setActiveCustomFields(validFields);
       }
     } catch (err: any) {
       console.error('Error fetching signature templates:', err);
@@ -500,16 +507,14 @@ export function SignatureTemplatesConfig() {
         )}
       </CardContent>
 
-      {/* --- REDESIGNED MAIN DIALOG ---
-          Override sm:max-w-sm locally with w-[96vw] max-w-[1100px] sm:max-w-[1100px] max-h-[90vh]
-          Pinned Header & Footer, Scrollable Central Form Body, Responsive 3-Section Layout */}
+      {/* --- REDESIGNED MAIN DIALOG (FIXED OVERFLOW & ACCURATE BOX-SIZING MATH) --- */}
       <Dialog open={dialogOpen} onOpenChange={handleAttemptClose}>
         <DialogContent
           showCloseButton={false}
-          className="w-[96vw] max-w-[1100px] sm:max-w-[1100px] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-xl border bg-background shadow-2xl"
+          className="w-[94vw] max-w-[1080px] sm:max-w-[1080px] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-xl border bg-background shadow-2xl box-border"
         >
           {/* Fixed Header */}
-          <DialogHeader className="p-5 sm:p-6 pb-4 border-b bg-muted/20 shrink-0 flex flex-row items-center justify-between gap-4">
+          <DialogHeader className="p-4 sm:p-5 pb-3 border-b bg-muted/20 shrink-0 flex flex-row items-center justify-between gap-4 box-border w-full">
             <div className="space-y-1 min-w-0">
               <DialogTitle className="text-base sm:text-lg font-semibold flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary shrink-0" />
@@ -530,20 +535,20 @@ export function SignatureTemplatesConfig() {
             </Button>
           </DialogHeader>
 
-          {/* Scrollable Form Body */}
-          <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 min-w-0">
+          {/* Scrollable Form Body - Explicit Padding & Box-Sizing Preventing Internal Overflow */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-6 min-w-0 w-full box-border">
             {formError && (
-              <div className="p-3.5 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-xs sm:text-sm flex items-start gap-2.5">
+              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-xs sm:text-sm flex items-start gap-2.5">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span className="font-medium">{formError}</span>
               </div>
             )}
 
             {/* SECTION 1: Identificação do Modelo */}
-            <div className="space-y-4">
-              <div className="border-b pb-2">
+            <div className="space-y-3 min-w-0 w-full">
+              <div className="border-b pb-1.5">
                 <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">1</span>
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold shrink-0">1</span>
                   Identificação do Modelo
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -551,13 +556,13 @@ export function SignatureTemplatesConfig() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5 min-w-0">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 min-w-0 w-full">
+                <div className="space-y-1 min-w-0">
                   <Label htmlFor="tpl-name" className="text-xs font-medium">Nome Interno do Modelo *</Label>
                   <Input
                     id="tpl-name"
                     placeholder="Ex: Procuração Anvisa Desertmoon"
-                    className="h-9 text-xs"
+                    className="h-8 sm:h-9 text-xs w-full min-w-0"
                     value={templateName}
                     onChange={(e) => {
                       setTemplateName(e.target.value);
@@ -565,12 +570,12 @@ export function SignatureTemplatesConfig() {
                     }}
                   />
                 </div>
-                <div className="space-y-1.5 min-w-0">
+                <div className="space-y-1 min-w-0">
                   <Label htmlFor="tpl-id" className="text-xs font-medium">ID na ZapSign (template_id) *</Label>
                   <Input
                     id="tpl-id"
                     placeholder="Ex: b416fa71-4466-4bb0-901a-6ea66b988d2f"
-                    className="h-9 text-xs font-mono"
+                    className="h-8 sm:h-9 text-xs font-mono w-full min-w-0"
                     value={templateId}
                     onChange={(e) => {
                       setTemplateId(e.target.value);
@@ -578,12 +583,12 @@ export function SignatureTemplatesConfig() {
                     }}
                   />
                 </div>
-                <div className="space-y-1.5 min-w-0">
+                <div className="space-y-1 min-w-0">
                   <Label htmlFor="tpl-cat" className="text-xs font-medium">Categoria</Label>
                   <Input
                     id="tpl-cat"
                     placeholder="Ex: procuracao, contrato"
-                    className="h-9 text-xs"
+                    className="h-8 sm:h-9 text-xs w-full min-w-0"
                     value={category}
                     onChange={(e) => {
                       setCategory(e.target.value);
@@ -595,10 +600,10 @@ export function SignatureTemplatesConfig() {
             </div>
 
             {/* SECTION 2: Regras de Assinatura e Envio */}
-            <div className="space-y-4">
-              <div className="border-b pb-2">
+            <div className="space-y-3 min-w-0 w-full">
+              <div className="border-b pb-1.5">
                 <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">2</span>
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold shrink-0">2</span>
                   Regras de Assinatura e Envio
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -606,12 +611,12 @@ export function SignatureTemplatesConfig() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5 min-w-0">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0 w-full">
+                <div className="space-y-1 min-w-0">
                   <Label htmlFor="signatory-rule" className="text-xs font-medium">Regra do Signatário</Label>
                   <select
                     id="signatory-rule"
-                    className="w-full border rounded-md h-9 text-xs bg-background px-3 focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full border rounded-md h-8 sm:h-9 text-xs bg-background px-2.5 focus:outline-none focus:ring-1 focus:ring-primary min-w-0 truncate"
                     value={signatoryRule}
                     onChange={(e: any) => {
                       setSignatoryRule(e.target.value);
@@ -623,11 +628,11 @@ export function SignatureTemplatesConfig() {
                     <option value="guardian_only">Somente o Responsável Legal</option>
                   </select>
                 </div>
-                <div className="space-y-1.5 min-w-0">
+                <div className="space-y-1 min-w-0">
                   <Label htmlFor="delivery-mode" className="text-xs font-medium">Modo de Envio Padrão</Label>
                   <select
                     id="delivery-mode"
-                    className="w-full border rounded-md h-9 text-xs bg-background px-3 focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full border rounded-md h-8 sm:h-9 text-xs bg-background px-2.5 focus:outline-none focus:ring-1 focus:ring-primary min-w-0 truncate"
                     value={deliveryMode}
                     onChange={(e: any) => {
                       setDeliveryMode(e.target.value);
@@ -643,11 +648,11 @@ export function SignatureTemplatesConfig() {
             </div>
 
             {/* SECTION 3: Mapeamento de Variáveis */}
-            <div className="space-y-4">
+            <div className="space-y-3 min-w-0 w-full">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b pb-2">
                 <div>
                   <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">3</span>
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold shrink-0">3</span>
                     Mapeamento de Variáveis (de/para)
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
@@ -701,14 +706,14 @@ export function SignatureTemplatesConfig() {
                   <p className="text-[11px]">Clique em "Adicionar Campo" ou "Colar Vários Campos" para começar.</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2.5 min-w-0 w-full">
                   {/* Header Row for Desktop */}
-                  <div className="hidden md:grid md:grid-cols-12 gap-3 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    <div className="col-span-3">Variável ZapSign</div>
-                    <div className="col-span-3">Origem do Dado</div>
-                    <div className="col-span-4">Campo de Origem</div>
-                    <div className="col-span-1 text-center">Obrig.</div>
-                    <div className="col-span-1 text-right">Ação</div>
+                  <div className="hidden md:grid md:grid-cols-12 gap-2.5 px-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider min-w-0 w-full">
+                    <div className="col-span-3 min-w-0">Variável ZapSign</div>
+                    <div className="col-span-3 min-w-0">Origem do Dado</div>
+                    <div className="col-span-4 min-w-0">Campo de Origem</div>
+                    <div className="col-span-1 text-center min-w-0">Obrig.</div>
+                    <div className="col-span-1 text-right min-w-0">Ação</div>
                   </div>
 
                   {/* Mapping Rows - Responsive Grid on Desktop, Card on Mobile */}
@@ -719,13 +724,13 @@ export function SignatureTemplatesConfig() {
                     return (
                       <div
                         key={idx}
-                        className={`p-3 rounded-lg border bg-card/60 transition-colors space-y-2 md:space-y-0 md:grid md:grid-cols-12 md:gap-3 md:items-center ${
+                        className={`p-2.5 rounded-lg border bg-card/60 transition-colors space-y-2 md:space-y-0 md:grid md:grid-cols-12 md:gap-2.5 md:items-center min-w-0 w-full box-border ${
                           isInvalidCustomField ? 'border-destructive/60 bg-destructive/5' : 'hover:border-border'
                         }`}
                       >
                         {/* 1. Variable Name */}
                         <div className="md:col-span-3 min-w-0">
-                          <span className="md:hidden text-[10px] font-semibold text-muted-foreground uppercase">Variável ZapSign</span>
+                          <span className="md:hidden text-[10px] font-semibold text-muted-foreground uppercase block mb-1">Variável ZapSign</span>
                           <Input
                             placeholder="Ex: Nome completo:"
                             className="h-8 text-xs font-mono w-full min-w-0"
@@ -736,7 +741,7 @@ export function SignatureTemplatesConfig() {
 
                         {/* 2. Source Type */}
                         <div className="md:col-span-3 min-w-0">
-                          <span className="md:hidden text-[10px] font-semibold text-muted-foreground uppercase">Origem</span>
+                          <span className="md:hidden text-[10px] font-semibold text-muted-foreground uppercase block mb-1">Origem</span>
                           <select
                             className="w-full border rounded h-8 text-xs bg-background px-2 focus:outline-none focus:ring-1 focus:ring-primary min-w-0 truncate"
                             value={mapping.source_type}
@@ -749,9 +754,9 @@ export function SignatureTemplatesConfig() {
                           </select>
                         </div>
 
-                        {/* 3. Source Key / Selector */}
+                        {/* 3. Source Key / Selector (Explicitly renders Label (field_key)) */}
                         <div className="md:col-span-4 min-w-0">
-                          <span className="md:hidden text-[10px] font-semibold text-muted-foreground uppercase">Campo Selecionado</span>
+                          <span className="md:hidden text-[10px] font-semibold text-muted-foreground uppercase block mb-1">Campo Selecionado</span>
                           {mapping.source_type === 'contact_property' ? (
                             <select
                               className="w-full border rounded h-8 text-xs bg-background px-2 focus:outline-none focus:ring-1 focus:ring-primary min-w-0 truncate"
@@ -808,12 +813,12 @@ export function SignatureTemplatesConfig() {
                         </div>
 
                         {/* 4. Required & Delete Action */}
-                        <div className="flex items-center justify-between md:contents pt-1 md:pt-0">
+                        <div className="flex items-center justify-between md:contents pt-1 md:pt-0 min-w-0">
                           <div className="md:col-span-1 text-center min-w-0">
                             <label className="flex items-center gap-1.5 cursor-pointer justify-start md:justify-center">
                               <input
                                 type="checkbox"
-                                className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                                className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4 shrink-0"
                                 checked={mapping.is_required}
                                 onChange={(e) => handleMappingChange(idx, 'is_required', e.target.checked)}
                               />
@@ -843,7 +848,7 @@ export function SignatureTemplatesConfig() {
           </div>
 
           {/* Fixed Footer */}
-          <DialogFooter className="p-4 sm:px-6 border-t bg-muted/20 shrink-0 flex flex-row items-center justify-end gap-3">
+          <DialogFooter className="p-3.5 sm:px-5 border-t bg-muted/20 shrink-0 flex flex-row items-center justify-end gap-3 box-border w-full">
             <Button variant="outline" onClick={handleAttemptClose} size="sm">
               Cancelar
             </Button>
@@ -855,14 +860,13 @@ export function SignatureTemplatesConfig() {
         </DialogContent>
       </Dialog>
 
-      {/* --- REDESIGNED BATCH PASTE MODAL ---
-          w-[96vw] max-w-[850px] sm:max-w-[850px] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden */}
+      {/* --- REDESIGNED BATCH PASTE MODAL --- */}
       <Dialog open={batchModalOpen} onOpenChange={setBatchModalOpen}>
         <DialogContent
           showCloseButton={false}
-          className="w-[96vw] max-w-[850px] sm:max-w-[850px] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden rounded-xl border bg-background shadow-2xl"
+          className="w-[94vw] max-w-[840px] sm:max-w-[840px] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden rounded-xl border bg-background shadow-2xl box-border"
         >
-          <DialogHeader className="p-5 sm:p-6 pb-4 border-b bg-muted/20 shrink-0 flex flex-row items-center justify-between gap-4">
+          <DialogHeader className="p-4 sm:p-5 pb-3 border-b bg-muted/20 shrink-0 flex flex-row items-center justify-between gap-4 box-border w-full">
             <div className="space-y-1 min-w-0">
               <DialogTitle className="text-base sm:text-lg font-semibold flex items-center gap-2">
                 <ClipboardList className="w-5 h-5 text-primary shrink-0" />
@@ -882,14 +886,14 @@ export function SignatureTemplatesConfig() {
             </Button>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 min-w-0">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 min-w-0 w-full box-border">
             {batchStep === 'input' ? (
-              <div className="space-y-3">
-                <div className="space-y-1.5">
+              <div className="space-y-3 min-w-0 w-full">
+                <div className="space-y-1">
                   <Label className="text-xs font-semibold">Conteúdo das Variáveis (Pipe ou JSON)</Label>
                   <textarea
-                    rows={10}
-                    className="w-full text-xs font-mono border rounded-lg p-3 bg-muted/10 focus:outline-none focus:ring-1 focus:ring-primary min-w-0 resize-y"
+                    rows={9}
+                    className="w-full text-xs font-mono border rounded-lg p-3 bg-muted/10 focus:outline-none focus:ring-1 focus:ring-primary min-w-0 resize-y box-border"
                     placeholder={`Formato Pipe (1 linha por variável):\n{{Nome completo:}} | contact_property | name | true\n{{CPF:}} | custom_field | cpf | true\n{{RG:}} | custom_field | rg | true\n{{Local e data:}} | system_value | contact_city_current_date_ptbr | true`}
                     value={batchRawText}
                     onChange={(e) => setBatchRawText(e.target.value)}
@@ -903,7 +907,7 @@ export function SignatureTemplatesConfig() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-4 min-w-0 w-full">
                 <div className="flex items-center justify-between text-xs border-b pb-2">
                   <span className="font-semibold text-foreground">Resultado da Análise da Colagem</span>
                   <div className="flex gap-2">
@@ -918,11 +922,11 @@ export function SignatureTemplatesConfig() {
                   </div>
                 </div>
 
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1 min-w-0 w-full">
                   {batchParsedItems.map((item, idx) => (
                     <div
                       key={idx}
-                      className={`p-2.5 rounded-lg border text-xs flex items-center justify-between font-mono ${
+                      className={`p-2.5 rounded-lg border text-xs flex items-center justify-between font-mono min-w-0 w-full box-border ${
                         item.isValid
                           ? 'bg-emerald-500/5 border-emerald-500/30 text-foreground'
                           : 'bg-destructive/5 border-destructive/30 text-destructive'
@@ -948,7 +952,7 @@ export function SignatureTemplatesConfig() {
                   ))}
                 </div>
 
-                <div className="space-y-2 border-t pt-3">
+                <div className="space-y-2 border-t pt-3 min-w-0 w-full">
                   <Label className="text-xs font-semibold">Modo de Aplicação no Formulário</Label>
                   <div className="flex flex-col sm:flex-row gap-3 text-xs">
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -977,7 +981,7 @@ export function SignatureTemplatesConfig() {
             )}
           </div>
 
-          <DialogFooter className="p-4 sm:px-6 border-t bg-muted/20 shrink-0 flex flex-row items-center justify-end gap-3">
+          <DialogFooter className="p-3.5 sm:px-5 border-t bg-muted/20 shrink-0 flex flex-row items-center justify-end gap-3 box-border w-full">
             {batchStep === 'input' ? (
               <>
                 <Button variant="outline" onClick={() => setBatchModalOpen(false)} size="sm">
