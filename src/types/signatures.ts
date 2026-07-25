@@ -2,12 +2,25 @@ import { z } from 'zod';
 
 export type SignatoryRule = 'contact_only' | 'guardian_if_minor' | 'guardian_only';
 export type DeliveryMode = 'manual_link' | 'zapsign_email' | 'zapsign_whatsapp';
-export type FieldSourceType = 'contact_property' | 'custom_field' | 'fixed_value';
+export type FieldSourceType = 'contact_property' | 'custom_field' | 'fixed_value' | 'system_value';
 export type FieldFormatType = 'uppercase' | 'lowercase' | 'digits_only' | 'date_ptbr';
 
+export type SignatureRequestStatus =
+  | 'draft'
+  | 'creating'
+  | 'pending'
+  | 'viewed'
+  | 'signed'
+  | 'refused'
+  | 'expired'
+  | 'cancelled'
+  | 'error';
+
 // Strict allowlist for native columns on the contacts table ONLY.
-// Extended fields (cpf, birth_date, address, guardian_*, etc.) MUST be configured as custom_fields!
 export const ALLOWED_CONTACT_PROPERTIES = new Set(['name', 'phone', 'email', 'company']);
+
+// Strict allowlist for system values
+export const ALLOWED_SYSTEM_VALUES = new Set(['contact_city_current_date_ptbr']);
 
 export interface FieldMapping {
   zapsign_var: string;
@@ -29,23 +42,23 @@ export interface SignatureTemplate {
   signatory_rule: SignatoryRule;
   delivery_mode: DeliveryMode;
   field_mappings: FieldMapping[];
+  instruction_message_template?: string | null;
+  privacy_notice_url?: string | null;
+  destination_document_type?: string;
   created_at: string;
   updated_at: string;
 }
 
-// Strict Zod schema for validating field mappings without allowing arbitrary code execution
 export const fieldMappingSchema = z.object({
   zapsign_var: z
     .string()
     .min(1, 'Variável é obrigatória')
-    .max(100)
-    .regex(/^[a-zA-Z0-9_]+$/, 'Nome da variável deve conter apenas letras, números e underline'),
-  source_type: z.enum(['contact_property', 'custom_field', 'fixed_value']),
+    .max(100),
+  source_type: z.enum(['contact_property', 'custom_field', 'fixed_value', 'system_value']),
   source_key: z
     .string()
     .min(1, 'Chave de origem é obrigatória')
-    .max(100)
-    .regex(/^[a-zA-Z0-9._]+$/, 'Chave de origem inválida'),
+    .max(100),
   default_value: z.string().max(500).optional(),
   is_required: z.boolean().default(false),
   format: z.enum(['uppercase', 'lowercase', 'digits_only', 'date_ptbr']).optional(),
@@ -60,6 +73,9 @@ export const createSignatureTemplateSchema = z.object({
   signatory_rule: z.enum(['contact_only', 'guardian_if_minor', 'guardian_only']).default('contact_only'),
   delivery_mode: z.enum(['manual_link', 'zapsign_email', 'zapsign_whatsapp']).default('manual_link'),
   field_mappings: z.array(fieldMappingSchema).max(50, 'Máximo 50 mapeamentos por modelo').default([]),
+  instruction_message_template: z.string().nullable().optional(),
+  privacy_notice_url: z.string().url('URL deve ser HTTPS').nullable().optional(),
+  destination_document_type: z.string().default('procuracao'),
 });
 
 export const updateSignatureTemplateSchema = createSignatureTemplateSchema.partial();
