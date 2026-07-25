@@ -6,6 +6,7 @@ export interface ResolvedSignatory {
   email?: string;
   phone?: string;
   cpf?: string;
+  rg?: string;
   relationship?: string;
 }
 
@@ -51,6 +52,7 @@ export function resolveSignatory(
         email: contact.email || undefined,
         phone: contact.phone || undefined,
         cpf: custom.cpf ? String(custom.cpf) : undefined,
+        rg: custom.rg ? String(custom.rg) : undefined,
       },
     };
   }
@@ -83,6 +85,7 @@ export function resolveSignatory(
           email: contact.email || undefined,
           phone: contact.phone || undefined,
           cpf: custom.cpf ? String(custom.cpf) : undefined,
+          rg: custom.rg ? String(custom.rg) : undefined,
         },
       };
     }
@@ -111,6 +114,7 @@ export function resolveSignatory(
         email: String(custom.guardian_email).trim(),
         phone: String(custom.guardian_phone).trim(),
         cpf: String(custom.guardian_cpf).trim(),
+        rg: custom.guardian_rg ? String(custom.guardian_rg) : undefined,
         relationship: String(custom.guardian_relationship).trim(),
       },
     };
@@ -140,6 +144,7 @@ export function resolveSignatory(
         email: String(custom.guardian_email).trim(),
         phone: String(custom.guardian_phone).trim(),
         cpf: String(custom.guardian_cpf).trim(),
+        rg: custom.guardian_rg ? String(custom.guardian_rg) : undefined,
         relationship: String(custom.guardian_relationship).trim(),
       },
     };

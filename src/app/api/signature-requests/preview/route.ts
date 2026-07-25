@@ -139,7 +139,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 4. Fetch Contact with Relational Custom Fields (using fixed contact-helper)
+    // 4. Fetch Contact with Relational Custom Fields
     const contact = await getContactWithCustomFields(accountId, contact_id);
 
     if (!contact) {
@@ -191,12 +191,28 @@ export async function POST(request: Request) {
       });
     }
 
-    // 7. Evaluate Variable Mappings (DOCX de/para)
+    // 7. Evaluate Variable Mappings (DOCX de/para) & Categorize Breakdown
     const customFields = contact.custom_fields || {};
+    const isMinor = customFields.is_minor === true || String(customFields.is_minor).toLowerCase() === 'true';
+
+    const fieldMappings = template.field_mappings || [];
+    const totalMappings = fieldMappings.length;
     const variables: Array<{ de: string; para: string; is_required: boolean }> = [];
     const missingRequiredVariables: string[] = [];
 
-    for (const mapping of template.field_mappings || []) {
+    let filledCount = 0;
+    let nonApplicableCount = 0;
+
+    for (const mapping of fieldMappings) {
+      const sourceKey = mapping.source_key || '';
+      const isGuardianField = sourceKey === 'guardian_name' || sourceKey === 'guardian_cpf' || sourceKey.startsWith('guardian_');
+
+      // Conditional non-applicable check: Guardian fields for adult patient are non-applicable
+      if (!isMinor && isGuardianField) {
+        nonApplicableCount++;
+        continue;
+      }
+
       let resolvedValue: string | undefined = undefined;
 
       if (mapping.source_type === 'contact_property') {
@@ -223,10 +239,13 @@ export async function POST(request: Request) {
           missingRequiredVariables.push(mapping.source_key || mapping.zapsign_var);
         } else if (mapping.default_value) {
           resolvedValue = mapping.default_value;
+        } else {
+          nonApplicableCount++;
         }
       }
 
-      if (resolvedValue) {
+      if (resolvedValue && resolvedValue.trim()) {
+        filledCount++;
         variables.push({
           de: mapping.zapsign_var,
           para: resolvedValue.trim(),
@@ -262,7 +281,9 @@ export async function POST(request: Request) {
       contactAccountId: contact.account_id,
       templateId: template.id,
       signatoryType: signatoryRes.signatory.signatory_type,
-      variablesCount: variables.length,
+      totalMappings,
+      filledCount,
+      nonApplicableCount,
       resolutionSource: 'profile',
     });
 
@@ -270,7 +291,10 @@ export async function POST(request: Request) {
       is_valid: true,
       template_name: template.template_name,
       signatory: signatoryRes.signatory,
-      variables_count: variables.length,
+      total_mappings: totalMappings,
+      filled_variables_count: filledCount,
+      non_applicable_variables_count: nonApplicableCount,
+      variables_count: filledCount,
       instruction_message: formattedMsg.message,
       correlation_id: correlationId,
     });

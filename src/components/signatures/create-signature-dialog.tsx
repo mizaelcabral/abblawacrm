@@ -30,6 +30,38 @@ interface CreateSignatureDialogProps {
   deals?: Array<{ id: string; title: string }>;
 }
 
+export function maskCpf(cpf?: string | null): string {
+  if (!cpf) return '***.***.***-**';
+  const digits = cpf.replace(/\D/g, '');
+  if (digits.length !== 11) return '***.***.***-**';
+  return `${digits.slice(0, 3)}.***.***-${digits.slice(9, 11)}`;
+}
+
+export function maskRg(rg?: string | null): string {
+  if (!rg) return '**.***.***-*';
+  const digits = rg.replace(/\D/g, '');
+  if (digits.length < 5) return '**.***.***-*';
+  const firstTwo = digits.slice(0, 2);
+  const lastOne = digits.slice(-1);
+  return `${firstTwo}.***.***-${lastOne}`;
+}
+
+export function maskPhone(phone?: string | null): string {
+  if (!phone) return '(**) *****-****';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 10) return '(**) *****-****';
+  const ddd = digits.slice(0, 2);
+  const lastFour = digits.slice(-4);
+  return `(${ddd}) *****-${lastFour}`;
+}
+
+export function maskEmail(email?: string | null): string {
+  if (!email || !email.includes('@')) return '***@***.com';
+  const [name, domain] = email.split('@');
+  if (name.length <= 2) return `${name[0] || '*'}***@${domain}`;
+  return `${name.slice(0, 2)}***@${domain}`;
+}
+
 export function CreateSignatureDialog({
   open,
   onOpenChange,
@@ -51,6 +83,9 @@ export function CreateSignatureDialog({
     blockReason?: string;
     missingFields?: string[];
     signatory?: any;
+    totalMappings?: number;
+    filledCount?: number;
+    nonApplicableCount?: number;
     variablesCount?: number;
     instructionMessage?: string;
   } | null>(null);
@@ -113,6 +148,9 @@ export function CreateSignatureDialog({
         blockReason: data.block_reason,
         missingFields: data.missing_fields,
         signatory: data.signatory,
+        totalMappings: data.total_mappings,
+        filledCount: data.filled_variables_count,
+        nonApplicableCount: data.non_applicable_variables_count,
         variablesCount: data.variables_count,
         instructionMessage: data.instruction_message,
       });
@@ -122,14 +160,6 @@ export function CreateSignatureDialog({
     } finally {
       setPreviewing(false);
     }
-  };
-
-  const maskCpf = (cpf?: string) => (cpf && cpf.length >= 11 ? `${cpf.substring(0, 3)}.***.***-${cpf.substring(9)}` : '***');
-  const maskPhone = (phone?: string) => (phone && phone.length >= 8 ? `(${phone.substring(0, 2)}) *****-${phone.substring(phone.length - 4)}` : '***');
-  const maskEmail = (email?: string) => {
-    if (!email || !email.includes('@')) return '***';
-    const [name, domain] = email.split('@');
-    return `${name.substring(0, 2)}***@${domain}`;
   };
 
   return (
@@ -251,6 +281,7 @@ export function CreateSignatureDialog({
                       ? 'Signatário: Paciente Adulto (Próprio Contato)'
                       : 'Signatário: Responsável Legal (Paciente Menor)'}
                   </div>
+
                   <div className="grid grid-cols-2 gap-2 text-muted-foreground pt-1">
                     <div>
                       Nome: <strong className="text-foreground">{previewResult.signatory?.name}</strong>
@@ -259,19 +290,30 @@ export function CreateSignatureDialog({
                       CPF: <strong className="text-foreground">{maskCpf(previewResult.signatory?.cpf)}</strong>
                     </div>
                     <div>
+                      RG: <strong className="text-foreground">{maskRg(previewResult.signatory?.rg)}</strong>
+                    </div>
+                    <div>
                       Telefone:{' '}
                       <strong className="text-foreground">{maskPhone(previewResult.signatory?.phone)}</strong>
                     </div>
-                    <div>
+                    <div className="col-span-2">
                       E-mail:{' '}
                       <strong className="text-foreground">{maskEmail(previewResult.signatory?.email)}</strong>
                     </div>
                   </div>
-                  <div className="border-t pt-2 mt-2 text-[11px] text-muted-foreground flex items-center justify-between">
-                    <span>Variáveis preenchidas: <strong>{previewResult.variablesCount}</strong></span>
-                    <Badge variant="outline" className="text-emerald-600 border-emerald-600/40 text-[10px]">
-                      Pronto para Assinatura Real (Fase 2B)
-                    </Badge>
+
+                  {/* Variable Mappings Breakdown */}
+                  <div className="border-t pt-2 mt-2 text-[11px] text-muted-foreground bg-muted/20 p-2.5 rounded space-y-1">
+                    <div className="flex items-center justify-between font-medium text-foreground">
+                      <span>Mapeamentos avaliados: <strong>{previewResult.totalMappings || 16}</strong></span>
+                      <Badge variant="outline" className="text-emerald-600 border-emerald-600/40 text-[10px]">
+                        Pronto para Assinatura Real (Fase 2B)
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                      <div>Preenchidos: <strong className="text-emerald-600">{previewResult.filledCount ?? previewResult.variablesCount}</strong></div>
+                      <div>Não aplicáveis: <strong className="text-amber-600">{previewResult.nonApplicableCount ?? 0}</strong></div>
+                    </div>
                   </div>
                 </div>
               )}
