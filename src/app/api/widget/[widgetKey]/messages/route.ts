@@ -101,10 +101,28 @@ export async function POST(
       const { data: newContact } = await supabase.from('contacts').insert({
         account_id: config.account_id,
         user_id: ownerUserId,
-        name: 'Visitante do Site',
+        name: session?.visitor_name || 'Visitante do Site',
+        email: session?.visitor_email || null,
+        phone: session?.visitor_phone || null,
       }).select('id').single();
 
       contactId = newContact?.id;
+    } else if (contactId && session?.visitor_name) {
+      const { data: currentContact } = await supabase
+        .from('contacts')
+        .select('name')
+        .eq('id', contactId)
+        .maybeSingle();
+
+      if (!currentContact?.name || currentContact.name.toLowerCase().includes('visitante')) {
+        await supabase
+          .from('contacts')
+          .update({
+            name: session.visitor_name,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', contactId);
+      }
     }
 
     if (ownerUserId && contactId && !conversationId) {
@@ -127,6 +145,9 @@ export async function POST(
         visitor_token: visitorToken,
         contact_id: contactId || null,
         conversation_id: conversationId || null,
+        visitor_name: session?.visitor_name || null,
+        visitor_email: session?.visitor_email || null,
+        visitor_phone: session?.visitor_phone || null,
       }).select('*').single();
       session = newSession;
     } else if (session && (contactId !== session.contact_id || conversationId !== session.conversation_id)) {
@@ -159,11 +180,12 @@ export async function POST(
       return NextResponse.json({ error: msgErr.message }, { status: 500 });
     }
 
-    // 5) Update conversation metadata
+    // 5) Update conversation metadata and ensure status is open
     await supabase.from('conversations').update({
       last_message_text: content.trim(),
       last_message_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      status: 'open',
     }).eq('id', conversationId);
 
     // 6) Check and trigger AI Autopilot if enabled

@@ -49,18 +49,22 @@ export async function POST(
     let contactId = existingSession?.contact_id;
     let conversationId = existingSession?.conversation_id;
 
+    const effectiveName = name || existingSession?.visitor_name;
+    const effectiveEmail = email || existingSession?.visitor_email;
+    const effectivePhone = phone || existingSession?.visitor_phone;
+
     // 4) Create or update contact if details provided or missing
-    if (ownerUserId && (name || email || phone || !contactId)) {
+    if (ownerUserId && (effectiveName || effectiveEmail || effectivePhone || !contactId)) {
       let existingMatch: any = null;
 
       // Match contact by phone using dedupe helper
-      if (phone) {
-        existingMatch = await findExistingContact(supabase, config.account_id, phone);
+      if (effectivePhone) {
+        existingMatch = await findExistingContact(supabase, config.account_id, effectivePhone);
       }
 
       // Match contact by clean email if no phone match
-      if (!existingMatch && email) {
-        const cleanEmail = email.trim().toLowerCase();
+      if (!existingMatch && effectiveEmail) {
+        const cleanEmail = effectiveEmail.trim().toLowerCase();
         const { data: matchedByEmail } = await supabase
           .from('contacts')
           .select('id, name, email, phone')
@@ -77,33 +81,47 @@ export async function POST(
       if (existingMatch) {
         contactId = existingMatch.id;
         const updateData: Record<string, any> = { updated_at: new Date().toISOString() };
-        if (name && (!existingMatch.name || existingMatch.name === 'Visitante do Site')) {
-          updateData.name = name;
+        if (effectiveName && (!existingMatch.name || existingMatch.name.toLowerCase().includes('visitante'))) {
+          updateData.name = effectiveName;
         }
-        if (email && !existingMatch.email) {
-          updateData.email = email.trim().toLowerCase();
+        if (effectiveEmail && !existingMatch.email) {
+          updateData.email = effectiveEmail.trim().toLowerCase();
         }
-        if (phone && !existingMatch.phone) {
-          updateData.phone = phone;
+        if (effectivePhone && !existingMatch.phone) {
+          updateData.phone = effectivePhone;
         }
 
         if (Object.keys(updateData).length > 1) {
           await supabase.from('contacts').update(updateData).eq('id', contactId);
         }
       } else if (contactId) {
-        const updateData: Record<string, any> = { updated_at: new Date().toISOString() };
-        if (name) updateData.name = name;
-        if (email) updateData.email = email.trim().toLowerCase();
-        if (phone) updateData.phone = phone;
+        const { data: currentContact } = await supabase
+          .from('contacts')
+          .select('name, email, phone')
+          .eq('id', contactId)
+          .maybeSingle();
 
-        await supabase.from('contacts').update(updateData).eq('id', contactId);
+        const updateData: Record<string, any> = { updated_at: new Date().toISOString() };
+        if (effectiveName && (!currentContact?.name || currentContact.name.toLowerCase().includes('visitante'))) {
+          updateData.name = effectiveName;
+        }
+        if (effectiveEmail && !currentContact?.email) {
+          updateData.email = effectiveEmail.trim().toLowerCase();
+        }
+        if (effectivePhone && !currentContact?.phone) {
+          updateData.phone = effectivePhone;
+        }
+
+        if (Object.keys(updateData).length > 1) {
+          await supabase.from('contacts').update(updateData).eq('id', contactId);
+        }
       } else {
         const { data: newContact } = await supabase.from('contacts').insert({
           account_id: config.account_id,
           user_id: ownerUserId,
-          name: name || 'Visitante do Site',
-          email: email ? email.trim().toLowerCase() : null,
-          phone: phone || null,
+          name: effectiveName || 'Visitante do Site',
+          email: effectiveEmail ? effectiveEmail.trim().toLowerCase() : null,
+          phone: effectivePhone || null,
         }).select('id').single();
 
         contactId = newContact?.id;

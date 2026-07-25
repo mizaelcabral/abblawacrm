@@ -190,12 +190,19 @@ export default function WidgetClient({
   };
 
   useEffect(() => {
+    let cachedName = '';
+    let cachedEmail = '';
+    let cachedPhone = '';
+
     // 1) Check local storage identification cache for immediate rendering
     if (typeof window !== 'undefined') {
       const isLocallyIdentified = localStorage.getItem(`abbla_widget_identified_${widgetKey}`);
       if (isLocallyIdentified === 'true') {
         setIdentified(true);
       }
+      cachedName = localStorage.getItem(`abbla_widget_lead_name_${widgetKey}`) || '';
+      cachedEmail = localStorage.getItem(`abbla_widget_lead_email_${widgetKey}`) || '';
+      cachedPhone = localStorage.getItem(`abbla_widget_lead_phone_${widgetKey}`) || '';
     }
 
     // 2) Fetch Widget Config
@@ -214,7 +221,13 @@ export default function WidgetClient({
     fetch(`/api/widget/${widgetKey}/session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visitorToken, metadata: { pageUrl } }),
+      body: JSON.stringify({
+        visitorToken,
+        name: cachedName || undefined,
+        email: cachedEmail || undefined,
+        phone: cachedPhone || undefined,
+        metadata: { pageUrl },
+      }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -225,6 +238,9 @@ export default function WidgetClient({
             setIdentified(true);
             if (typeof window !== 'undefined') {
               localStorage.setItem(`abbla_widget_identified_${widgetKey}`, 'true');
+              if (data.session.visitor_name) localStorage.setItem(`abbla_widget_lead_name_${widgetKey}`, data.session.visitor_name);
+              if (data.session.visitor_email) localStorage.setItem(`abbla_widget_lead_email_${widgetKey}`, data.session.visitor_email);
+              if (data.session.visitor_phone) localStorage.setItem(`abbla_widget_lead_phone_${widgetKey}`, data.session.visitor_phone);
             }
           }
         }
@@ -315,6 +331,9 @@ export default function WidgetClient({
         setIdentified(true);
         if (typeof window !== 'undefined') {
           localStorage.setItem(`abbla_widget_identified_${widgetKey}`, 'true');
+          if (name) localStorage.setItem(`abbla_widget_lead_name_${widgetKey}`, name);
+          if (email) localStorage.setItem(`abbla_widget_lead_email_${widgetKey}`, email);
+          if (phone) localStorage.setItem(`abbla_widget_lead_phone_${widgetKey}`, phone);
         }
       } else {
         console.error('Failed to submit lead form:', res.status, res.statusText);
