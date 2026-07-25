@@ -57,6 +57,7 @@ describe('Public Widget Session API (/api/widget/[widgetKey]/session)', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       or: vi.fn().mockReturnThis(),
+      like: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue({ data: defaultSingleData, error: null }),
@@ -66,16 +67,18 @@ describe('Public Widget Session API (/api/widget/[widgetKey]/session)', () => {
     });
 
     const mockConfigChain = createGenericChain({ id: 'w-1', account_id: 'acc-1' });
+    const mockAccountChain = createGenericChain({ owner_user_id: 'owner-1' });
     const mockProfileChain = createGenericChain({ user_id: 'owner-1' });
     const mockSessionChain = createGenericChain({ id: 'sess-1', visitor_token: 'vtoken-123', contact_id: 'c-1', conversation_id: 'conv-1' });
     const mockContactChain = createGenericChain({ id: 'c-1' });
     const mockConvChain = createGenericChain({ id: 'conv-1' });
     const mockPipelineChain = createGenericChain([{ id: 'pipe-1' }]);
     const mockStageChain = createGenericChain([{ id: 'stage-1' }]);
-    const mockDealChain = createGenericChain({ id: 'deal-1' });
+    const mockDealChain = createGenericChain([{ id: 'deal-1' }]);
 
     mockAdminClient.from.mockImplementation((table: string) => {
       if (table === 'chat_widget_configs') return mockConfigChain;
+      if (table === 'accounts') return mockAccountChain;
       if (table === 'profiles') return mockProfileChain;
       if (table === 'chat_widget_sessions') return mockSessionChain;
       if (table === 'contacts') return mockContactChain;
@@ -92,6 +95,7 @@ describe('Public Widget Session API (/api/widget/[widgetKey]/session)', () => {
         visitorToken: 'vtoken-123',
         name: 'Maria Silva',
         email: 'maria@example.com',
+        phone: '(11) 99999-9999',
       }),
     });
 
@@ -102,3 +106,4 @@ describe('Public Widget Session API (/api/widget/[widgetKey]/session)', () => {
     expect(body.conversationId).toBe('conv-1');
   });
 });
+

@@ -306,14 +306,18 @@ export default function WidgetClient({
     e.preventDefault();
     setLoading(true);
     try {
-      await fetch(`/api/widget/${widgetKey}/session`, {
+      const res = await fetch(`/api/widget/${widgetKey}/session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ visitorToken, name, email, phone }),
       });
-      setIdentified(true);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(`abbla_widget_identified_${widgetKey}`, 'true');
+      if (res.ok) {
+        setIdentified(true);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`abbla_widget_identified_${widgetKey}`, 'true');
+        }
+      } else {
+        console.error('Failed to submit lead form:', res.status, res.statusText);
       }
     } catch (err) {
       console.error(err);
