@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/client';
-import { createClient as createServerClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/automations/admin-client';
 import { resolveSignatory } from '@/lib/signatures/signatory-resolver';
 import { resolveSystemValue } from '@/lib/signatures/system-value-resolver';
@@ -21,7 +20,7 @@ export async function POST(request: Request) {
   const correlationId = generateCorrelationId();
 
   try {
-    const supabase = await createServerClient();
+    const supabase = await createClient();
 
     const {
       data: { user },
@@ -37,13 +36,20 @@ export async function POST(request: Request) {
 
     const admin = supabaseAdmin();
 
-    const { data: profile } = await admin
+    // 1. Canonical Tenant Resolution (same as /api/signature-templates & /api/contacts)
+    const { data: profile, error: profErr } = await admin
       .from('profiles')
-      .select('account_id')
+      .select('account_id, email, account_role')
       .eq('user_id', user.id)
       .maybeSingle();
 
-    if (!profile || !profile.account_id) {
+    if (profErr || !profile || !profile.account_id) {
+      console.warn(`[POST /api/signature-requests/preview] Profile/Account Resolution Failed (${correlationId}):`, {
+        userId: user.id,
+        hasProfile: !!profile,
+        hasAccountId: !!profile?.account_id,
+        error: profErr?.message,
+      });
       return NextResponse.json(
         { error: 'Perfil sem conta ativa.', correlation_id: correlationId },
         { status: 403 }
@@ -64,7 +70,7 @@ export async function POST(request: Request) {
 
     const { contact_id, signature_template_id, deal_id } = body;
 
-    // 1. Contract & Format Audits
+    // 2. Contract & Format Audits
     if (!contact_id) {
       return NextResponse.json(
         { error: 'O parâmetro contact_id é obrigatório.', correlation_id: correlationId },
@@ -111,7 +117,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Fetch Active Internal Template
+    // 3. Fetch Active Internal Template
     const { data: template, error: tplErr } = await admin
       .from('signature_templates')
       .select('*')
@@ -133,17 +139,24 @@ export async function POST(request: Request) {
       );
     }
 
-    // 3. Fetch Contact with Aggregated Custom Fields
+    // 4. Fetch Contact with Relational Custom Fields (using fixed contact-helper)
     const contact = await getContactWithCustomFields(accountId, contact_id);
 
     if (!contact) {
+      console.warn(`[POST /api/signature-requests/preview] Contact Not Found (${correlationId}):`, {
+        userId: user.id,
+        resolvedAccountId: accountId,
+        requestedContactId: contact_id,
+        resolutionSource: 'profile',
+      });
+
       return NextResponse.json(
         { error: 'Contato não encontrado nesta conta.', correlation_id: correlationId },
         { status: 404 }
       );
     }
 
-    // 4. Deal Link Validation (if provided)
+    // 5. Deal Link Validation (if provided)
     if (deal_id) {
       if (!UUID_REGEX.test(deal_id)) {
         return NextResponse.json(
@@ -167,7 +180,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 5. Resolve Signatory Rule
+    // 6. Resolve Signatory Rule
     const signatoryRes = resolveSignatory(template.signatory_rule, contact);
     if (signatoryRes.is_blocked || !signatoryRes.signatory) {
       return NextResponse.json({
@@ -178,7 +191,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // 6. Evaluate Variable Mappings (DOCX de/para)
+    // 7. Evaluate Variable Mappings (DOCX de/para)
     const customFields = contact.custom_fields || {};
     const variables: Array<{ de: string; para: string; is_required: boolean }> = [];
     const missingRequiredVariables: string[] = [];
@@ -231,7 +244,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // 7. Format Instruction Message Preview
+    // 8. Format Instruction Message Preview
     const firstName = contact.name ? contact.name.split(' ')[0] : 'Cliente';
     const formattedMsg = formatInstructionMessage({
       templateText: template.instruction_message_template,
@@ -241,13 +254,16 @@ export async function POST(request: Request) {
     });
 
     // Sanitized Server Log (NO PII)
-    console.info(`[POST /api/signature-requests/preview] Success`, {
+    console.info(`[POST /api/signature-requests/preview] Success (${correlationId}):`, {
       correlationId,
-      accountId,
       userId: user.id,
+      resolvedAccountId: accountId,
+      requestedContactId: contact_id,
+      contactAccountId: contact.account_id,
       templateId: template.id,
       signatoryType: signatoryRes.signatory.signatory_type,
       variablesCount: variables.length,
+      resolutionSource: 'profile',
     });
 
     return NextResponse.json({
