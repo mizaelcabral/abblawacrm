@@ -45,6 +45,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { DocumentUploadDialog, DOCUMENT_TYPES } from './document-upload-dialog';
+import { CreateSignatureDialog } from '@/components/signatures/create-signature-dialog';
 
 interface ContactDetailViewProps {
   open: boolean;
@@ -98,6 +99,7 @@ export function ContactDetailView({
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [documentUploadOpen, setDocumentUploadOpen] = useState(false);
+  const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
 
   const fetchContact = useCallback(async () => {
@@ -383,11 +385,34 @@ export function ContactDetailView({
       .slice(0, 2);
   }
 
-  // Calculate incomplete custom fields
+  // Active custom fields
   const activeFields = customFields.filter((f) => f.is_active !== false);
-  const incompleteCount = activeFields.filter(
-    (f) => !customValues[f.id] || !customValues[f.id].trim()
-  ).length;
+
+  // Resolve is_minor value
+  const isMinorField = activeFields.find((f) => f.field_key === 'is_minor');
+  const isMinorRaw = isMinorField ? customValues[isMinorField.id] : undefined;
+
+  let isMinor: boolean | null = null;
+  if (isMinorRaw === 'true') isMinor = true;
+  if (isMinorRaw === 'false') isMinor = false;
+
+  // Calculate incomplete custom fields with ADULT vs MINOR conditional logic
+  const incompleteCount = activeFields.filter((f) => {
+    const val = customValues[f.id];
+    const isMissing = !val || !val.trim();
+    if (!isMissing) return false;
+
+    const isGuardianField =
+      f.group_name === 'Responsável legal' ||
+      (f.field_key && f.field_key.startsWith('guardian_'));
+
+    // Rule: If patient is an adult (is_minor === false), guardian fields do NOT count as pending/incomplete!
+    if (isMinor === false && isGuardianField) {
+      return false;
+    }
+
+    return true;
+  }).length;
 
   // Group custom fields
   const groupedFields: Record<string, CustomField[]> = {};
@@ -674,6 +699,27 @@ export function ContactDetailView({
                   </p>
                 ) : (
                   <div className="space-y-4">
+                    {/* Action Card: Signature Request Preview */}
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex items-center justify-between gap-3">
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
+                          <ShieldCheck className="size-4 text-primary shrink-0" />
+                          <span>Assinatura Eletrônica ZapSign</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          Pré-visualize a procuração sem criar registros ou chamadas externas.
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => setSignatureDialogOpen(true)}
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-7 shrink-0 gap-1"
+                      >
+                        <FileText className="size-3.5" />
+                        Pré-visualizar procuração
+                      </Button>
+                    </div>
+
                     {incompleteCount > 0 && (
                       <div className="rounded-md border border-amber-500/20 bg-amber-500/10 p-2.5 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-2">
                         <AlertCircle className="size-4 shrink-0" />
@@ -685,13 +731,55 @@ export function ContactDetailView({
 
                     {Object.entries(groupedFields).map(([groupName, groupFields]) => (
                       <div key={groupName} className="space-y-2.5 rounded-lg border border-border bg-card p-3">
-                        <h4 className="text-xs font-semibold text-foreground border-b border-border pb-1.5">
-                          {groupName}
+                        <h4 className="text-xs font-semibold text-foreground border-b border-border pb-1.5 flex items-center justify-between">
+                          <span>{groupName}</span>
+                          {groupName === 'Responsável legal' && isMinor === false && (
+                            <Badge variant="outline" className="text-[10px] text-muted-foreground font-normal">
+                              Não aplicável para paciente adulto
+                            </Badge>
+                          )}
+                          {groupName === 'Responsável legal' && isMinor === null && (
+                            <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/30 font-normal">
+                              Defina se o paciente é menor de idade
+                            </Badge>
+                          )}
                         </h4>
                         <div className="space-y-2">
                           {groupFields.map((field) => {
                             const val = customValues[field.id] ?? '';
-                            const isIncomplete = !val.trim();
+                            const isMissing = !val.trim();
+                            const isGuardianField =
+                              groupName === 'Responsável legal' ||
+                              (field.field_key && field.field_key.startsWith('guardian_'));
+
+                            let statusBadge: React.ReactNode = null;
+                            if (isGuardianField) {
+                              if (isMinor === false) {
+                                statusBadge = (
+                                  <span className="text-[10px] text-muted-foreground font-normal">
+                                    Não aplicável para paciente adulto
+                                  </span>
+                                );
+                              } else if (isMinor === null) {
+                                statusBadge = (
+                                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                                    Defina se o paciente é menor de idade
+                                  </span>
+                                );
+                              } else if (isMissing) {
+                                statusBadge = (
+                                  <span className="text-[10px] text-amber-500 font-medium">
+                                    Incompleto
+                                  </span>
+                                );
+                              }
+                            } else if (isMissing) {
+                              statusBadge = (
+                                <span className="text-[10px] text-amber-500 font-medium">
+                                  Incompleto
+                                </span>
+                              );
+                            }
 
                             return (
                               <div key={field.id} className="space-y-1">
@@ -699,11 +787,7 @@ export function ContactDetailView({
                                   <Label className="text-xs text-muted-foreground">
                                     {field.field_name}
                                   </Label>
-                                  {isIncomplete && (
-                                    <span className="text-[10px] text-amber-500 font-medium">
-                                      Incompleto
-                                    </span>
-                                  )}
+                                  {statusBadge}
                                 </div>
 
                                 {field.field_type === 'boolean' ? (
@@ -719,7 +803,7 @@ export function ContactDetailView({
                                   >
                                     <option value="">Não informado</option>
                                     <option value="true">Sim</option>
-                                    <option value="false">Não</option>
+                                    <option value="false">Não (Paciente Adulto)</option>
                                   </select>
                                 ) : field.field_type === 'date' ? (
                                   <Input
@@ -774,7 +858,28 @@ export function ContactDetailView({
               {/* Documents Tab */}
               <TabsContent value="documents" className="flex-1 overflow-y-auto px-4 py-3">
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  {/* Action Card: Signature Request Preview */}
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
+                        <ShieldCheck className="size-4 text-primary shrink-0" />
+                        <span>Assinatura Eletrônica / ZapSign</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        Conferência e pré-visualização de procurações da Anvisa sem efeitos colaterais.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => setSignatureDialogOpen(true)}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-7 shrink-0 gap-1.5"
+                    >
+                      <FileText className="size-3.5" />
+                      Pré-visualizar procuração
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center justify-between border-t pt-2">
                     <div>
                       <h4 className="text-xs font-medium text-foreground">Documentos do Contato</h4>
                       <p className="text-[11px] text-muted-foreground">
@@ -948,6 +1053,17 @@ export function ContactDetailView({
             contactId={contactId}
             deals={deals}
             onSuccess={fetchDocuments}
+          />
+        )}
+
+        {/* Signature Request Preview Dialog */}
+        {contactId && (
+          <CreateSignatureDialog
+            open={signatureDialogOpen}
+            onOpenChange={setSignatureDialogOpen}
+            contactId={contactId}
+            contactName={contact?.name}
+            deals={deals}
           />
         )}
       </SheetContent>

@@ -9,7 +9,6 @@ import {
   UserCheck,
   ShieldAlert,
   Eye,
-  CheckCircle2,
 } from 'lucide-react';
 import {
   Dialog,
@@ -26,21 +25,22 @@ import { SignatureTemplate } from '@/types/signatures';
 interface CreateSignatureDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  contact: {
-    id: string;
-    name: string;
-    email?: string | null;
-    phone?: string | null;
-    company?: string | null;
-    custom_fields?: Record<string, any> | null;
-  };
-  dealId?: string | null;
+  contactId: string;
+  contactName?: string;
+  deals?: Array<{ id: string; title: string }>;
 }
 
-export function CreateSignatureDialog({ open, onOpenChange, contact, dealId }: CreateSignatureDialogProps) {
+export function CreateSignatureDialog({
+  open,
+  onOpenChange,
+  contactId,
+  contactName,
+  deals = [],
+}: CreateSignatureDialogProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [templates, setTemplates] = useState<SignatureTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<SignatureTemplate | null>(null);
+  const [selectedDealId, setSelectedDealId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,9 +61,10 @@ export function CreateSignatureDialog({ open, onOpenChange, contact, dealId }: C
       setError(null);
       setSelectedTemplate(null);
       setPreviewResult(null);
+      setSelectedDealId(deals[0]?.id || '');
       fetchActiveTemplates();
     }
-  }, [open]);
+  }, [open, deals]);
 
   const fetchActiveTemplates = async () => {
     setLoading(true);
@@ -96,8 +97,9 @@ export function CreateSignatureDialog({ open, onOpenChange, contact, dealId }: C
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contact_id: contact.id,
+          contact_id: contactId,
           signature_template_id: template.id,
+          deal_id: selectedDealId || undefined,
         }),
       });
 
@@ -152,6 +154,24 @@ export function CreateSignatureDialog({ open, onOpenChange, contact, dealId }: C
 
         {step === 1 && (
           <div className="space-y-4 py-2">
+            {deals.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-muted-foreground">Vincular Negócio (Opcional)</label>
+                <select
+                  className="w-full border rounded h-8 text-xs bg-background px-2"
+                  value={selectedDealId}
+                  onChange={(e) => setSelectedDealId(e.target.value)}
+                >
+                  <option value="">Nenhum negócio selecionado</option>
+                  {deals.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {loading ? (
               <div className="flex items-center justify-center p-8 text-muted-foreground text-sm">
                 <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando modelos...
@@ -185,7 +205,7 @@ export function CreateSignatureDialog({ open, onOpenChange, contact, dealId }: C
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                        <Eye className="w-3 h-3 text-primary" /> Clique para conferir dados e variáveis
+                        <Eye className="w-3.5 h-3.5 text-primary" /> Clique para conferir dados e variáveis
                       </p>
                     </div>
                   ))}
@@ -228,8 +248,8 @@ export function CreateSignatureDialog({ open, onOpenChange, contact, dealId }: C
                   <div className="flex items-center gap-2 text-emerald-600 font-semibold">
                     <UserCheck className="w-4 h-4" />
                     {previewResult.signatory?.signatory_type === 'contact'
-                      ? 'Signatário: Paciente (Próprio Contato)'
-                      : 'Signatário: Responsável Legal (Menor de Idade)'}
+                      ? 'Signatário: Paciente Adulto (Próprio Contato)'
+                      : 'Signatário: Responsável Legal (Paciente Menor)'}
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-muted-foreground pt-1">
                     <div>
