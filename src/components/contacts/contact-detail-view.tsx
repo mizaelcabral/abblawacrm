@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
+import { normalizeDateToYMD } from '@/lib/signatures/contact-helper';
 import type {
   Contact,
   Tag,
@@ -171,8 +172,14 @@ export function ContactDetailView({
     if (fieldsRes.data) setCustomFields(fieldsRes.data as CustomField[]);
     if (valuesRes.data) {
       const map: Record<string, string> = {};
+      const fieldsList = (fieldsRes.data as CustomField[]) || [];
       valuesRes.data.forEach((v) => {
-        map[v.custom_field_id] = v.value ?? '';
+        const fieldDef = fieldsList.find((f) => f.id === v.custom_field_id);
+        let rawVal = v.value ?? '';
+        if (fieldDef?.field_type === 'date' || fieldDef?.field_key === 'birth_date') {
+          rawVal = normalizeDateToYMD(rawVal);
+        }
+        map[v.custom_field_id] = rawVal;
       });
       setCustomValues(map);
     }
@@ -335,14 +342,21 @@ export function ContactDetailView({
         .eq('contact_id', contactId);
 
       const rows = Object.entries(customValues)
-        .filter(([, val]) => val.trim())
-        .map(([fieldId, val]) => ({
-          contact_id: contactId,
-          custom_field_id: fieldId,
-          value: val.trim(),
-          updated_at: new Date().toISOString(),
-          updated_by_user_id: user?.id || null,
-        }));
+        .filter(([, val]) => val && val.trim())
+        .map(([fieldId, val]) => {
+          const fieldDef = customFields.find((f) => f.id === fieldId);
+          let finalVal = val.trim();
+          if (fieldDef?.field_type === 'date' || fieldDef?.field_key === 'birth_date') {
+            finalVal = normalizeDateToYMD(finalVal);
+          }
+          return {
+            contact_id: contactId,
+            custom_field_id: fieldId,
+            value: finalVal,
+            updated_at: new Date().toISOString(),
+            updated_by_user_id: user?.id || null,
+          };
+        });
 
       if (rows.length > 0) {
         const { error } = await supabase
@@ -352,6 +366,8 @@ export function ContactDetailView({
       }
 
       toast.success('Campos personalizados salvos');
+      await fetchCustomFields();
+      onUpdated();
     } catch {
       toast.error('Falha ao salvar campos personalizados');
     }
@@ -398,7 +414,10 @@ export function ContactDetailView({
 
   // Calculate incomplete custom fields with ADULT vs MINOR conditional logic
   const incompleteCount = activeFields.filter((f) => {
-    const val = customValues[f.id];
+    let val = customValues[f.id];
+    if (f.field_type === 'date' || f.field_key === 'birth_date') {
+      val = normalizeDateToYMD(val);
+    }
     const isMissing = !val || !val.trim();
     if (!isMissing) return false;
 
@@ -746,7 +765,10 @@ export function ContactDetailView({
                         </h4>
                         <div className="space-y-2">
                           {groupFields.map((field) => {
-                            const val = customValues[field.id] ?? '';
+                            let val = customValues[field.id] ?? '';
+                            if (field.field_type === 'date' || field.field_key === 'birth_date') {
+                              val = normalizeDateToYMD(val);
+                            }
                             const isMissing = !val.trim();
                             const isGuardianField =
                               groupName === 'Responsável legal' ||
@@ -805,8 +827,8 @@ export function ContactDetailView({
                                     <option value="true">Sim</option>
                                     <option value="false">Não (Paciente Adulto)</option>
                                   </select>
-                                ) : field.field_type === 'date' ? (
-                                  <Input
+                                ) : field.field_type === 'date' || field.field_key === 'birth_date' ? (
+                                  <input
                                     type="date"
                                     value={val}
                                     onChange={(e) =>
@@ -815,7 +837,7 @@ export function ContactDetailView({
                                         [field.id]: e.target.value,
                                       }))
                                     }
-                                    className="bg-muted border-border text-foreground h-8 text-xs"
+                                    className="bg-muted border border-border text-foreground h-8 text-xs rounded-md px-2.5 w-full focus:outline-none focus:ring-1 focus:ring-primary"
                                   />
                                 ) : (
                                   <Input
@@ -858,41 +880,17 @@ export function ContactDetailView({
               {/* Documents Tab */}
               <TabsContent value="documents" className="flex-1 overflow-y-auto px-4 py-3">
                 <div className="space-y-3">
-                  {/* Action Card: Signature Request Preview */}
-                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div className="space-y-0.5 min-w-0">
-                      <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
-                        <ShieldCheck className="size-4 text-primary shrink-0" />
-                        <span>Assinatura Eletrônica / ZapSign</span>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground truncate">
-                        Conferência e pré-visualização de procurações da Anvisa sem efeitos colaterais.
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => setSignatureDialogOpen(true)}
-                      className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-7 shrink-0 gap-1.5"
-                    >
-                      <FileText className="size-3.5" />
-                      Pré-visualizar procuração
-                    </Button>
-                  </div>
-
-                  <div className="flex items-center justify-between border-t pt-2">
-                    <div>
-                      <h4 className="text-xs font-medium text-foreground">Documentos do Contato</h4>
-                      <p className="text-[11px] text-muted-foreground">
-                        Arquivos privados enviados pela equipe
-                      </p>
-                    </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      Documentos vinculados ao contato
+                    </p>
                     <Button
                       size="sm"
                       onClick={() => setDocumentUploadOpen(true)}
-                      className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-7"
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-7 gap-1"
                     >
-                      <Plus className="size-3.5 mr-1" />
-                      Adicionar Documento
+                      <Plus className="size-3.5" />
+                      Enviar Documento
                     </Button>
                   </div>
 
@@ -901,82 +899,53 @@ export function ContactDetailView({
                       <Loader2 className="size-5 animate-spin text-muted-foreground" />
                     </div>
                   ) : documents.length === 0 ? (
-                    <div className="text-center py-8 border border-dashed border-border rounded-lg p-4">
-                      <FileText className="size-8 text-muted-foreground mx-auto mb-2 opacity-50" />
-                      <p className="text-xs text-muted-foreground">
-                        Nenhum documento cadastrado neste contato.
-                      </p>
+                    <div className="p-6 text-center border border-dashed rounded-lg text-muted-foreground space-y-1">
+                      <FileText className="size-6 mx-auto opacity-50" />
+                      <p className="text-xs font-medium">Nenhum documento enviado ainda.</p>
+                      <p className="text-[11px]">Faça upload de procurações, laudos ou comprovantes.</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
                       {documents.map((doc) => {
-                        const typeLabel =
-                          DOCUMENT_TYPES.find((t) => t.value === doc.document_type)?.label ||
-                          doc.document_type;
-
-                        const isExpired =
-                          doc.valid_until && new Date(doc.valid_until) < new Date();
-
+                        const typeInfo = DOCUMENT_TYPES.find((t) => t.value === doc.document_type) || {
+                          label: doc.document_type,
+                        };
                         return (
                           <div
                             key={doc.id}
-                            className="rounded-lg border border-border bg-muted/40 p-3 space-y-2"
+                            className="p-3 rounded-lg border border-border bg-card flex items-center justify-between gap-3 text-xs"
                           >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <FileText className="size-4 text-primary shrink-0" />
-                                  <span className="text-xs font-medium text-foreground truncate">
-                                    {doc.display_name}
-                                  </span>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-muted-foreground">
-                                  <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">
-                                    {typeLabel}
-                                  </span>
-                                  {doc.deal && (
-                                    <span className="rounded bg-primary/10 text-primary px-1.5 py-0.5">
-                                      Negócio: {doc.deal.title}
-                                    </span>
-                                  )}
-                                  {doc.valid_until && (
-                                    <span
-                                      className={`flex items-center gap-1 ${
-                                        isExpired
-                                          ? 'text-red-500 font-semibold'
-                                          : 'text-muted-foreground'
-                                      }`}
-                                    >
-                                      <Clock className="size-3" />
-                                      Validade: {new Date(doc.valid_until).toLocaleDateString('pt-BR')}
-                                      {isExpired && ' (VENCIDO)'}
-                                    </span>
-                                  )}
-                                </div>
+                            <div className="space-y-1 min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-foreground truncate">
+                                  {doc.display_name}
+                                </span>
+                                <Badge variant="outline" className="text-[10px] shrink-0">
+                                  {typeInfo.label}
+                                </Badge>
                               </div>
-
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={downloadingDocId === doc.id}
-                                onClick={() => handleDownloadDocument(doc)}
-                                className="h-7 text-xs border-border shrink-0"
-                                title="Visualizar / Baixar documento com URL segura temporária"
-                              >
-                                {downloadingDocId === doc.id ? (
-                                  <Loader2 className="size-3 animate-spin mr-1" />
-                                ) : (
-                                  <Download className="size-3 mr-1 text-primary" />
-                                )}
-                                Visualizar
-                              </Button>
+                              <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                                {doc.deal && <span>Negócio: {doc.deal.title}</span>}
+                                <span>v{doc.version}</span>
+                                <span>
+                                  {new Date(doc.created_at).toLocaleDateString('pt-BR')}
+                                </span>
+                              </div>
                             </div>
-
-                            {doc.rejection_reason && (
-                              <p className="text-[11px] text-muted-foreground bg-muted p-1.5 rounded border border-border/50">
-                                <span className="font-semibold">Obs:</span> {doc.rejection_reason}
-                              </p>
-                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDownloadDocument(doc)}
+                              disabled={downloadingDocId === doc.id}
+                              className="h-7 text-xs gap-1 shrink-0"
+                            >
+                              {downloadingDocId === doc.id ? (
+                                <Loader2 className="size-3 animate-spin" />
+                              ) : (
+                                <Download className="size-3" />
+                              )}
+                              Baixar
+                            </Button>
                           </div>
                         );
                       })}
@@ -987,59 +956,41 @@ export function ContactDetailView({
 
               {/* Deals Tab */}
               <TabsContent value="deals" className="flex-1 overflow-y-auto px-4 py-3">
-                {loadingDeals ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="size-5 animate-spin text-primary" />
-                  </div>
-                ) : deals.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Nenhum negócio ainda</p>
-                ) : (
-                  <div className="space-y-2">
-                    {deals.map((deal) => (
+                <div className="space-y-2">
+                  {loadingDeals ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : deals.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      Nenhum negócio vinculado a este contato.
+                    </p>
+                  ) : (
+                    deals.map((deal) => (
                       <div
                         key={deal.id}
-                        className="rounded-lg border border-border bg-muted/50 p-3"
+                        className="rounded-lg bg-muted/50 border border-border/50 p-3 space-y-1.5"
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium text-foreground">
+                          <p className="text-sm font-medium text-popover-foreground truncate">
                             {deal.title}
                           </p>
-                          {deal.stage && (
-                            <span
-                              className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
-                              style={{
-                                backgroundColor: `${deal.stage.color}20`,
-                                color: deal.stage.color,
-                              }}
-                            >
-                              {deal.stage.name}
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <DollarSign className="size-3" />
-                            {formatCurrency(
-                              deal.value ?? 0,
-                              deal.currency || defaultCurrency,
-                            )}
+                          <span className="text-xs font-semibold text-primary shrink-0">
+                            {formatCurrency(deal.value, defaultCurrency)}
                           </span>
-                          {deal.status && deal.status !== 'open' && (
-                            <span
-                              className={
-                                deal.status === 'won'
-                                  ? 'text-primary'
-                                  : 'text-red-400'
-                              }
-                            >
-                              {deal.status === 'won' ? 'ganho' : deal.status === 'lost' ? 'perdido' : 'aberto'}
-                            </span>
-                          )}
                         </div>
+                        {deal.stage && (
+                          <Badge
+                            variant="secondary"
+                            className="bg-muted text-muted-foreground text-xs"
+                          >
+                            {deal.stage.name}
+                          </Badge>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
+                    ))
+                  )}
+                </div>
               </TabsContent>
             </Tabs>
           </div>
@@ -1056,14 +1007,14 @@ export function ContactDetailView({
           />
         )}
 
-        {/* Signature Request Preview Dialog */}
+        {/* Signature Request Dialog */}
         {contactId && (
           <CreateSignatureDialog
             open={signatureDialogOpen}
             onOpenChange={setSignatureDialogOpen}
             contactId={contactId}
             contactName={contact?.name}
-            deals={deals}
+            deals={deals.map((d) => ({ id: d.id, title: d.title }))}
           />
         )}
       </SheetContent>

@@ -2,10 +2,17 @@ import { resolveSignatory } from './signatory-resolver';
 import { resolveSystemValue } from './system-value-resolver';
 import { formatInstructionMessage } from './instruction-message-formatter';
 import { MockSignatureAdapter } from './provider-adapter';
+import { normalizeDateToYMD } from './contact-helper';
 import { maskCpf, maskRg, maskPhone, maskEmail } from '@/components/signatures/create-signature-dialog';
 
 export function runPhase2ATests() {
   console.log('--- STARTING PHASE 2A REVISED CONTRACT & PREVIEW SCENARIOS TEST SUITE ---');
+
+  // 0. Date Normalization Helper Tests
+  console.assert(normalizeDateToYMD('2015-01-01') === '2015-01-01', 'YMD date string must remain 2015-01-01');
+  console.assert(normalizeDateToYMD('2015-01-01T00:00:00.000Z') === '2015-01-01', 'ISO date timestamp must extract 2015-01-01');
+  console.assert(normalizeDateToYMD('01/01/2015') === '2015-01-01', 'Brazilian DD/MM/YYYY date must normalize to 2015-01-01');
+  console.assert(normalizeDateToYMD('') === '', 'Empty date string must return empty string');
 
   // 1. Adult Complete Scenario
   const adultComplete = {
@@ -47,20 +54,21 @@ export function runPhase2ATests() {
   const maskedEmailResult = maskEmail(resAdultOk.signatory?.email);
   console.assert(maskedEmailResult === 'ad***@example.com', `Email mask must obscure name (got ${maskedEmailResult})`);
 
-  // 2. Minor Complete Scenario with Guardian
+  // 2. Minor Complete Scenario with Guardian & birth_date
   const minorComplete = {
     id: 'c_minor_full',
-    name: 'Paciente Menor Teste',
-    email: 'menor@example.com',
-    phone: '5511999998888',
+    name: 'TESTE RDC 660 - Paciente Fictício',
+    email: 'paciente.menor.teste@example.invalid',
+    phone: '5511000000000',
     custom_fields: {
       is_minor: true,
-      cpf: '11122233344',
-      rg: '123456789',
-      guardian_name: 'Responsável Legal Teste',
-      guardian_cpf: '99988877766',
-      guardian_phone: '5511977776666',
-      guardian_email: 'guardian@example.com',
+      birth_date: '2015-01-01',
+      cpf: '111.111.111-11',
+      rg: '11.111.111-1',
+      guardian_name: 'Responsável Legal Fictício',
+      guardian_cpf: '222.222.222-22',
+      guardian_phone: '5511000000999',
+      guardian_email: 'responsavel.legal.teste@example.invalid',
       guardian_relationship: 'Mãe',
     },
   };
@@ -68,12 +76,12 @@ export function runPhase2ATests() {
   const resMinorOk = resolveSignatory('guardian_if_minor', minorComplete);
   console.assert(!resMinorOk.is_blocked, 'Minor with complete guardian fields must be allowed');
   console.assert(resMinorOk.signatory?.signatory_type === 'guardian', 'Signatory must be guardian for minor');
-  console.assert(resMinorOk.signatory?.name === 'Responsável Legal Teste', 'Signatory name must be guardian');
-  console.assert(resMinorOk.signatory?.cpf === '99988877766', 'Signatory CPF must be guardian CPF');
+  console.assert(resMinorOk.signatory?.name === 'Responsável Legal Fictício', 'Signatory name must be guardian');
+  console.assert(resMinorOk.signatory?.cpf === '222.222.222-22', 'Signatory CPF must be guardian CPF');
   console.assert(resMinorOk.signatory?.cpf !== minorComplete.custom_fields.cpf, 'STRICT: Patient CPF must NOT be used as fallback for guardian');
 
   const maskedGuardianCpf = maskCpf(resMinorOk.signatory?.cpf);
-  console.assert(maskedGuardianCpf === '999.***.***-66', `Guardian CPF mask must be 999.***.***-66 (got ${maskedGuardianCpf})`);
+  console.assert(maskedGuardianCpf === '222.***.***-22', `Guardian CPF mask must be 222.***.***-22 (got ${maskedGuardianCpf})`);
 
   // 3. Malformed / Invalid Values Masking Scenarios
   console.assert(maskCpf('123') === '***.***.***-**', 'Short CPF must render safe generic mask ***.***.***-**');
