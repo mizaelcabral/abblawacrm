@@ -200,7 +200,7 @@ export default function FlowsPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 w-full max-w-full">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">

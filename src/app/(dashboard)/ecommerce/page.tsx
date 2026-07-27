@@ -235,7 +235,7 @@ export default function EcommerceOverviewPage() {
   // Helper to render full-width split onboarding layout (ponytail: beautiful full-width columns with feature cards)
   const renderOnboardingLayout = (mainCard: React.ReactNode) => {
     return (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full items-start">
+      <div className="p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-3 gap-6 w-full max-w-full items-start">
         {/* Lado Esquerdo: Card Principal de Ação (ocupa 2 colunas) */}
         <div className="lg:col-span-2 space-y-6">
           {mainCard}
@@ -594,7 +594,7 @@ export default function EcommerceOverviewPage() {
 
   // FASE 4: Configurado com sucesso. Exibe Métricas + Vendas
   return (
-    <div className="space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 w-full max-w-full">
       {/* Cards de Métricas */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-border">

@@ -332,7 +332,7 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="space-y-6 p-1">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 w-full max-w-full">
       {/* Top Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

@@ -148,7 +148,7 @@ export default function BroadcastsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 w-full max-w-full">
       {/* Top indeterminate progress bar: only visible while a broadcast
           is mid-send. Pure CSS animation so no extra deps. */}
       {anySending && (

@@ -101,7 +101,7 @@ export default function DashboardPage() {
   )
 
   return (
-    <div className="space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 w-full max-w-full">
       {/* Cuba Top Row: Welcome Banner + 4 KPI Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* Welcome Card (Spans 7 cols on LG) */}
