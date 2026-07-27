@@ -82,7 +82,17 @@ export function CubaTopContacts({ items, loading }: CubaTopContactsProps) {
               </tr>
             ) : (
               filteredItems.slice(0, 6).map((item) => {
-                const initials = getInitials(item.text)
+                const kindLabels: Record<string, string> = {
+                  message: 'Mensagem',
+                  deal: 'Negócio',
+                  contact: 'Contato',
+                  broadcast: 'Transmissão',
+                  automation: 'Automação',
+                }
+                const formattedText = item.text
+                  .replace(/^New message from /i, 'Nova mensagem de ')
+                  .replace(/^New contact: /i, 'Novo contato: ')
+                const initials = getInitials(formattedText)
 
                 return (
                   <tr
@@ -96,12 +106,12 @@ export function CubaTopContacts({ items, loading }: CubaTopContactsProps) {
                     <td className="py-3 pl-1">
                       <div className="flex items-center gap-3">
                         <div
-                          className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold border select-none ${getAvatarColor(item.text)}`}
+                          className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold border select-none ${getAvatarColor(formattedText)}`}
                         >
                           {initials}
                         </div>
                         <p className="font-semibold text-foreground group-hover:text-primary transition-colors truncate max-w-xs sm:max-w-md">
-                          {item.text}
+                          {formattedText}
                         </p>
                       </div>
                     </td>
@@ -114,7 +124,7 @@ export function CubaTopContacts({ items, loading }: CubaTopContactsProps) {
                         {item.kind === 'contact' && <UserCheck className="w-3 h-3 text-indigo-500" />}
                         {item.kind === 'broadcast' && <Radio className="w-3 h-3 text-amber-500" />}
                         {item.kind === 'automation' && <Zap className="w-3 h-3 text-purple-500" />}
-                        <span>{item.kind}</span>
+                        <span>{kindLabels[item.kind] || item.kind}</span>
                       </span>
                     </td>
 
