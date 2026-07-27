@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature';
+import { persistContactAvatar } from '@/lib/contacts/avatar';
 
 // Admin client helper
 let _adminClient: any = null;
@@ -347,9 +348,13 @@ async function fetchUserProfileDetails(
       avatarUrl = data.profile_picture_url || '';
     }
 
-    if (name) {
-      const updatePayload: any = { name };
-      if (avatarUrl) updatePayload.avatar_url = avatarUrl;
+    if (name || avatarUrl) {
+      const updatePayload: any = {};
+      if (name) updatePayload.name = name;
+      if (avatarUrl) {
+        const persistentUrl = await persistContactAvatar(supabaseAdmin(), contactId, avatarUrl);
+        updatePayload.avatar_url = persistentUrl || avatarUrl;
+      }
 
       await supabaseAdmin()
         .from('contacts')

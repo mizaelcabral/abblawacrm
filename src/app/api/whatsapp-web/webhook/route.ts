@@ -5,6 +5,7 @@ import { normalizePhone } from '@/lib/whatsapp/phone-utils';
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
 import { generateAIResponse, transcribeAudioUsingGemini } from '@/lib/ai/service';
 import { verifyBillingAndUsage, incrementAIConsumption } from '@/lib/billing/guard';
+import { persistContactAvatar } from '@/lib/contacts/avatar';
 
 // ponytail: format phone number as a human-readable fallback name (no external deps)
 function formatPhoneAsName(phone: string): string {
@@ -147,8 +148,10 @@ async function processIncomingMessage(config: any, messageData: any) {
   let avatarUrl: string | null = (existingContact?.avatar_url as string | null) || null;
   let profileName: string | null = null;
 
-  // ponytail: only fetch profile if contact is new, has no avatar, has no real name, or is a LID JID
-  if (!existingContact || !existingContact.avatar_url || !existingContact.name || existingContact.name === 'WhatsApp Contact' || existingContact.name.startsWith('+') || remoteJid.endsWith('@lid')) {
+  const currentAvatarStr = typeof existingContact?.avatar_url === 'string' ? existingContact.avatar_url : '';
+  const hasExpiredAvatar = currentAvatarStr.includes('pps.whatsapp.net');
+  // ponytail: only fetch profile if contact is new, has no avatar, has expired whatsapp avatar, has no real name, or is a LID JID
+  if (!existingContact || !existingContact.avatar_url || hasExpiredAvatar || !existingContact.name || existingContact.name === 'WhatsApp Contact' || existingContact.name.startsWith('+') || remoteJid.endsWith('@lid')) {
     try {
       const token = decrypt(config.api_token);
       const profile = await fetchProfileWithRetry(config.api_url, config.instance_name, token, remoteJid);
@@ -166,13 +169,17 @@ async function processIncomingMessage(config: any, messageData: any) {
         }
       }
       if (profile.picture) {
-        avatarUrl = profile.picture;
-        if (existingContact && existingContact.avatar_url !== avatarUrl) {
+        let persistentUrl = profile.picture;
+        if (existingContact) {
+          persistentUrl = (await persistContactAvatar(supabaseAdmin(), existingContact.id, profile.picture)) || profile.picture;
+        }
+        avatarUrl = persistentUrl;
+        if (existingContact && existingContact.avatar_url !== persistentUrl) {
           await supabaseAdmin()
             .from('contacts')
-            .update({ avatar_url: avatarUrl })
+            .update({ avatar_url: persistentUrl })
             .eq('id', existingContact.id);
-          existingContact.avatar_url = avatarUrl;
+          existingContact.avatar_url = persistentUrl;
         }
       }
     } catch (err) {
@@ -491,8 +498,11 @@ async function findOrCreateContact(accountId: string, userId: string, phone: str
       needsUpdate = true;
     }
     if (avatarUrl && existing.avatar_url !== avatarUrl) {
-      updatePayload.avatar_url = avatarUrl;
-      needsUpdate = true;
+      const persistentUrl = (await persistContactAvatar(supabaseAdmin(), existing.id, avatarUrl)) || avatarUrl;
+      if (persistentUrl !== existing.avatar_url) {
+        updatePayload.avatar_url = persistentUrl;
+        needsUpdate = true;
+      }
     }
     if (needsUpdate) {
       const { data } = await supabaseAdmin()
@@ -529,6 +539,17 @@ async function findOrCreateContact(accountId: string, userId: string, phone: str
     }
     console.error('[WhatsApp Web Webhook] Error creating contact:', createError);
     return null;
+  }
+
+  if (newContact && avatarUrl && !avatarUrl.includes('supabase.co/storage')) {
+    const persistentUrl = await persistContactAvatar(supabaseAdmin(), newContact.id, avatarUrl);
+    if (persistentUrl && persistentUrl !== avatarUrl) {
+      await supabaseAdmin()
+        .from('contacts')
+        .update({ avatar_url: persistentUrl })
+        .eq('id', newContact.id);
+      newContact.avatar_url = persistentUrl;
+    }
   }
 
   return newContact;

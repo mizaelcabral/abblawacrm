@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/automations/admin-client';
 import { decrypt } from '@/lib/whatsapp/encryption';
+import { persistContactAvatar } from '@/lib/contacts/avatar';
 
 // fetchProfile with 1-retry and 1s delay between attempts (mirrors webhook/route.ts)
 async function fetchProfileWithRetry(
@@ -47,16 +48,18 @@ export async function POST(req: Request) {
 
     const admin = supabaseAdmin();
 
-    // 2. Query up to 50 contacts matching pending name conditions
+    // 2. Query up to 50 contacts matching pending name/avatar conditions
     // - name = 'WhatsApp Contact'
     // - name IS NULL
     // - name starts with '+'
+    // - avatar_url IS NULL
+    // - avatar_url contains 'pps.whatsapp.net'
     // - phone IS NOT NULL
     const { data: contacts, error: contactsError } = await admin
       .from('contacts')
       .select('id, name, phone, avatar_url, account_id')
       .not('phone', 'is', null)
-      .or('name.eq.WhatsApp Contact,name.is.null,name.ilike.+%')
+      .or('name.eq.WhatsApp Contact,name.is.null,name.ilike.+%,avatar_url.is.null,avatar_url.ilike.%pps.whatsapp.net%')
       .order('created_at', { ascending: false })
       .limit(50);
 
@@ -147,10 +150,13 @@ export async function POST(req: Request) {
           shouldUpdate = true;
         }
 
-        // Always update the avatar URL if a new one is returned, to refresh expired links
-        if (profile.picture && profile.picture !== contact.avatar_url) {
-          updatePayload.avatar_url = profile.picture;
-          shouldUpdate = true;
+        // Persist avatar to Supabase Storage if a picture is returned
+        if (profile.picture) {
+          const persistentUrl = await persistContactAvatar(admin, contact.id, profile.picture);
+          if (persistentUrl && persistentUrl !== contact.avatar_url) {
+            updatePayload.avatar_url = persistentUrl;
+            shouldUpdate = true;
+          }
         }
 
         if (shouldUpdate) {
