@@ -179,11 +179,6 @@ export function CubaSidebar({
             className="flex items-center gap-2 overflow-hidden"
           >
             <Logo />
-            {!isCollapsed && (
-              <span className="text-xs font-bold tracking-wider text-primary uppercase ml-1">
-                CRM
-              </span>
-            )}
           </Link>
 
           {/* Close button for mobile */}

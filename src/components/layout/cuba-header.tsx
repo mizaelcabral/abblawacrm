@@ -83,24 +83,24 @@ export function CubaHeader({ onToggleSidebar }: CubaHeaderProps) {
   }, [])
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border/60 bg-background/95 backdrop-blur-md px-4 lg:px-6 shadow-xs transition-all duration-200">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-2 sm:gap-4 border-b border-border/60 bg-background/95 backdrop-blur-md px-4 lg:px-6 shadow-xs transition-all duration-200">
       {/* Left side: Toggle button, Logo & Breadcrumb */}
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         <button
           type="button"
           onClick={onToggleSidebar}
           aria-label="Alternar menu lateral"
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-all hover:bg-accent hover:text-foreground focus:outline-none"
+          className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-all hover:bg-accent hover:text-foreground focus:outline-none shrink-0"
         >
           <Menu className="h-5 w-5" />
         </button>
 
-        <Link href="/dashboard" className="flex items-center lg:hidden">
+        <Link href="/dashboard" className="flex items-center lg:hidden shrink-0">
           <Logo />
         </Link>
 
         {/* Cuba Style Breadcrumbs */}
-        <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 whitespace-nowrap">
           <span className="hover:text-foreground transition-colors">
             {breadcrumb.category}
           </span>
@@ -111,10 +111,10 @@ export function CubaHeader({ onToggleSidebar }: CubaHeaderProps) {
         </div>
       </div>
 
-      {/* Center: Search Bar */}
-      <div className="hidden md:flex items-center max-w-md w-full mx-4">
+      {/* Center: Search Bar (Fluid flex max-w so it never overlaps breadcrumbs or controls on 13"-15" laptops) */}
+      <div className="hidden md:flex items-center flex-1 max-w-xs lg:max-w-sm xl:max-w-md mx-2 lg:mx-4 min-w-0">
         <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <input
             type="text"
             placeholder="Buscar contatos, conversas, produtos..."
@@ -127,9 +127,9 @@ export function CubaHeader({ onToggleSidebar }: CubaHeaderProps) {
       </div>
 
       {/* Right side controls */}
-      <div className="flex items-center gap-1.5 sm:gap-2">
+      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         {/* Language Indicator */}
-        <div className="hidden lg:flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium text-muted-foreground hover:bg-muted transition-colors cursor-pointer" title="Idioma: Português (Brasil)">
+        <div className="hidden xl:flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium text-muted-foreground hover:bg-muted transition-colors cursor-pointer" title="Idioma: Português (Brasil)">
           <Globe className="w-3.5 h-3.5 text-indigo-500" />
           <span>PT-BR</span>
         </div>

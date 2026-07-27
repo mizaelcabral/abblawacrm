@@ -341,4 +341,18 @@ html[data-theme="rose"] {
 .cuba-badge-soft-secondary {
   background-color: rgba(247, 49, 100, 0.12);
   color: #f73164;
+}
+
+/* Floating animation for welcome banner vector image */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-float {
+  animation: float 3.5s ease-in-out infinite;
 }

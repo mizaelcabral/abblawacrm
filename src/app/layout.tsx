@@ -73,11 +73,7 @@ const THEME_BOOT_SCRIPT = `
 (function(){
   var d = document.documentElement;
   try {
-    var THEME_KEY = ${JSON.stringify(STORAGE_KEY)};
-    var THEME_DEFAULT = ${JSON.stringify(DEFAULT_THEME)};
-    var THEMES = ${JSON.stringify(THEME_IDS)};
-    var savedTheme = localStorage.getItem(THEME_KEY);
-    d.dataset.theme = THEMES.indexOf(savedTheme) !== -1 ? savedTheme : THEME_DEFAULT;
+    d.dataset.theme = 'violet';
 
     var MODE_KEY = ${JSON.stringify(MODE_STORAGE_KEY)};
     var MODE_DEFAULT = ${JSON.stringify(DEFAULT_MODE)};
@@ -91,7 +87,7 @@ const THEME_BOOT_SCRIPT = `
       d.classList.remove('dark');
     }
   } catch (_e) {
-    d.dataset.theme = ${JSON.stringify(DEFAULT_THEME)};
+    d.dataset.theme = 'violet';
     d.dataset.mode = ${JSON.stringify(DEFAULT_MODE)};
     d.classList.add('dark');
   }

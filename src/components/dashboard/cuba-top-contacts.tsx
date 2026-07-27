@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ActivityItem } from '@/lib/dashboard/types'
 import { Search, MessageSquare, DollarSign, UserCheck, Zap, Radio, MoreHorizontal } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { getInitials, getAvatarColor } from '@/lib/utils'
 import { Skeleton } from './skeleton'
 
 interface CubaTopContactsProps {
@@ -81,7 +82,7 @@ export function CubaTopContacts({ items, loading }: CubaTopContactsProps) {
               </tr>
             ) : (
               filteredItems.slice(0, 6).map((item) => {
-                const initial = item.text.trim().charAt(0).toUpperCase() || 'A'
+                const initials = getInitials(item.text)
 
                 return (
                   <tr
@@ -94,11 +95,11 @@ export function CubaTopContacts({ items, loading }: CubaTopContactsProps) {
                     {/* Activity Description */}
                     <td className="py-3 pl-1">
                       <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8 border border-border/60">
-                          <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
-                            {initial}
-                          </AvatarFallback>
-                        </Avatar>
+                        <div
+                          className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold border select-none ${getAvatarColor(item.text)}`}
+                        >
+                          {initials}
+                        </div>
                         <p className="font-semibold text-foreground group-hover:text-primary transition-colors truncate max-w-xs sm:max-w-md">
                           {item.text}
                         </p>

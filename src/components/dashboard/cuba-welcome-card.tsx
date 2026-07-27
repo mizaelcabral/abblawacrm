@@ -1,37 +1,19 @@
 "use client"
 
-import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/hooks/use-auth'
-import { Clock, Send, UserPlus, Sparkles } from 'lucide-react'
+import { Send, UserPlus, Sparkles } from 'lucide-react'
 
 export function CubaWelcomeCard() {
   const { profile } = useAuth()
-  const [timeStr, setTimeStr] = useState<string>('')
 
   const userName =
     profile?.full_name?.split(' ')[0] ||
     profile?.email?.split('@')[0] ||
     'Atendente'
 
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date()
-      setTimeStr(
-        now.toLocaleTimeString('pt-BR', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        })
-      )
-    }
-    updateTime()
-    const timer = setInterval(updateTime, 1000)
-    return () => clearInterval(timer)
-  }, [])
-
   return (
-    <div className="relative overflow-hidden rounded-3xl cuba-gradient-welcome p-6 sm:p-8 text-white shadow-xl">
+    <div className="relative overflow-hidden rounded-3xl cuba-gradient-welcome p-6 sm:p-8 text-white shadow-xl h-full flex flex-col justify-between">
       {/* Decorative background circles */}
       <div className="absolute -right-12 -bottom-12 w-64 h-64 rounded-full bg-white/10 blur-2xl pointer-events-none" />
       <div className="absolute right-32 -top-12 w-48 h-48 rounded-full bg-indigo-400/20 blur-xl pointer-events-none" />
@@ -70,18 +52,13 @@ export function CubaWelcomeCard() {
           </div>
         </div>
 
-        {/* Right Column: Digital Clock Widget */}
-        <div className="self-end md:self-center flex flex-col items-center justify-center p-4 rounded-2xl bg-white/15 backdrop-blur-md border border-white/20 min-w-[140px] text-center shadow-inner">
-          <div className="flex items-center gap-1.5 text-amber-300 text-xs font-medium mb-1">
-            <Clock className="w-4 h-4" />
-            <span>Horário Atual</span>
-          </div>
-          <span className="text-xl sm:text-2xl font-black tracking-wider text-white font-mono">
-            {timeStr || '12:00:00'}
-          </span>
-          <span className="text-[10px] uppercase tracking-widest text-white/70 mt-1 font-semibold">
-            {new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}
-          </span>
+        {/* Right Column: Floating Vector Woman PNG Illustration */}
+        <div className="self-center md:self-auto flex items-center justify-center shrink-0 max-w-[240px] sm:max-w-[300px] md:max-w-[340px] pointer-events-none select-none">
+          <img
+            src="/images/vector-women-abbla.png"
+            alt="Ilustração ABBLA CRM"
+            className="w-full h-auto object-contain animate-float drop-shadow-2xl"
+          />
         </div>
       </div>
     </div>

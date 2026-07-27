@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils";
+import { cn, getInitials, getAvatarColor } from "@/lib/utils";
 import type { Conversation, ConversationStatus } from "@/types";
 import { Search, ChevronDown, User } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -287,7 +287,14 @@ function ConversationItem({
     >
       {/* Avatar with Channel Badge */}
       <div className="relative shrink-0">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground select-none">
+        <div
+          className={cn(
+            "flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold border select-none transition-all shadow-xs",
+            contact?.avatar_url && !imgError
+              ? "bg-muted border-border/60"
+              : getAvatarColor(displayName)
+          )}
+        >
           {contact?.avatar_url && !imgError ? (
             <img
               src={contact.avatar_url}
@@ -296,7 +303,7 @@ function ConversationItem({
               className="h-10 w-10 rounded-full object-cover"
             />
           ) : (
-            <User className="h-5 w-5 text-muted-foreground" />
+            <span>{getInitials(displayName)}</span>
           )}
         </div>
         <div

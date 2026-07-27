@@ -329,7 +329,7 @@ export function SettingsOverview({
     {
       section: 'appearance',
       loading: false,
-      subtitle: `Modo ${mode === 'light' ? 'Claro' : 'Escuro'} · Tema ${themeName}`,
+      subtitle: `Modo ${mode === 'light' ? 'Claro' : 'Escuro'}`,
     },
     {
       section: 'widgets',

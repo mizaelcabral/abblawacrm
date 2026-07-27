@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { cn } from "@/lib/utils";
+import { cn, getInitials, getAvatarColor } from "@/lib/utils";
 import type { Contact, Deal, ContactNote, Tag, Task, Pipeline, PipelineStage } from "@/types";
 import { KBSearchPanel } from "@/components/knowledge-base/kb-search-panel";
 import { DealForm } from "@/components/pipelines/deal-form";
@@ -371,7 +371,14 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
         <div className="p-4">
           {/* Contact Info */}
           <div className="flex flex-col items-center text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-foreground select-none">
+            <div
+              className={cn(
+                "flex h-16 w-16 items-center justify-center rounded-full text-lg font-bold border select-none transition-all shadow-sm",
+                contact.avatar_url && !imgError
+                  ? "bg-muted border-border/60"
+                  : getAvatarColor(displayName)
+              )}
+            >
               {contact.avatar_url && !imgError ? (
                 <img
                   src={contact.avatar_url}
@@ -380,7 +387,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                   className="h-16 w-16 rounded-full object-cover"
                 />
               ) : (
-                <User className="h-8 w-8 text-muted-foreground" />
+                <span>{getInitials(displayName)}</span>
               )}
             </div>
             <h3 className="mt-3 text-sm font-semibold text-foreground">
