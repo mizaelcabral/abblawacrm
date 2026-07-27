@@ -685,7 +685,7 @@ const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(
           >
             {showGridLines ? (
               <CartesianGrid
-                className={cx("stroke-border stroke-1")}
+                className={cx("stroke-border/80 dark:stroke-slate-700/60 stroke-1")}
                 horizontal={layout !== "vertical"}
                 vertical={layout === "vertical"}
               />
@@ -693,14 +693,13 @@ const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(
             <XAxis
               hide={!showXAxis}
               tick={{
+                fill: "currentColor",
                 transform:
                   layout !== "vertical" ? "translate(0, 6)" : undefined,
               }}
-              fill=""
-              stroke=""
               className={cx(
                 "text-xs",
-                "fill-muted-foreground",
+                "fill-muted-foreground dark:fill-slate-200 text-muted-foreground dark:text-slate-200 [&_text]:fill-muted-foreground dark:[&_text]:fill-slate-200",
                 { "mt-4": layout !== "vertical" },
               )}
               tickLine={false}
@@ -730,7 +729,7 @@ const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(
                 <Label
                   position="insideBottom"
                   offset={-20}
-                  className="fill-foreground text-sm font-medium"
+                  className="fill-foreground dark:fill-white text-sm font-medium"
                 >
                   {xAxisLabel}
                 </Label>
@@ -741,13 +740,12 @@ const BarChart = React.forwardRef<HTMLDivElement, BarChartProps>(
               hide={!showYAxis}
               axisLine={false}
               tickLine={false}
-              fill=""
-              stroke=""
               className={cx(
                 "text-xs",
-                "fill-muted-foreground",
+                "fill-muted-foreground dark:fill-slate-200 text-muted-foreground dark:text-slate-200 [&_text]:fill-muted-foreground dark:[&_text]:fill-slate-200",
               )}
               tick={{
+                fill: "currentColor",
                 transform:
                   layout !== "vertical"
                     ? "translate(-3, 0)"

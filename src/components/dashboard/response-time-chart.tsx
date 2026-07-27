@@ -47,19 +47,19 @@ export function ResponseTimeChart({
         {(thresholdMinutes > 0 || (data && (data.thisWeekAvg != null || data.lastWeekAvg != null))) && (
           <div className="flex flex-wrap items-center justify-between gap-2.5">
             {thresholdMinutes > 0 && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-500 shrink-0">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 dark:bg-rose-500/20 px-2.5 py-1 text-xs font-semibold text-rose-500 dark:text-rose-300 shrink-0">
                 <Target className="w-3.5 h-3.5" />
                 Meta {thresholdMinutes}m
               </span>
             )}
             {data && (data.thisWeekAvg != null || data.lastWeekAvg != null) && (
-              <div className="flex items-center gap-3 text-xs bg-muted/40 border border-border/60 rounded-xl px-3 py-1 shrink-0 whitespace-nowrap ml-auto">
-                <div className="text-muted-foreground">
-                  Esta semana: <span className="font-bold text-foreground tabular-nums">{fmt(data.thisWeekAvg)}</span>
+              <div className="flex items-center gap-3 text-xs bg-muted/40 dark:bg-card-2/90 border border-border/60 rounded-xl px-3 py-1 shrink-0 whitespace-nowrap ml-auto">
+                <div className="text-muted-foreground dark:text-slate-300">
+                  Esta semana: <span className="font-bold text-foreground dark:text-white tabular-nums">{fmt(data.thisWeekAvg)}</span>
                 </div>
                 <span className="text-border/80">|</span>
-                <div className="text-muted-foreground">
-                  Semana passada: <span className="font-semibold text-foreground/80 tabular-nums">{fmt(data.lastWeekAvg)}</span>
+                <div className="text-muted-foreground dark:text-slate-300">
+                  Semana passada: <span className="font-semibold text-foreground/80 dark:text-slate-200 tabular-nums">{fmt(data.lastWeekAvg)}</span>
                 </div>
               </div>
             )}
