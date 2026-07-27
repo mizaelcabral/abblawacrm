@@ -4,12 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { formatCurrency } from '@/lib/currency'
-import {
-  MessageSquare,
-  UserPlus,
-  DollarSign,
-  Send,
-} from 'lucide-react'
+import { MessageSquare, UserPlus, DollarSign, Send } from 'lucide-react'
 
 import {
   loadActivity,
@@ -26,13 +21,13 @@ import type {
   ResponseTimeSummary,
 } from '@/lib/dashboard/types'
 
-import { MetricCard } from '@/components/dashboard/metric-card'
-import { SkeletonCard } from '@/components/dashboard/skeleton'
-import { QuickActions } from '@/components/dashboard/quick-actions'
+import { CubaWelcomeCard } from '@/components/dashboard/cuba-welcome-card'
+import { CubaMetricCard } from '@/components/dashboard/cuba-metric-card'
+import { CubaTopContacts } from '@/components/dashboard/cuba-top-contacts'
+import { CubaTargetGauge } from '@/components/dashboard/cuba-target-gauge'
 import { ConversationsChart } from '@/components/dashboard/conversations-chart'
-import { PipelineDonut } from '@/components/dashboard/pipeline-donut'
 import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
-import { ActivityFeed } from '@/components/dashboard/activity-feed'
+import { SkeletonCard } from '@/components/dashboard/skeleton'
 
 type RangeDays = 7 | 30 | 90
 
@@ -42,9 +37,6 @@ export default function DashboardPage() {
   const [metricsLoading, setMetricsLoading] = useState(true)
 
   const [range, setRange] = useState<RangeDays>(30)
-  // Keep a cache per range so switching tabs doesn't re-fetch what we
-  // already have. Ranges the user hasn't opened yet stay null and
-  // trigger a fetch on first view.
   const [series, setSeries] = useState<Record<RangeDays, ConversationsSeriesPoint[] | null>>({
     7: null,
     30: null,
@@ -64,9 +56,6 @@ export default function DashboardPage() {
   const loadAll = useCallback(() => {
     const db = createClient()
 
-    // Kick everything off in parallel. Each block has its own
-    // setState + finally so a slow query doesn't hold up faster
-    // sections — each widget shows its own skeleton independently.
     void loadMetrics(db)
       .then((m) => setMetrics(m))
       .catch((err) => console.error('[dashboard] metrics failed:', err))
@@ -87,9 +76,6 @@ export default function DashboardPage() {
       .catch((err) => console.error('[dashboard] response time failed:', err))
       .finally(() => setResponseTimeLoading(false))
 
-    // Fetch up to 50 so the biggest page-size option in the feed
-    // (50 rows) is already in memory — switching sizes then becomes
-    // a pure client-side slice with no extra round trip.
     void loadActivity(db, 50)
       .then((a) => setActivity(a))
       .catch((err) => console.error('[dashboard] activity failed:', err))
@@ -100,10 +86,6 @@ export default function DashboardPage() {
     loadAll()
   }, [loadAll])
 
-  // Range switch handler — kept in an event callback (not an effect)
-  // so the setState calls stay out of the react-hooks/set-state-in-effect
-  // rule's way. The cached bucket check means switching back to a
-  // previously-viewed range is instant and doesn't re-fetch.
   const handleRangeChange = useCallback(
     (r: RangeDays) => {
       setRange(r)
@@ -119,78 +101,66 @@ export default function DashboardPage() {
   )
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Análises em tempo real de conversas, contatos, negócios, transmissões e automações.
-        </p>
+    <div className="space-y-6">
+      {/* Cuba Top Row: Welcome Banner + 4 KPI Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Welcome Card (Spans 7 cols on LG) */}
+        <div className="lg:col-span-7 flex flex-col">
+          <CubaWelcomeCard />
+        </div>
+
+        {/* 4 Metric Cards (Spans 5 cols on LG in 2x2 grid) */}
+        <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {metricsLoading || !metrics ? (
+            Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
+          ) : (
+            <>
+              <CubaMetricCard
+                title="Conversas Ativas"
+                value={metrics.activeConversations.current.toLocaleString()}
+                icon={MessageSquare}
+                variant="primary"
+                delta={{
+                  value: `${metrics.activeConversations.previous >= 0 ? '+' : ''}${metrics.activeConversations.previous}`,
+                  isPositive: metrics.activeConversations.previous >= 0,
+                }}
+              />
+              <CubaMetricCard
+                title="Novos Leads Hoje"
+                value={metrics.newContactsToday.current.toLocaleString()}
+                icon={UserPlus}
+                variant="success"
+                delta={{
+                  value: `${metrics.newContactsToday.current - metrics.newContactsToday.previous >= 0 ? '+' : ''}${metrics.newContactsToday.current - metrics.newContactsToday.previous}`,
+                  isPositive: metrics.newContactsToday.current >= metrics.newContactsToday.previous,
+                }}
+              />
+              <CubaMetricCard
+                title="Negócios Abertos"
+                value={formatCurrency(metrics.openDealsValue, defaultCurrency)}
+                icon={DollarSign}
+                variant="secondary"
+                subtitle={`${metrics.openDealsCount} negócio${metrics.openDealsCount === 1 ? '' : 's'}`}
+              />
+              <CubaMetricCard
+                title="Mensagens Enviadas"
+                value={metrics.messagesSentToday.current.toLocaleString()}
+                icon={Send}
+                variant="warning"
+                delta={{
+                  value: `${metrics.messagesSentToday.current - metrics.messagesSentToday.previous >= 0 ? '+' : ''}${metrics.messagesSentToday.current - metrics.messagesSentToday.previous}`,
+                  isPositive: metrics.messagesSentToday.current >= metrics.messagesSentToday.previous,
+                }}
+              />
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Metric cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {metricsLoading || !metrics ? (
-          Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
-        ) : (
-          <>
-            <MetricCard
-              title="Conversas Ativas"
-              value={metrics.activeConversations.current.toLocaleString()}
-              icon={MessageSquare}
-              delta={{
-                sign: metrics.activeConversations.previous,
-                label: deltaLabel(metrics.activeConversations.previous, 'novas hoje vs ontem'),
-              }}
-            />
-            <MetricCard
-              title="Novos Contatos Hoje"
-              value={metrics.newContactsToday.current.toLocaleString()}
-              icon={UserPlus}
-              delta={{
-                sign:
-                  metrics.newContactsToday.current - metrics.newContactsToday.previous,
-                label: deltaLabel(
-                  metrics.newContactsToday.current - metrics.newContactsToday.previous,
-                  'vs ontem',
-                ),
-              }}
-            />
-            <MetricCard
-              title="Valor de Negócios Abertos"
-              value={formatCurrency(metrics.openDealsValue, defaultCurrency)}
-              icon={DollarSign}
-              subtitle={`${metrics.openDealsCount} negócio${metrics.openDealsCount === 1 ? ' aberto' : 's abertos'}`}
-            />
-            <MetricCard
-              title="Mensagens Enviadas Hoje"
-              value={metrics.messagesSentToday.current.toLocaleString()}
-              icon={Send}
-              delta={{
-                sign:
-                  metrics.messagesSentToday.current - metrics.messagesSentToday.previous,
-                label: deltaLabel(
-                  metrics.messagesSentToday.current - metrics.messagesSentToday.previous,
-                  'vs ontem',
-                ),
-              }}
-            />
-          </>
-        )}
-      </div>
-
-      {/* Quick actions */}
-      <QuickActions />
-
-      {/* Charts row */}
-      {/* items-stretch (the grid default) stretches the two columns to
-          match the tallest sibling; adding h-full on each wrapper and
-          on the inner panels makes both cards actually fill that
-          stretched height so their rounded borders line up. Without
-          this, the pipeline card rendered at its natural (shorter)
-          height while the line chart drove the row height. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <div className="h-full lg:col-span-3">
+      {/* Middle Row: Conversations Main Chart + Monthly Target Gauge */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Main Chart (Spans 8 cols on LG) */}
+        <div className="lg:col-span-8 flex flex-col">
           <ConversationsChart
             series={series}
             loading={seriesLoading}
@@ -198,28 +168,25 @@ export default function DashboardPage() {
             onRangeChange={handleRangeChange}
           />
         </div>
-        <div className="h-full lg:col-span-2">
-          <PipelineDonut
-            data={pipeline}
-            loading={pipelineLoading}
-            currency={defaultCurrency}
-          />
+
+        {/* Target Gauge (Spans 4 cols on LG) */}
+        <div className="lg:col-span-4 flex flex-col">
+          <CubaTargetGauge data={pipeline} loading={pipelineLoading} />
         </div>
       </div>
 
-      {/* Response time */}
-      <ResponseTimeChart data={responseTime} loading={responseTimeLoading} />
+      {/* Bottom Row: Top Contacts Table + Response Time Summary */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Top Contacts / Activity Table (Spans 7 cols on LG) */}
+        <div className="lg:col-span-7 flex flex-col">
+          <CubaTopContacts items={activity} loading={activityLoading} />
+        </div>
 
-      {/* Activity feed */}
-      <ActivityFeed items={activity} loading={activityLoading} />
+        {/* Response Time Chart (Spans 5 cols on LG) */}
+        <div className="lg:col-span-5 flex flex-col">
+          <ResponseTimeChart data={responseTime} loading={responseTimeLoading} />
+        </div>
+      </div>
     </div>
   )
-}
-
-// ------------------------------------------------------------
-
-function deltaLabel(delta: number, suffix: string): string {
-  if (delta === 0) return `Sem alteração ${suffix}`
-  const sign = delta > 0 ? '+' : ''
-  return `${sign}${delta.toLocaleString()} ${suffix}`
 }

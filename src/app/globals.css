@@ -291,3 +291,54 @@ html[data-theme="rose"] {
   scrollbar-width: thin;
   scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
 }
+
+/* ============================================================
+ * CUBA ADMIN DESIGN SYSTEM UTILITIES
+ * ============================================================ */
+.cuba-card {
+  @apply bg-card text-card-foreground rounded-2xl border border-border/60 transition-all duration-200;
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.04);
+}
+
+.cuba-card:hover {
+  box-shadow: 0 6px 24px 0 rgba(0, 0, 0, 0.08);
+}
+
+.dark .cuba-card {
+  box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.25);
+}
+
+.cuba-gradient-welcome {
+  background: linear-gradient(135deg, #7366ff 0%, #9085ff 50%, #b2aaff 100%);
+}
+
+.cuba-gradient-primary {
+  background: linear-gradient(135deg, #7366ff 0%, #5443ed 100%);
+}
+
+.cuba-gradient-secondary {
+  background: linear-gradient(135deg, #f73164 0%, #e0174c 100%);
+}
+
+.cuba-gradient-success {
+  background: linear-gradient(135deg, #51bb25 0%, #3e9e16 100%);
+}
+
+.cuba-gradient-warning {
+  background: linear-gradient(135deg, #f8d62b 0%, #d4b408 100%);
+}
+
+.cuba-badge-soft-primary {
+  background-color: rgba(115, 102, 255, 0.12);
+  color: #7366ff;
+}
+
+.cuba-badge-soft-success {
+  background-color: rgba(81, 187, 37, 0.12);
+  color: #51bb25;
+}
+
+.cuba-badge-soft-secondary {
+  background-color: rgba(247, 49, 100, 0.12);
+  color: #f73164;
+}

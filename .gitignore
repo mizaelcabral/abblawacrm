@@ -44,3 +44,5 @@ yarn-error.log*
 next-env.d.ts
 
 testsprite_tests\tmp\config.json
+/layout
+/scratch

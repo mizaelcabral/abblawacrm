@@ -500,54 +500,56 @@ export function ContactDetailView({
 
             {/* Tabs */}
             <Tabs defaultValue="details" className="flex-1 flex flex-col min-h-0">
-              <TabsList className="bg-muted/50 border-b border-border mx-4 mt-3 shrink-0 flex-wrap h-auto p-1">
-                <TabsTrigger
-                  value="details"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground text-xs py-1 px-2.5"
-                >
-                  Detalhes
-                </TabsTrigger>
-                <TabsTrigger
-                  value="tags"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground text-xs py-1 px-2.5"
-                >
-                  Tags
-                </TabsTrigger>
-                <TabsTrigger
-                  value="notes"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground text-xs py-1 px-2.5"
-                >
-                  Observações
-                </TabsTrigger>
-                <TabsTrigger
-                  value="custom"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground text-xs py-1 px-2.5 relative"
-                >
-                  Dados Complementares
-                  {incompleteCount > 0 && (
-                    <span className="ml-1 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.2 text-[10px] font-semibold">
-                      {incompleteCount}
-                    </span>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="documents"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground text-xs py-1 px-2.5"
-                >
-                  Documentos
-                  {documents.length > 0 && (
-                    <span className="ml-1 text-[10px] text-muted-foreground">
-                      ({documents.length})
-                    </span>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="deals"
-                  className="data-active:bg-muted data-active:text-primary text-muted-foreground text-xs py-1 px-2.5"
-                >
-                  Negócios
-                </TabsTrigger>
-              </TabsList>
+              <div className="border-b border-border/60 bg-muted/30 p-2 shrink-0">
+                <TabsList className="w-full grid grid-cols-3 gap-1.5 bg-transparent p-0 h-auto">
+                  <TabsTrigger
+                    value="details"
+                    className="flex items-center justify-center gap-1 rounded-lg py-1.5 px-2 text-xs font-semibold text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs border border-transparent data-[state=active]:border-border/60 transition-all cursor-pointer"
+                  >
+                    <span>Detalhes</span>
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="tags"
+                    className="flex items-center justify-center gap-1 rounded-lg py-1.5 px-2 text-xs font-semibold text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs border border-transparent data-[state=active]:border-border/60 transition-all cursor-pointer"
+                  >
+                    <span>Tags</span>
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="notes"
+                    className="flex items-center justify-center gap-1 rounded-lg py-1.5 px-2 text-xs font-semibold text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs border border-transparent data-[state=active]:border-border/60 transition-all cursor-pointer"
+                  >
+                    <span>Observações</span>
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="custom"
+                    className="flex items-center justify-center gap-1 rounded-lg py-1.5 px-1.5 text-xs font-semibold text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs border border-transparent data-[state=active]:border-border/60 transition-all cursor-pointer"
+                  >
+                    <span>Dados Adicionais</span>
+                    {incompleteCount > 0 && (
+                      <span className="ml-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.2 text-[10px] font-bold shrink-0">
+                        {incompleteCount}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="documents"
+                    className="flex items-center justify-center gap-1 rounded-lg py-1.5 px-2 text-xs font-semibold text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs border border-transparent data-[state=active]:border-border/60 transition-all cursor-pointer"
+                  >
+                    <span>Documentos</span>
+                    {documents.length > 0 && (
+                      <span className="ml-0.5 text-[10px] font-semibold text-muted-foreground shrink-0">
+                        ({documents.length})
+                      </span>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="deals"
+                    className="flex items-center justify-center gap-1 rounded-lg py-1.5 px-2 text-xs font-semibold text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-primary data-[state=active]:shadow-xs border border-transparent data-[state=active]:border-border/60 transition-all cursor-pointer"
+                  >
+                    <span>Negócios</span>
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
               {/* Details Tab */}
               <TabsContent value="details" className="flex-1 overflow-y-auto px-4 py-3">
