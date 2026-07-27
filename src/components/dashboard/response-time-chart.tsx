@@ -1,6 +1,6 @@
 "use client"
 
-import { Clock } from 'lucide-react'
+import { Clock, Target } from 'lucide-react'
 import { DOW_SHORT_MON_FIRST } from '@/lib/dashboard/date-utils'
 import type { ResponseTimeSummary } from '@/lib/dashboard/types'
 import { BarChart } from '@/components/tremor/bar-chart'
@@ -10,19 +10,9 @@ import { Skeleton } from './skeleton'
 interface ResponseTimeChartProps {
   data: ResponseTimeSummary | null
   loading: boolean
-  /** Minutes. Surfaced as a "target" pill in the header. The
-   *  hand-rolled SVG version drew this as a horizontal dashed
-   *  line on the chart; Tremor BarChart doesn't expose Recharts
-   *  primitives, so we promote it to the header for now. A
-   *  follow-up can introduce an overlay or extend the vendored
-   *  BarChart with a `referenceLines` prop. */
   thresholdMinutes?: number
 }
 
-// Single category, single colour — the data is "average minutes
-// per weekday". Tremor expects categories as the second tuple in
-// the row object, so we shape the buckets into
-// `{ day: 'Mon', 'Avg minutes': 4.2 }` rows below.
 const CATEGORY = 'Média (minutos)'
 
 export function ResponseTimeChart({
@@ -32,10 +22,6 @@ export function ResponseTimeChart({
 }: ResponseTimeChartProps) {
   const hasData = data?.buckets.some((b) => b.avgMinutes != null) ?? false
 
-  // Map buckets → Tremor rows. Null `avgMinutes` (no samples)
-  // collapses to 0; the chart will render an empty slot for it.
-  // We attach `samples` on the row so a future customTooltip can
-  // surface "no samples" copy without losing the data shape.
   const chartData =
     data?.buckets.map((b, i) => ({
       day: DOW_SHORT_MON_FIRST[i],
@@ -44,40 +30,41 @@ export function ResponseTimeChart({
     })) ?? []
 
   return (
-    <section className="rounded-xl border border-border bg-card">
-      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+    <section className="cuba-card p-5 space-y-4">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-border/60">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">
+          <h3 className="text-base font-bold text-foreground">
             Tempo Médio de Primeira Resposta
-          </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Minutos para responder à primeira mensagem não respondida do cliente, por dia da semana
           </p>
         </div>
-        <div className="flex items-center gap-3 text-right text-xs">
+
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0 whitespace-nowrap self-start lg:self-auto">
           {thresholdMinutes > 0 && (
-            <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 font-medium text-rose-300 tabular-nums">
-              meta {thresholdMinutes}m
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-500 shrink-0">
+              <Target className="w-3.5 h-3.5" />
+              Meta {thresholdMinutes}m
             </span>
           )}
           {data && (data.thisWeekAvg != null || data.lastWeekAvg != null) && (
-            <div>
+            <div className="flex items-center gap-3 text-xs bg-muted/40 border border-border/60 rounded-xl px-3 py-1 shrink-0">
               <div className="text-muted-foreground">
-                Esta semana:{' '}
-                <span className="font-medium text-foreground tabular-nums">
-                  {fmt(data.thisWeekAvg)}
-                </span>
+                Esta semana: <span className="font-bold text-foreground tabular-nums">{fmt(data.thisWeekAvg)}</span>
               </div>
+              <span className="text-border/80">|</span>
               <div className="text-muted-foreground">
-                Semana passada:{' '}
-                <span className="tabular-nums">{fmt(data.lastWeekAvg)}</span>
+                Semana passada: <span className="font-semibold text-foreground/80 tabular-nums">{fmt(data.lastWeekAvg)}</span>
               </div>
             </div>
           )}
         </div>
-      </header>
+      </div>
 
-      <div className="p-5">
+      {/* Chart Body */}
+      <div>
         {loading || !data ? (
           <Skeleton className="h-[260px] w-full" />
         ) : !hasData ? (
@@ -91,14 +78,10 @@ export function ResponseTimeChart({
             data={chartData}
             index="day"
             categories={[CATEGORY]}
-            // 'violet' maps to Tailwind's `fill-violet-500` — matches
-            // the brand accent the hand-rolled bars used (#7c3aed).
             colors={['violet']}
-            valueFormatter={(value) => `${value.toFixed(1)}m`}
+            valueFormatter={(value) => (value === 0 ? '0m' : value % 1 === 0 ? `${value}m` : `${value.toFixed(1)}m`)}
             showLegend={false}
             yAxisWidth={48}
-            // Compact height so the chart sits well inside the card
-            // without dominating the row alongside the donut + activity feed.
             className="h-[260px]"
           />
         )}
