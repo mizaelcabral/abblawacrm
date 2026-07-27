@@ -31,36 +31,40 @@ export function ResponseTimeChart({
 
   return (
     <section className="cuba-card p-5 space-y-4">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-border/60">
+      {/* Header: Organized top-to-bottom layout */}
+      <div className="space-y-3 pb-3.5 border-b border-border/60">
+        {/* Title & Description Block (Full Width) */}
         <div>
-          <h3 className="text-base font-bold text-foreground">
+          <h3 className="text-base font-bold text-foreground leading-snug">
             Tempo Médio de Primeira Resposta
           </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
             Minutos para responder à primeira mensagem não respondida do cliente, por dia da semana
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0 whitespace-nowrap self-start lg:self-auto">
-          {thresholdMinutes > 0 && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-500 shrink-0">
-              <Target className="w-3.5 h-3.5" />
-              Meta {thresholdMinutes}m
-            </span>
-          )}
-          {data && (data.thisWeekAvg != null || data.lastWeekAvg != null) && (
-            <div className="flex items-center gap-3 text-xs bg-muted/40 border border-border/60 rounded-xl px-3 py-1 shrink-0">
-              <div className="text-muted-foreground">
-                Esta semana: <span className="font-bold text-foreground tabular-nums">{fmt(data.thisWeekAvg)}</span>
+        {/* Metrics & Target Sub-Bar */}
+        {(thresholdMinutes > 0 || (data && (data.thisWeekAvg != null || data.lastWeekAvg != null))) && (
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            {thresholdMinutes > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-500 shrink-0">
+                <Target className="w-3.5 h-3.5" />
+                Meta {thresholdMinutes}m
+              </span>
+            )}
+            {data && (data.thisWeekAvg != null || data.lastWeekAvg != null) && (
+              <div className="flex items-center gap-3 text-xs bg-muted/40 border border-border/60 rounded-xl px-3 py-1 shrink-0 whitespace-nowrap ml-auto">
+                <div className="text-muted-foreground">
+                  Esta semana: <span className="font-bold text-foreground tabular-nums">{fmt(data.thisWeekAvg)}</span>
+                </div>
+                <span className="text-border/80">|</span>
+                <div className="text-muted-foreground">
+                  Semana passada: <span className="font-semibold text-foreground/80 tabular-nums">{fmt(data.lastWeekAvg)}</span>
+                </div>
               </div>
-              <span className="text-border/80">|</span>
-              <div className="text-muted-foreground">
-                Semana passada: <span className="font-semibold text-foreground/80 tabular-nums">{fmt(data.lastWeekAvg)}</span>
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Chart Body */}
@@ -81,7 +85,7 @@ export function ResponseTimeChart({
             colors={['violet']}
             valueFormatter={(value) => (value === 0 ? '0m' : value % 1 === 0 ? `${value}m` : `${value.toFixed(1)}m`)}
             showLegend={false}
-            yAxisWidth={48}
+            yAxisWidth={60}
             className="h-[260px]"
           />
         )}
