@@ -90,7 +90,7 @@ function LoginPageInner() {
             <UsersRound className="h-6 w-6 text-primary" />
           </div>
         ) : (
-          <Logo badgeText="hub" className="justify-center scale-110" />
+          <Logo className="justify-center scale-125" />
         )}
 
         <Card className="w-full border-border bg-card">

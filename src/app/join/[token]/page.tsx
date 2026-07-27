@@ -222,7 +222,7 @@ export default function JoinPage() {
   if (peek === null || authedUserId === undefined) {
     return (
       <div className="relative z-10 flex w-full max-w-md flex-col gap-6">
-        <Logo badgeText="hub" className="justify-center scale-110" />
+        <Logo className="justify-center scale-125" />
         <Card className="w-full border-border bg-card">
           <CardContent className="flex flex-col items-center gap-3 py-12">
             <Loader2 className="size-6 animate-spin text-primary" />
@@ -238,7 +238,7 @@ export default function JoinPage() {
     const copy = FAIL_COPY[peek.reason];
     return (
       <div className="relative z-10 flex w-full max-w-md flex-col gap-6">
-        <Logo badgeText="hub" className="justify-center scale-110" />
+        <Logo className="justify-center scale-125" />
         <Card className="w-full border-border bg-card">
           <CardHeader className="items-center text-center">
             <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-red-500/10">
@@ -328,7 +328,7 @@ export default function JoinPage() {
   if (authedUserId) {
     return (
       <div className="relative z-10 flex w-full max-w-md flex-col gap-6">
-        <Logo badgeText="hub" className="justify-center scale-110" />
+        <Logo className="justify-center scale-125" />
         <Card className="w-full border-border bg-card">
           {inviteHeader}
           <CardContent className="flex flex-col gap-3">
@@ -417,7 +417,7 @@ export default function JoinPage() {
   // ----- Not authed: prompt to sign up or sign in -----
   return (
     <div className="relative z-10 flex w-full max-w-md flex-col gap-6">
-      <Logo badgeText="hub" className="justify-center scale-110" />
+      <Logo className="justify-center scale-125" />
       <Card className="w-full border-border bg-card">
         {inviteHeader}
         <CardContent className="flex flex-col gap-2">

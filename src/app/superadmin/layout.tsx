@@ -48,7 +48,7 @@ function SuperAdminLayoutInner({ children }: { children: ReactNode }) {
       {/* Sidebar for Desktop */}
       <aside className="hidden md:flex md:w-64 md:flex-col border-r border-border bg-card/60 backdrop-blur-md sticky top-0 h-screen">
         <div className="flex h-16 items-center justify-between px-6 border-b border-border">
-          <Logo badgeText="admin" />
+          <Logo />
           <ModeToggle />
         </div>
         <nav className="flex-1 space-y-1 px-4 py-4">
