@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   ShoppingBag,
   CreditCard,
@@ -75,6 +76,8 @@ export default function CheckoutPage() {
     saveAddress: true,
   });
 
+  const [selectedGateway, setSelectedGateway] = useState<string>('woovi');
+
   // Saved addresses auto-complete list
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -105,6 +108,9 @@ export default function CheckoutPage() {
         app_id: configData.has_app_id ? 'configured' : null
       };
       setConfig(mappedConfig);
+      if (mappedConfig.active_gateway) {
+        setSelectedGateway(mappedConfig.active_gateway);
+      }
       setStoreName(configData.store_name || '');
       setStoreLogoUrl(configData.store_logo_url || null);
 
@@ -630,6 +636,33 @@ export default function CheckoutPage() {
                   </div>
                 </div>
               )}
+
+              <Card className="border-border">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <CreditCard className="h-5 w-5 text-primary" />
+                    Forma de Pagamento
+                  </CardTitle>
+                  <CardDescription>
+                    Selecione como deseja pagar.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <RadioGroup
+                    value={selectedGateway}
+                    onValueChange={setSelectedGateway}
+                    className="grid gap-4"
+                  >
+                    <div className="flex items-center space-x-3 rounded-xl border border-border p-4 bg-background">
+                      <RadioGroupItem value="woovi" id="woovi" />
+                      <Label htmlFor="woovi" className="flex flex-1 items-center justify-between cursor-pointer">
+                        <span className="font-semibold text-sm">Pix (Woovi/Rove)</span>
+                        <QrCode className="h-5 w-5 text-muted-foreground" />
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </CardContent>
+              </Card>
 
               <Button
                 type="submit"

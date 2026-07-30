@@ -87,7 +87,23 @@ export async function POST(request: Request) {
       .eq('account_id', accountId)
       .maybeSingle();
 
-    if (configError || !wooviConfig || !wooviConfig.app_id) {
+    if (configError || !wooviConfig) {
+      return NextResponse.json(
+        { error: 'A loja não possui configurações de pagamento ativas.' },
+        { status: 400 }
+      );
+    }
+
+    const activeGateway = wooviConfig.active_gateway || 'woovi';
+    let gatewayAppId = wooviConfig.app_id;
+    let gatewaySecretKey = wooviConfig.secret_key;
+
+    if (activeGateway === 'woovi' && wooviConfig.gateways_config?.woovi) {
+      gatewayAppId = wooviConfig.gateways_config.woovi.appId || gatewayAppId;
+      gatewaySecretKey = wooviConfig.gateways_config.woovi.secretKey || gatewaySecretKey;
+    }
+
+    if (activeGateway === 'woovi' && !gatewayAppId) {
       return NextResponse.json(
         { error: 'A loja não possui credenciais Woovi ativas.' },
         { status: 400 }
@@ -285,11 +301,11 @@ export async function POST(request: Request) {
 
     // 8. Chamar Woovi API para gerar cobrança Pix
     const isSandbox =
-      wooviConfig.app_id.includes('sandbox') ||
-      wooviConfig.app_id.startsWith('plugin_sb') ||
+      gatewayAppId.includes('sandbox') ||
+      gatewayAppId.startsWith('plugin_sb') ||
       process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('localhost');
 
-    const wooviClient = new WooviClient(wooviConfig.app_id, isSandbox);
+    const wooviClient = new WooviClient(gatewayAppId, isSandbox);
 
     const valueCents = Math.round(totalAmount * 100);
 
@@ -317,7 +333,7 @@ export async function POST(request: Request) {
     }
 
     const masterAppId = getWooviMasterAppId();
-    const isSubaccount = masterAppId && wooviConfig.app_id === masterAppId;
+    const isSubaccount = masterAppId && gatewayAppId === masterAppId;
 
     let chargeResponse;
     try {
@@ -330,7 +346,7 @@ export async function POST(request: Request) {
           phone: customerInfo.phone,
         },
         ...(splits.length > 0 ? { splits } : {}),
-        ...(isSubaccount && wooviConfig.secret_key ? { subaccount: wooviConfig.secret_key } : {}),
+        ...(isSubaccount && gatewaySecretKey ? { subaccount: gatewaySecretKey } : {}),
       });
     } catch (err: any) {
       if (splits.length > 0 && (err.message.includes('split') || err.message.includes('virtual') || err.message.includes('400') || err.message.includes('pixKey'))) {
@@ -343,7 +359,7 @@ export async function POST(request: Request) {
             email: customerInfo.email,
             phone: customerInfo.phone,
           },
-          ...(isSubaccount && wooviConfig.secret_key ? { subaccount: wooviConfig.secret_key } : {}),
+          ...(isSubaccount && gatewaySecretKey ? { subaccount: gatewaySecretKey } : {}),
         });
       } else {
         throw err;
