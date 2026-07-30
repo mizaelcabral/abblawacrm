@@ -105,7 +105,10 @@ export default function StorefrontPage() {
     loadStoreData();
   }, [loadStoreData]);
 
-  // Load cart from LocalStorage using resolved account_id
+  // Wishlist state
+  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
+
+  // Load cart and wishlist from LocalStorage using resolved account_id
   useEffect(() => {
     if (!config?.account_id) return;
     
@@ -121,7 +124,30 @@ export default function StorefrontPage() {
         console.error(e);
       }
     }
+
+    const savedWishlist = localStorage.getItem(`wishlist_${config.account_id}`);
+    if (savedWishlist) {
+      try {
+        setWishlistIds(JSON.parse(savedWishlist));
+      } catch (e) {
+        console.error(e);
+      }
+    }
   }, [config?.account_id]);
+
+  const handleToggleWishlist = (productId: string) => {
+    if (!config?.account_id) return;
+    let updated: string[];
+    if (wishlistIds.includes(productId)) {
+      updated = wishlistIds.filter((id) => id !== productId);
+      toast.success('Produto removido da lista de desejos.');
+    } else {
+      updated = [...wishlistIds, productId];
+      toast.success('Produto adicionado à lista de desejos!');
+    }
+    setWishlistIds(updated);
+    localStorage.setItem(`wishlist_${config.account_id}`, JSON.stringify(updated));
+  };
 
   const updateCart = (items: { variationId: string; quantity: number }[]) => {
     setCartItems(items);
@@ -266,9 +292,14 @@ export default function StorefrontPage() {
           
           {/* Actions */}
           <div className="flex items-center gap-1 sm:gap-2">
-             <Button variant="ghost" size="icon" asChild className="hidden sm:inline-flex text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-full">
-                <a href={`/shop/${tenantSlug}/wishlist`}>
-                  <Heart className="h-5 w-5" />
+             <Button variant="ghost" size="icon" asChild className="relative hidden sm:inline-flex text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-full">
+                <a href={`/shop/${tenantSlug}/wishlist`} title="Lista de Desejos">
+                  <Heart className={`h-5 w-5 ${wishlistIds.length > 0 ? 'text-red-500 fill-red-500' : ''}`} />
+                  {wishlistIds.length > 0 && (
+                    <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white animate-in zoom-in">
+                      {wishlistIds.length}
+                    </span>
+                  )}
                 </a>
              </Button>
              <Button
@@ -433,11 +464,23 @@ export default function StorefrontPage() {
                              ) : (
                                <ShoppingBag className="h-12 w-12 text-muted-foreground opacity-30" />
                              )}
-                             <div className="absolute top-3 right-3 flex flex-col gap-2">
-                               <Badge variant={p.product_type === 'digital' ? 'secondary' : 'default'} className="text-[10px] uppercase font-bold shadow-sm backdrop-blur-md bg-background/90">
-                                 {p.product_type === 'digital' ? 'Digital' : 'Físico'}
-                               </Badge>
-                             </div>
+                              <div className="absolute top-3 left-3">
+                                <Badge variant={p.product_type === 'digital' ? 'secondary' : 'default'} className="text-[10px] uppercase font-bold shadow-sm backdrop-blur-md bg-background/90">
+                                  {p.product_type === 'digital' ? 'Digital' : 'Físico'}
+                                </Badge>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleToggleWishlist(p.id);
+                                }}
+                                className="absolute top-3 right-3 h-8 w-8 rounded-full bg-white/90 backdrop-blur-md text-gray-400 hover:text-red-500 transition-colors flex items-center justify-center shadow-sm z-10"
+                                title={wishlistIds.includes(p.id) ? "Remover da Lista de Desejos" : "Adicionar à Lista de Desejos"}
+                              >
+                                <Heart className={`h-4 w-4 ${wishlistIds.includes(p.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                              </button>
                            </a>
 
                            <div className="p-4 space-y-2.5">
