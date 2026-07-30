@@ -226,6 +226,24 @@ export default function ProductDetailPage() {
     setCartOpen(true);
   };
 
+  const handleBuyNow = () => {
+    if (!selectedVariation) return;
+
+    const existing = cartItems.find((item) => item.variationId === selectedVariation.id);
+    let updated;
+    if (existing) {
+      updated = cartItems.map((item) =>
+        item.variationId === selectedVariation.id
+          ? { ...item, quantity: item.quantity + quantity }
+          : item
+      );
+    } else {
+      updated = [...cartItems, { variationId: selectedVariation.id, quantity }];
+    }
+    updateCart(updated);
+    router.push(`/shop/${tenantSlug}/checkout`);
+  };
+
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   if (loading) {
@@ -332,9 +350,9 @@ export default function ProductDetailPage() {
         <div className="grid gap-8 md:grid-cols-2">
           {/* Lado Esquerdo: Galeria */}
           <div className="space-y-4">
-            <div className="relative aspect-square w-full rounded-2xl border border-border bg-card overflow-hidden flex items-center justify-center">
+            <div className="relative aspect-square w-full rounded-2xl border border-border bg-card overflow-hidden flex items-center justify-center group cursor-zoom-in">
               {activeImage ? (
-                <img src={activeImage} alt={product.name} className="h-full w-full object-cover" />
+                <img src={activeImage} alt={product.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-125" />
               ) : (
                 <ShoppingBag className="h-20 w-20 text-muted-foreground opacity-30" />
               )}
@@ -370,7 +388,17 @@ export default function ProductDetailPage() {
                 <Layers className="h-3.5 w-3.5" />
                 {product.category?.name || 'Sem Categoria'}
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">{product.name}</h1>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight">{product.name}</h1>
+                <div className="flex items-center gap-1 mt-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <svg key={star} className="w-4 h-4 fill-primary text-primary" viewBox="0 0 20 20">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  ))}
+                  <span className="text-sm text-muted-foreground ml-2">(4.8)</span>
+                </div>
+              </div>
 
               {/* Preço Ativo */}
               <div className="text-2xl sm:text-3xl font-extrabold text-primary">
@@ -460,15 +488,23 @@ export default function ProductDetailPage() {
             </div>
 
             {/* Ações */}
-            <div className="pt-6 border-t border-border mt-auto">
+            <div className="pt-6 border-t border-border mt-auto flex flex-col gap-3">
               <Button
                 className="w-full rounded-2xl h-12 text-base font-bold shadow-md shadow-primary/20"
-                onClick={handleAddToCart}
+                onClick={handleBuyNow}
                 disabled={!!(product.product_type === 'physical' && selectedVariation && selectedVariation.stock <= 0)}
               >
                 {product.product_type === 'physical' && selectedVariation && selectedVariation.stock <= 0
                   ? 'Esgotado'
-                  : 'Adicionar ao Carrinho'}
+                  : 'Comprar Agora'}
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full rounded-2xl h-12 text-base font-bold"
+                onClick={handleAddToCart}
+                disabled={!!(product.product_type === 'physical' && selectedVariation && selectedVariation.stock <= 0)}
+              >
+                Adicionar ao Carrinho
               </Button>
             </div>
           </div>
