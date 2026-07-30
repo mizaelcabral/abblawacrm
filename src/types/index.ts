@@ -635,6 +635,8 @@ export interface WooviConfig {
   id: string;
   account_id: string;
   onboarding_status: WooviOnboardingStatus;
+  active_gateway?: string | null;
+  gateways_config?: Record<string, any> | null;
   app_id?: string | null;
   secret_key?: string | null;
   default_shipping_fee: number;
