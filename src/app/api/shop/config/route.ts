@@ -35,13 +35,14 @@ export async function GET(request: Request) {
       if (account) {
         return NextResponse.json({
           account_id: account.id,
-          onboarding_status: 'none',
+          onboarding_status: 'approved',
           default_shipping_fee: 0,
           store_name: account.name || 'Loja Virtual',
           store_slug: null,
           store_description: null,
           store_logo_url: null,
           password_protected: false,
+          active_gateway: 'woovi',
           has_app_id: false
         });
       }
@@ -49,16 +50,25 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Store not found' }, { status: 404 });
   }
 
+  const activeGateway = data.active_gateway || 'woovi';
+  const gatewaysConfig = data.gateways_config || {};
+  const activeGwConfig = gatewaysConfig[activeGateway] || {};
+
+  const hasAppId = activeGateway === 'woovi'
+    ? !!(data.app_id || activeGwConfig.appId)
+    : !!(activeGwConfig.appId || activeGwConfig.apiKey || activeGwConfig.secretKey);
+
   // Retorna apenas dados públicos seguros (OMITE app_id, secret_key e store_password)
   return NextResponse.json({
     account_id: data.account_id,
-    onboarding_status: data.onboarding_status,
+    onboarding_status: data.onboarding_status || 'approved',
     default_shipping_fee: data.default_shipping_fee,
     store_name: data.store_name,
     store_slug: data.store_slug,
     store_description: data.store_description,
     store_logo_url: data.store_logo_url,
     password_protected: data.password_protected,
-    has_app_id: !!data.app_id
+    active_gateway: activeGateway,
+    has_app_id: hasAppId
   });
 }

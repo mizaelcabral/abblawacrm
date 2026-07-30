@@ -72,6 +72,7 @@ describe('GET /api/shop/config', () => {
     expect(body.app_id).toBeUndefined(); // should be omitted
     expect(body.secret_key).toBeUndefined(); // should be omitted
     expect(body.store_password).toBeUndefined(); // should be omitted
+    expect(body.active_gateway).toBe('woovi');
     expect(body.has_app_id).toBe(true);
     expect(mockQueryChain.or).toHaveBeenCalledWith(`account_id.eq.${uuid},store_slug.eq.${uuid}`);
   });
@@ -100,8 +101,33 @@ describe('GET /api/shop/config', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.store_slug).toBe(slug);
+    expect(body.active_gateway).toBe('woovi');
     expect(body.has_app_id).toBe(false);
     expect(mockQueryChain.eq).toHaveBeenCalledWith('store_slug', slug);
+  });
+
+  it('should recognize active_gateway and gateways_config', async () => {
+    const slug = 'custom-gateway-store';
+    const req = new Request(`http://localhost/api/shop/config?tenantSlug=${slug}`);
+    mockQueryChain.maybeSingle.mockResolvedValue({
+      data: {
+        account_id: 'some-uuid',
+        onboarding_status: 'approved',
+        active_gateway: 'asaas',
+        gateways_config: {
+          asaas: { apiKey: 'asaas_key_123' },
+        },
+        store_name: 'Custom Gateway Store',
+        store_slug: slug,
+      },
+      error: null,
+    });
+
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.active_gateway).toBe('asaas');
+    expect(body.has_app_id).toBe(true);
   });
 
   it('should return 404 if store not found and not a valid account', async () => {
@@ -127,6 +153,8 @@ describe('GET /api/shop/config', () => {
     const body = await res.json();
     expect(body.account_id).toBe(uuid);
     expect(body.store_name).toBe('Minha Empresa');
+    expect(body.onboarding_status).toBe('approved');
+    expect(body.active_gateway).toBe('woovi');
     expect(body.has_app_id).toBe(false);
   });
 
