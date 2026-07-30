@@ -19,8 +19,10 @@ import {
   Sparkles,
   CheckSquare,
   Globe,
+  Shield,
 } from 'lucide-react'
 import { Logo } from './logo'
+import { useAuth } from '@/hooks/use-auth'
 
 interface CubaSidebarProps {
   isCollapsed?: boolean
@@ -151,6 +153,23 @@ export function CubaSidebar({
   onCloseMobile,
 }: CubaSidebarProps) {
   const pathname = usePathname()
+  const { profile } = useAuth()
+
+  const displayGroups = profile?.role === 'super_admin'
+    ? [
+        ...navGroups,
+        {
+          groupTitle: 'ADMINISTRAÇÃO',
+          items: [
+            {
+              title: 'Painel Super Admin',
+              href: '/superadmin',
+              icon: Shield,
+            },
+          ],
+        },
+      ]
+    : navGroups
 
   return (
     <>
@@ -192,7 +211,7 @@ export function CubaSidebar({
 
         {/* Navigation Items Scroll Area */}
         <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6 no-scrollbar">
-          {navGroups.map((group, idx) => (
+          {displayGroups.map((group, idx) => (
             <div key={idx} className="space-y-1.5">
               {!isCollapsed && (
                 <h2 className="px-3 text-[10px] font-extrabold tracking-wider text-muted-foreground/70 uppercase">
