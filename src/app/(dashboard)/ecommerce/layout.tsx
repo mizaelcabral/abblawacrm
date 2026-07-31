@@ -31,7 +31,7 @@ export default function EcommerceLayout({
   const pathname = usePathname();
 
   return (
-    <div className="flex flex-col space-y-6">
+    <div className="flex flex-col space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col space-y-2 border-b border-border pb-5 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">

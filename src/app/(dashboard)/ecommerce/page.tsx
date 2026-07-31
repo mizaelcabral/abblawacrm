@@ -225,7 +225,7 @@ export default function EcommerceOverviewPage() {
   const hasCredentials = config && ((config.gateways_config as any)?.woovi?.appId || config.app_id);
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6 w-full max-w-full">
+    <div className="space-y-6 w-full max-w-full">
       {!hasCredentials && (
         <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-amber-600 flex items-center justify-between">
           <div className="flex items-center space-x-3">
