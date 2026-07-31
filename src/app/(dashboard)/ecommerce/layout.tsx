@@ -45,7 +45,7 @@ export default function EcommerceLayout({
 
       {/* Navegação Secundária (Sub-abas) */}
       <div className="flex border-b border-border overflow-x-auto pb-px">
-        <nav className="flex space-x-6 min-w-max px-1">
+        <nav className="flex space-x-6 min-w-max">
           {subNavItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
