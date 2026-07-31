@@ -51,7 +51,7 @@ export default function OrderDetailsPage() {
 
   // Realtime updates for payment status
   useEffect(() => {
-    if (order && order.status === 'pending' && timeLeft > 0) {
+    if (order && order.status === 'pending') {
       const channel = supabase
         .channel(`public-order-status-${order.id}`)
         .on(
@@ -66,6 +66,15 @@ export default function OrderDetailsPage() {
         )
         .subscribe();
 
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [order?.id, order?.status, supabase]);
+
+  // Countdown timer interval
+  useEffect(() => {
+    if (order && order.status === 'pending' && timeLeft > 0) {
       const interval = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 1) {
@@ -77,11 +86,10 @@ export default function OrderDetailsPage() {
       }, 1000);
 
       return () => {
-        supabase.removeChannel(channel);
         clearInterval(interval);
       };
     }
-  }, [order, supabase, timeLeft]);
+  }, [order?.status, timeLeft]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
