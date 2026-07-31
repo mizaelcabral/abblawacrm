@@ -130,6 +130,7 @@ export default function OrderHistoryPage() {
                         <tr>
                           <th className="px-5 py-4 font-medium rounded-tl-lg">Pedido #</th>
                           <th className="px-5 py-4 font-medium">Data</th>
+                          <th className="px-5 py-4 font-medium">Qtd de Itens</th>
                           <th className="px-5 py-4 font-medium text-right">Total</th>
                           <th className="px-5 py-4 font-medium">Status</th>
                           <th className="px-5 py-4 font-medium rounded-tr-lg"></th>
@@ -145,6 +146,9 @@ export default function OrderHistoryPage() {
                               {new Date(order.created_at).toLocaleDateString('pt-BR', {
                                 day: '2-digit', month: 'short', year: 'numeric'
                               })}
+                            </td>
+                            <td className="px-5 py-4 font-medium">
+                              {order.order_items?.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0) || 0}
                             </td>
                             <td className="px-5 py-4 text-right font-bold text-foreground">
                               R$ {Number(order.total_amount).toFixed(2)}

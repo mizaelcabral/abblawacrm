@@ -21,7 +21,7 @@ export default function OrderDetailsPage() {
   const [address, setAddress] = useState<any>(null);
   const [timeLeft, setTimeLeft] = useState(900); // 15 mins for PIX
 
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   useEffect(() => {
     async function loadOrder() {
@@ -51,7 +51,7 @@ export default function OrderDetailsPage() {
 
   // Realtime updates for payment status
   useEffect(() => {
-    if (order && order.status === 'pending') {
+    if (order && order.status === 'pending' && timeLeft > 0) {
       const channel = supabase
         .channel(`public-order-status-${order.id}`)
         .on(
@@ -81,7 +81,7 @@ export default function OrderDetailsPage() {
         clearInterval(interval);
       };
     }
-  }, [order, supabase]);
+  }, [order, supabase, timeLeft]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -107,7 +107,7 @@ export default function OrderDetailsPage() {
   const translateStatus = (status: string) => {
     switch (status) {
       case 'paid': return 'Pago';
-      case 'pending': return 'Aguardando Pagamento';
+      case 'pending': return timeLeft === 0 ? 'Expirado' : 'Aguardando Pagamento';
       case 'cancelled': return 'Cancelado / Expirado';
       default: return status;
     }
@@ -224,7 +224,7 @@ export default function OrderDetailsPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground/80">
                       <Truck className="h-4 w-4 text-primary" /> Endereço de Entrega
-                    </CardTitle>
+                  </CardTitle>
                   </CardHeader>
                   <CardContent className="text-sm space-y-1 text-muted-foreground">
                     <p className="font-medium text-foreground">{address.street}, {address.number} {address.complement ? ` - ${address.complement}` : ''}</p>
@@ -239,45 +239,64 @@ export default function OrderDetailsPage() {
           {/* Sidebar (Right) */}
           <div className="space-y-6">
             {/* Pix Payment Box if pending */}
-            {isPending && !isExpired && (
-              <Card className="border-primary/30 shadow-md overflow-hidden">
-                <div className="h-1.5 w-full bg-primary/20">
-                  <div className="h-full bg-primary animate-pulse w-full"></div>
-                </div>
-                <CardHeader className="text-center pb-2 bg-primary/5 border-b border-primary/10">
-                  <CardTitle className="text-lg text-primary flex justify-center items-center gap-2 font-bold">
-                    <QrCode className="h-5 w-5" /> Pagamento Pix
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-6 space-y-5 text-center">
-                  <div className="inline-flex items-center gap-1.5 text-xs font-bold bg-amber-100 text-amber-800 px-4 py-1.5 rounded-full border border-amber-200">
-                    <Clock className="h-4 w-4 animate-spin" /> Expira em {formatTime(timeLeft)}
-                  </div>
-                  
-                  {order.woovi_qrcode_image && (
-                    <div className="border-2 border-border p-3 rounded-2xl bg-white w-fit mx-auto shadow-sm hover:border-primary/50 transition-colors">
-                      <img src={order.woovi_qrcode_image} alt="QR Code" className="h-40 w-40 object-contain" />
+            {isPending && (
+              <Card className={isExpired ? "border-red-200 shadow-md overflow-hidden bg-red-50/50" : "border-primary/30 shadow-md overflow-hidden"}>
+                {isExpired ? (
+                  <>
+                    <CardHeader className="text-center pb-2 bg-red-100/30 border-b border-red-200">
+                      <CardTitle className="text-lg text-red-700 flex justify-center items-center gap-2 font-bold">
+                        <XCircle className="h-5 w-5" /> Pix Expirado
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-6 space-y-4 text-center">
+                      <p className="text-sm text-red-900 font-bold">
+                        O tempo limite para pagamento deste pedido expirou.
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Por favor, realize uma nova compra ou entre em contato com o suporte do lojista se achar que isso é um erro.
+                      </p>
+                    </CardContent>
+                  </>
+                ) : (
+                  <>
+                    <div className="h-1.5 w-full bg-primary/20">
+                      <div className="h-full bg-primary animate-pulse w-full"></div>
                     </div>
-                  )}
-
-                  {order.woovi_brcode && (
-                    <div className="space-y-2 text-left">
-                      <div className="text-xs text-muted-foreground font-bold text-center">Pix Copia e Cola</div>
-                      <div className="flex gap-2 border border-border bg-muted/30 p-2 rounded-xl items-center shadow-inner">
-                        <div className="flex-1 overflow-hidden truncate text-[11px] font-mono text-muted-foreground">
-                          {order.woovi_brcode}
-                        </div>
-                        <Button size="sm" onClick={() => copyToClipboard(order.woovi_brcode)} className="h-8 shrink-0 text-xs px-3 font-bold shadow-md shadow-primary/20">
-                          <Copy className="h-3.5 w-3.5 mr-1.5" /> Copiar
-                        </Button>
+                    <CardHeader className="text-center pb-2 bg-primary/5 border-b border-primary/10">
+                      <CardTitle className="text-lg text-primary flex justify-center items-center gap-2 font-bold">
+                        <QrCode className="h-5 w-5" /> Pagamento Pix
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-6 space-y-5 text-center">
+                      <div className="inline-flex items-center gap-1.5 text-xs font-bold bg-amber-100 text-amber-800 px-4 py-1.5 rounded-full border border-amber-200">
+                        <Clock className="h-4 w-4 animate-spin" /> Expira em {formatTime(timeLeft)}
                       </div>
-                    </div>
-                  )}
-                  
-                  <p className="text-xs text-muted-foreground mt-3 leading-relaxed font-medium">
-                    Aguardando confirmação do pagamento.<br/>A página será atualizada automaticamente.
-                  </p>
-                </CardContent>
+                      
+                      {order.woovi_qrcode_image && (
+                        <div className="border-2 border-border p-3 rounded-2xl bg-white w-fit mx-auto shadow-sm hover:border-primary/50 transition-colors">
+                          <img src={order.woovi_qrcode_image} alt="QR Code" className="h-40 w-40 object-contain" />
+                        </div>
+                      )}
+
+                      {order.woovi_brcode && (
+                        <div className="space-y-2 text-left">
+                          <div className="text-xs text-muted-foreground font-bold text-center">Pix Copia e Cola</div>
+                          <div className="flex gap-2 border border-border bg-muted/30 p-2 rounded-xl items-center shadow-inner">
+                            <div className="flex-1 overflow-hidden truncate text-[11px] font-mono text-muted-foreground">
+                              {order.woovi_brcode}
+                            </div>
+                            <Button size="sm" onClick={() => copyToClipboard(order.woovi_brcode)} className="h-8 shrink-0 text-xs px-3 font-bold shadow-md shadow-primary/20">
+                              <Copy className="h-3.5 w-3.5 mr-1.5" /> Copiar
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <p className="text-xs text-muted-foreground mt-3 leading-relaxed font-medium">
+                        Aguardando confirmação do pagamento.<br/>A página será atualizada automaticamente.
+                      </p>
+                    </CardContent>
+                )}
               </Card>
             )}
 

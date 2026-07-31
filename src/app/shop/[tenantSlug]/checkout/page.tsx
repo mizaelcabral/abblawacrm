@@ -47,7 +47,7 @@ export default function CheckoutPage() {
   const params = useParams();
   const router = useRouter();
   const tenantSlug = params.tenantSlug as string; // account_id or slug
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<WooviConfig | null>(null);
@@ -689,25 +689,38 @@ export default function CheckoutPage() {
               <CardContent className="space-y-6">
                 
                 {/* Timer */}
-                <div className="flex items-center justify-center gap-1.5 text-sm font-semibold bg-muted rounded-full py-1.5 px-4 w-max mx-auto text-amber-500 border border-amber-500/20">
-                  <Clock className="h-4 w-4 animate-spin" />
-                  <span>Aguardando pagamento: {formatTime(timeLeft)}</span>
-                </div>
-
-                {/* QR Code */}
-                {createdOrder.woovi_qrcode_image ? (
-                  <div className="mx-auto border border-border rounded-2xl p-4 bg-white h-52 w-52 flex items-center justify-center shadow-inner">
-                    <img src={createdOrder.woovi_qrcode_image} alt="Pix QR Code" className="h-full w-full object-contain" />
+                {timeLeft > 0 ? (
+                  <div className="flex items-center justify-center gap-1.5 text-sm font-semibold bg-muted rounded-full py-1.5 px-4 w-max mx-auto text-amber-500 border border-amber-500/20">
+                    <Clock className="h-4 w-4 animate-spin" />
+                    <span>Aguardando pagamento: {formatTime(timeLeft)}</span>
                   </div>
                 ) : (
-                  <div className="mx-auto border border-dashed border-muted rounded-2xl p-6 h-52 w-52 flex flex-col items-center justify-center text-muted-foreground text-xs">
-                    <QrCode className="h-10 w-10 mb-2 opacity-50" />
-                    <span>QR Code indisponível</span>
+                  <div className="flex flex-col items-center justify-center gap-2 text-sm font-semibold bg-red-500/10 rounded-xl p-4 mx-auto text-red-500 border border-red-500/20">
+                    <AlertCircle className="h-6 w-6" />
+                    <span className="text-lg">Pix Expirado!</span>
+                    <span className="font-normal text-xs text-muted-foreground text-center">
+                      O tempo limite para pagamento deste Pix acabou.<br/>
+                      Por favor, recarregue a página e faça um novo pedido.
+                    </span>
                   </div>
                 )}
 
+                {/* QR Code */}
+                {timeLeft > 0 && (
+                  createdOrder.woovi_qrcode_image ? (
+                    <div className="mx-auto border border-border rounded-2xl p-4 bg-white h-52 w-52 flex items-center justify-center shadow-inner">
+                      <img src={createdOrder.woovi_qrcode_image} alt="Pix QR Code" className="h-full w-full object-contain" />
+                    </div>
+                  ) : (
+                    <div className="mx-auto border border-dashed border-muted rounded-2xl p-6 h-52 w-52 flex flex-col items-center justify-center text-muted-foreground text-xs">
+                      <QrCode className="h-10 w-10 mb-2 opacity-50" />
+                      <span>QR Code indisponível</span>
+                    </div>
+                  )
+                )}
+
                 {/* Copia e Cola */}
-                {createdOrder.woovi_brcode && (
+                {timeLeft > 0 && createdOrder.woovi_brcode && (
                   <div className="space-y-2 text-left max-w-sm mx-auto">
                     <Label className="text-xs font-bold text-muted-foreground block text-center">Código Pix Copia e Cola:</Label>
                     <div className="flex gap-2 border border-border rounded-xl p-2 bg-muted/50 break-all font-mono text-[10px] items-center">

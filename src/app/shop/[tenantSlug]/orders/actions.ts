@@ -17,12 +17,12 @@ export async function lookupCustomerOrders(tenantSlug: string, query: string) {
   
   const accountId = config.account_id;
 
-  // Search by phone or email in customer_info jsonb
+  // Search by phone or email in customer_info jsonb with strict matching
   const { data: orders, error } = await supabase
     .from('orders')
-    .select('*')
+    .select('*, order_items(quantity)')
     .eq('account_id', accountId)
-    .or(`customer_info->>phone.ilike.%${query}%,customer_info->>email.ilike.%${query}%`)
+    .or(`customer_info->>phone.eq.${query},customer_info->>email.eq.${query}`)
     .order('created_at', { ascending: false });
 
   if (error) {
