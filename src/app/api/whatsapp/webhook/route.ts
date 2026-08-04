@@ -1027,25 +1027,33 @@ async function findOrCreateContact(
   return { contact: newContact, wasCreated: true }
 }
 
-async function findOrCreateConversation(
+export async function findOrCreateConversation(
   accountId: string,
   configOwnerUserId: string,
   contactId: string,
 ) {
-  // Look for existing conversation in this account
+  // maybeSingle() retorna null sem erro quando nenhuma linha existe.
+  // order + limit garante que, se houver duplicatas históricas,
+  // reutilizamos a conversa mais antiga em vez de criar mais uma.
   const { data: existing, error: findError } = await supabaseAdmin()
     .from('conversations')
     .select('*')
     .eq('account_id', accountId)
     .eq('contact_id', contactId)
-    .single()
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
 
-  if (!findError && existing) {
+  if (findError) {
+    console.error('Error finding conversation:', findError)
+    return null
+  }
+
+  if (existing) {
     return existing
   }
 
-  // Create new conversation. Same tenancy + audit split as
-  // findOrCreateContact above.
+  // Create new conversation — same tenancy + audit split pattern.
   const { data: newConv, error: createError } = await supabaseAdmin()
     .from('conversations')
     .insert({
@@ -1057,6 +1065,20 @@ async function findOrCreateConversation(
     .single()
 
   if (createError) {
+    // Race condition: outra requisição concorrente criou a conversa entre
+    // nosso SELECT e INSERT. Re-buscar em vez de descartar a mensagem.
+    // Mesmo padrão já usado em findOrCreateContact.
+    if (isUniqueViolation(createError)) {
+      const { data: raced } = await supabaseAdmin()
+        .from('conversations')
+        .select('*')
+        .eq('account_id', accountId)
+        .eq('contact_id', contactId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (raced) return raced
+    }
     console.error('Error creating conversation:', createError)
     return null
   }
