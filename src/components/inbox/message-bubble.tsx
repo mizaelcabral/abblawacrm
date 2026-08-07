@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, memo } from "react";
 import { cn } from "@/lib/utils";
 import type { Message, MessageReaction } from "@/types";
 import {
@@ -305,7 +305,7 @@ function MessageContent({ message }: { message: Message }) {
   }
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   message,
   reply,
   reactions,
@@ -374,4 +374,4 @@ export function MessageBubble({
       )}
     </div>
   );
-}
+});

@@ -750,28 +750,30 @@ export function MessageThread({
 
       // Functional updater — captures the freshest reactions list, never a
       // stale closure. Snapshot stored for rollback on POST failure.
-      setReactions((prev) => {
-        snapshot = prev;
-        const own = prev.find(
-          (r) =>
-            r.message_id === messageId &&
-            r.actor_type === "agent" &&
-            r.actor_id === userId,
-        );
-        if (emoji === "") return own ? prev.filter((r) => r !== own) : prev;
-        if (own) return prev.map((r) => (r === own ? { ...own, emoji } : r));
-        return [
-          ...prev,
-          {
-            id: `temp-${Date.now()}`,
-            message_id: messageId,
-            conversation_id: convId,
-            actor_type: "agent",
-            actor_id: userId,
-            emoji,
-            created_at: new Date().toISOString(),
-          },
-        ];
+      startTransition(() => {
+        setReactions((prev) => {
+          snapshot = prev;
+          const own = prev.find(
+            (r) =>
+              r.message_id === messageId &&
+              r.actor_type === "agent" &&
+              r.actor_id === userId,
+          );
+          if (emoji === "") return own ? prev.filter((r) => r !== own) : prev;
+          if (own) return prev.map((r) => (r === own ? { ...own, emoji } : r));
+          return [
+            ...prev,
+            {
+              id: `temp-${Date.now()}`,
+              message_id: messageId,
+              conversation_id: convId,
+              actor_type: "agent",
+              actor_id: userId,
+              emoji,
+              created_at: new Date().toISOString(),
+            },
+          ];
+        });
       });
 
       try {
@@ -787,7 +789,7 @@ export function MessageThread({
       } catch (err) {
         const reason = err instanceof Error ? err.message : "network error";
         toast.error(`Falha na reação: ${reason}`);
-        setReactions(snapshot);
+        startTransition(() => setReactions(snapshot));
       }
     },
     [conversation, user?.id],
