@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, startTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Conversation } from "@/types";
 
@@ -60,7 +60,9 @@ export function useTotalUnread(): number {
           // Recompute — cheap, conversations per user stay small.
           let sum = 0;
           for (const n of map.values()) if (n > 0) sum += 1;
-          setTotal(sum);
+          startTransition(() => {
+            setTotal(sum);
+          });
         },
       )
       .subscribe();
