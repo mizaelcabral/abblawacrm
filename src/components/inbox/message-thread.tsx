@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, startTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { cn, getInitials, getAvatarColor } from "@/lib/utils";
@@ -485,8 +485,10 @@ export function MessageThread({
         created_at: new Date().toISOString(),
         reply_to_message_id: replyToId,
       };
-      onNewMessage(optimisticMsg);
-      setReplyTo(null);
+      startTransition(() => {
+        onNewMessage(optimisticMsg);
+        setReplyTo(null);
+      });
 
       try {
         const res = await fetch("/api/whatsapp/send", {
@@ -549,8 +551,10 @@ export function MessageThread({
         created_at: new Date().toISOString(),
         reply_to_message_id: payload.replyToId,
       };
-      onNewMessage(optimisticMsg);
-      setReplyTo(null);
+      startTransition(() => {
+        onNewMessage(optimisticMsg);
+        setReplyTo(null);
+      });
 
       try {
         const res = await fetch("/api/whatsapp/send", {
@@ -634,7 +638,9 @@ export function MessageThread({
         status: "sending",
         created_at: new Date().toISOString(),
       };
-      onNewMessage(optimisticMsg);
+      startTransition(() => {
+        onNewMessage(optimisticMsg);
+      });
 
       try {
         const res = await fetch("/api/whatsapp/send", {

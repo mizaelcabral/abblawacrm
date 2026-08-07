@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, Suspense } from "react";
+import { useState, useCallback, useEffect, useRef, Suspense, startTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Conversation, Message, Contact, ConversationStatus } from "@/types";
@@ -121,31 +121,35 @@ function InboxPageContent() {
           activeConversation &&
           newMsg.conversation_id === activeConversation.id
         ) {
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMsg.id)) return prev;
-            const withoutOptimistic = prev.filter(
-              (m) => !m.id.startsWith("temp-")
-            );
-            return [...withoutOptimistic, newMsg];
+          startTransition(() => {
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+              const withoutOptimistic = prev.filter(
+                (m) => !m.id.startsWith("temp-")
+              );
+              return [...withoutOptimistic, newMsg];
+            });
           });
         }
 
         if (knownConvIdsRef.current.has(newMsg.conversation_id)) {
-          setConversations((prev) => {
-            const updated = prev.map((c) =>
-              c.id === newMsg.conversation_id
-                ? {
-                    ...c,
-                    last_message_text: newMsg.content_text ?? "",
-                    last_message_at: newMsg.created_at,
-                    unread_count:
-                      activeConversation?.id === newMsg.conversation_id
-                        ? 0
-                        : c.unread_count + 1,
-                  }
-                : c,
-            );
-            return sortConversations(updated);
+          startTransition(() => {
+            setConversations((prev) => {
+              const updated = prev.map((c) =>
+                c.id === newMsg.conversation_id
+                  ? {
+                      ...c,
+                      last_message_text: newMsg.content_text ?? "",
+                      last_message_at: newMsg.created_at,
+                      unread_count:
+                        activeConversation?.id === newMsg.conversation_id
+                          ? 0
+                          : c.unread_count + 1,
+                    }
+                  : c,
+              );
+              return sortConversations(updated);
+            });
           });
         } else {
           hydrateConversation(newMsg.conversation_id);
@@ -153,9 +157,11 @@ function InboxPageContent() {
       }
 
       if (event.eventType === "UPDATE") {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === newMsg.id ? { ...m, ...newMsg } : m))
-        );
+        startTransition(() => {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === newMsg.id ? { ...m, ...newMsg } : m))
+          );
+        });
       }
     },
     [activeConversation, hydrateConversation]
@@ -171,9 +177,11 @@ function InboxPageContent() {
 
       if (event.eventType === "INSERT") {
         if (!knownConvIdsRef.current.has(conv.id)) {
-          setConversations((prev) => {
-            if (prev.some((c) => c.id === conv.id)) return prev;
-            return sortConversations([conv, ...prev]);
+          startTransition(() => {
+            setConversations((prev) => {
+              if (prev.some((c) => c.id === conv.id)) return prev;
+              return sortConversations([conv, ...prev]);
+            });
           });
           hydrateConversation(conv.id);
         }
@@ -182,26 +190,30 @@ function InboxPageContent() {
       if (event.eventType === "UPDATE") {
         if (knownConvIdsRef.current.has(conv.id)) {
           const isActive = activeConversation?.id === conv.id;
-          setConversations((prev) => {
-            const updated = prev.map((c) =>
-              c.id === conv.id
-                ? {
-                    ...c,
-                    ...conv,
-                    unread_count: isActive ? 0 : conv.unread_count,
-                  }
-                : c,
-            );
-            return sortConversations(updated);
+          startTransition(() => {
+            setConversations((prev) => {
+              const updated = prev.map((c) =>
+                c.id === conv.id
+                  ? {
+                      ...c,
+                      ...conv,
+                      unread_count: isActive ? 0 : conv.unread_count,
+                    }
+                  : c,
+              );
+              return sortConversations(updated);
+            });
           });
         } else {
           hydrateConversation(conv.id);
         }
 
         if (activeConversation && conv.id === activeConversation.id) {
-          setActiveConversation((prev) =>
-            prev ? { ...prev, ...conv } : prev
-          );
+          startTransition(() => {
+            setActiveConversation((prev) =>
+              prev ? { ...prev, ...conv } : prev
+            );
+          });
         }
       }
     },
@@ -404,49 +416,57 @@ function InboxPageContent() {
   }, []);
 
   const handleNewMessage = useCallback((msg: Message) => {
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === msg.id)) return prev;
-      return [...prev, msg];
+    startTransition(() => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
     });
   }, []);
 
   const handleUpdateMessage = useCallback(
     (id: string, updates: Partial<Message>) => {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
-      );
+      startTransition(() => {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
+        );
+      });
     },
     []
   );
 
   const handleStatusChange = useCallback(
     (conversationId: string, status: ConversationStatus) => {
-      setConversations((prev) =>
-        prev.map((c) => (c.id === conversationId ? { ...c, status } : c))
-      );
-      if (activeConversation?.id === conversationId) {
-        setActiveConversation((prev) => (prev ? { ...prev, status } : prev));
-      }
+      startTransition(() => {
+        setConversations((prev) =>
+          prev.map((c) => (c.id === conversationId ? { ...c, status } : c))
+        );
+        if (activeConversation?.id === conversationId) {
+          setActiveConversation((prev) => (prev ? { ...prev, status } : prev));
+        }
+      });
     },
     [activeConversation]
   );
 
   const handleAssignChange = useCallback(
     (conversationId: string, assignedAgentId: string | null) => {
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === conversationId
-            ? { ...c, assigned_agent_id: assignedAgentId ?? undefined }
-            : c
-        )
-      );
-      if (activeConversation?.id === conversationId) {
-        setActiveConversation((prev) =>
-          prev
-            ? { ...prev, assigned_agent_id: assignedAgentId ?? undefined }
-            : prev
+      startTransition(() => {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === conversationId
+              ? { ...c, assigned_agent_id: assignedAgentId ?? undefined }
+              : c
+          )
         );
-      }
+        if (activeConversation?.id === conversationId) {
+          setActiveConversation((prev) =>
+            prev
+              ? { ...prev, assigned_agent_id: assignedAgentId ?? undefined }
+              : prev
+          );
+        }
+      });
     },
     [activeConversation]
   );
