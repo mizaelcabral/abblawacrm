@@ -32,9 +32,12 @@ export function EmbeddedWidgetModal({ open, onOpenChange, bookingSlug }: Embedde
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl w-full p-6">
-        <DialogHeader className="pr-8">
-          <DialogTitle className="flex items-center gap-2 text-xl font-semibold">
+      <DialogContent
+        className="sm:max-w-2xl w-full p-6"
+        style={{ maxWidth: '672px', width: 'calc(100vw - 2rem)' }}
+      >
+        <DialogHeader className="pr-10">
+          <DialogTitle className="flex items-center gap-2 text-xl font-semibold pr-2">
             <Code className="h-5 w-5 text-primary shrink-0" />
             <span>Widget de Agendamento Embeddable</span>
           </DialogTitle>
