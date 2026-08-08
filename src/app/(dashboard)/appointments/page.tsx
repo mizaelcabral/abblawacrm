@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
-import { Calendar, Clock, User, Phone, Mail, Plus, Check, X, Settings2, Trash, Upload, Loader2, Code } from 'lucide-react'
+import { Calendar, Clock, User, Phone, Mail, Plus, Check, X, Settings2, Trash, Upload, Loader2, Code, Video, MapPin, ExternalLink } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
@@ -45,8 +45,15 @@ interface Appointment {
   end_time: string
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed'
   notes: string | null
+  meeting_url?: string | null
+  location_address?: string | null
   contact_id: string
-  service: { name: string; duration_minutes: number }
+  service: {
+    name: string
+    duration_minutes: number
+    online_meeting_url?: string | null
+    physical_address?: string | null
+  }
   profile: { full_name: string; avatar_url: string | null }
   contact: { name: string; phone: string; email: string | null }
 }
@@ -450,6 +457,31 @@ export default function AppointmentsPage() {
                             {appt.contact?.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {appt.contact?.email}</span>}
                           </div>
                           {appt.notes && <p className="mt-2 text-xs italic text-muted-foreground">Nota: {appt.notes}</p>}
+
+                          {/* Meeting Link or Physical Address */}
+                          {(appt.meeting_url || appt.service?.online_meeting_url) && (
+                            <div className="mt-2.5 pt-2 border-t border-border/40 flex items-center gap-2 flex-wrap">
+                              <Video className="h-3.5 w-3.5 text-primary shrink-0" />
+                              <span className="text-xs text-muted-foreground font-medium">Link da Reunião:</span>
+                              <a
+                                href={appt.meeting_url || appt.service?.online_meeting_url || '#'}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-primary hover:underline font-semibold flex items-center gap-1 truncate max-w-sm"
+                              >
+                                <span>{appt.meeting_url || appt.service?.online_meeting_url}</span>
+                                <ExternalLink className="h-3 w-3 shrink-0" />
+                              </a>
+                            </div>
+                          )}
+
+                          {(appt.location_address || appt.service?.physical_address) && (
+                            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                              <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+                              <span className="text-xs text-muted-foreground font-medium">Endereço:</span>
+                              <span className="text-xs text-foreground font-medium">{appt.location_address || appt.service?.physical_address}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
 

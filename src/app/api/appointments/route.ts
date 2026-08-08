@@ -13,25 +13,37 @@ export async function GET(request: Request) {
   } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: profile } = await supabase
+  const admin = supabaseAdmin()
+  const { data: profile } = await admin
     .from('profiles')
-    .select('account_id')
+    .select('account_id, id')
     .eq('user_id', user.id)
-    .single()
+    .maybeSingle()
+
   const accountId = profile?.account_id
   if (!accountId) {
     return NextResponse.json({ error: 'No account linked to your profile' }, { status: 403 })
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await admin
     .from('appointments')
-    .select('*, service:services(name, duration_minutes), profile:profiles(full_name, avatar_url), contact:contacts(name, phone, email)')
-    .eq('account_id', accountId)
-    .order('start_time', { ascending: false })
+    .select('*, service:services(name, duration_minutes, online_meeting_url, physical_address), profile:profiles(full_name, avatar_url), contact:contacts(name, phone, email)')
+    .or(`account_id.eq.${accountId},profile_id.eq.${profile.id}`)
+    .order('created_at', { ascending: false })
 
   if (error) {
+    console.error('Error fetching appointments:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // Trigger automation for any confirmed appointment in the background
+  if (data && data.length > 0) {
+    const confirmedAppts = data.filter((a: any) => a.status === 'confirmed')
+    for (const appt of confirmedAppts) {
+      processAppointmentConfirmation(appt.id, admin).catch(() => {})
+    }
+  }
+
   return NextResponse.json(data ?? [])
 }
 
