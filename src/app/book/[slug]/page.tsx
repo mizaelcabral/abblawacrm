@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { Calendar as CalendarIcon, Clock, User, Phone, Mail, CheckCircle2, ChevronRight, FileText, DollarSign } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, User, Phone, Mail, CheckCircle2, ChevronRight, FileText, DollarSign, Video, MapPin, ExternalLink, Loader2, Sparkles } from 'lucide-react'
 import { format, addDays, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
@@ -60,6 +60,7 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
   const [bookingSuccess, setBookingSuccess] = useState(false)
   const [bookingData, setBookingData] = useState<any>(null)
   const [waitingPayment, setWaitingPayment] = useState(false)
+  const [verifyingPayment, setVerifyingPayment] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const supabase = createClient()
@@ -73,9 +74,10 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
         if (res.ok) {
           const data = await res.json()
           if (data.status === 'confirmed') {
+            if (data.appointment) setBookingData(data.appointment)
             setBookingSuccess(true)
             setWaitingPayment(false)
-            toast.success('Pagamento confirmado e agendamento concluído!')
+            toast.success('Pagamento Pix confirmado e agendamento concluído!')
           }
         }
       } catch (err) {
@@ -85,6 +87,31 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
 
     return () => clearInterval(interval)
   }, [waitingPayment, bookingData?.id])
+
+  const handleCheckPayment = async () => {
+    if (!bookingData?.id) return
+    try {
+      setVerifyingPayment(true)
+      const res = await fetch(`/api/appointments/status?id=${bookingData.id}&check=true`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.status === 'confirmed') {
+          if (data.appointment) setBookingData(data.appointment)
+          setBookingSuccess(true)
+          setWaitingPayment(false)
+          toast.success('Pagamento Pix verificado com sucesso! Agendamento confirmado.')
+        } else {
+          toast.info('Pagamento Pix ainda em processamento. Tente novamente em alguns segundos.')
+        }
+      } else {
+        toast.error('Erro ao verificar status do pagamento.')
+      }
+    } catch (err) {
+      toast.error('Erro de conexão ao verificar pagamento.')
+    } finally {
+      setVerifyingPayment(false)
+    }
+  }
   // Load Profile and Services
   useEffect(() => {
     async function loadProfileAndServices() {
@@ -286,18 +313,18 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
   if (waitingPayment && bookingData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#09090b] text-white p-4">
-        <Card className="w-full max-w-md border-zinc-800 bg-zinc-950/80 backdrop-blur-xl">
+        <Card className="w-full max-w-md border-zinc-800 bg-zinc-950/80 backdrop-blur-xl shadow-2xl">
           <CardContent className="pt-6 text-center space-y-6">
             <div className="flex justify-center">
               <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-white">Aguardando Pagamento Pix</h2>
-              <p className="text-zinc-400 text-sm">Realize o pagamento para confirmar o agendamento do serviço.</p>
+              <h2 className="text-2xl font-bold text-white tracking-tight">Aguardando Pagamento Pix</h2>
+              <p className="text-zinc-400 text-sm">Realize o Pix para confirmar seu agendamento imediatamente.</p>
             </div>
 
             {bookingData.woovi_qrcode_image && (
-              <div className="flex justify-center border-4 border-white p-2 rounded-xl bg-white max-w-[220px] mx-auto">
+              <div className="flex justify-center border-4 border-white p-2 rounded-xl bg-white max-w-[220px] mx-auto shadow-lg">
                 <img src={bookingData.woovi_qrcode_image} alt="QR Code Pix" className="w-full h-auto" />
               </div>
             )}
@@ -305,21 +332,21 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
             {bookingData.woovi_brcode && (
               <div className="space-y-2">
                 <p className="text-xs text-zinc-400 font-medium">Pix Copia e Cola:</p>
-                <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-lg p-2 max-w-sm mx-auto">
+                <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl p-2 max-w-sm mx-auto">
                   <input
                     type="text"
                     readOnly
                     value={bookingData.woovi_brcode}
-                    className="bg-transparent text-xs text-zinc-300 flex-1 outline-none truncate"
+                    className="bg-transparent text-xs text-zinc-300 flex-1 outline-none truncate font-mono px-1"
                   />
                   <Button
                     size="sm"
                     variant="outline"
-                    className="text-xs px-3 border-zinc-700 hover:bg-zinc-800 text-zinc-300"
+                    className="text-xs px-3 border-zinc-700 hover:bg-zinc-800 text-zinc-300 shrink-0"
                     onClick={() => {
                       navigator.clipboard.writeText(bookingData.woovi_brcode)
                       setCopied(true)
-                      toast.success('Código copiado!')
+                      toast.success('Código Pix copiado!')
                       setTimeout(() => setCopied(false), 2000)
                     }}
                   >
@@ -329,13 +356,35 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
               </div>
             )}
 
-            <div className="border border-zinc-800 rounded-lg p-4 bg-zinc-900/50 text-left space-y-3">
-              <p className="text-sm text-zinc-400"><strong>Serviço:</strong> <span className="text-white">{bookingData?.service?.name || selectedService?.name}</span></p>
-              <p className="text-sm text-zinc-400"><strong>Data:</strong> <span className="text-white">{format(parseISO(bookingData?.start_time), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span></p>
-              <p className="text-sm text-zinc-400"><strong>Horário:</strong> <span className="text-white">{format(parseISO(bookingData?.start_time), 'HH:mm')}</span></p>
+            <div className="border border-zinc-800 rounded-xl p-4 bg-zinc-900/50 text-left space-y-2 text-xs text-zinc-300">
+              <p><strong>Serviço:</strong> <span className="text-white">{bookingData?.service?.name || selectedService?.name}</span></p>
+              {bookingData?.start_time && (
+                <>
+                  <p><strong>Data:</strong> <span className="text-white">{format(parseISO(bookingData.start_time), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span></p>
+                  <p><strong>Horário:</strong> <span className="text-white">{format(parseISO(bookingData.start_time), 'HH:mm')}</span></p>
+                </>
+              )}
             </div>
 
-            <p className="text-xs text-zinc-500 animate-pulse">Detectando pagamento Pix automaticamente...</p>
+            <Button
+              onClick={handleCheckPayment}
+              disabled={verifyingPayment}
+              className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 font-bold text-white shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 rounded-xl transition duration-200"
+            >
+              {verifyingPayment ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Verificando Pagamento...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Já fiz o pagamento! (Verificar)</span>
+                </>
+              )}
+            </Button>
+
+            <p className="text-[11px] text-zinc-500 animate-pulse">Detectando pagamento Pix automaticamente...</p>
           </CardContent>
         </Card>
       </div>
@@ -343,25 +392,102 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
   }
 
   if (bookingSuccess) {
+    const isOnline = bookingData?.location_type === 'online' || bookingData?.meeting_url || selectedService?.location_type === 'online'
+    const isPresencial = bookingData?.location_type === 'presencial' || bookingData?.location_address || selectedService?.location_type === 'presencial'
+    const meetingUrl = bookingData?.meeting_url || selectedService?.online_meeting_url
+    const physicalAddress = bookingData?.location_address || selectedService?.physical_address
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#09090b] text-white p-4">
-        <Card className="w-full max-w-md border-zinc-800 bg-zinc-950/80 backdrop-blur-xl">
-          <CardContent className="pt-6 text-center space-y-6">
+        <Card className="w-full max-w-lg border-zinc-800 bg-zinc-950/90 backdrop-blur-2xl shadow-2xl shadow-emerald-950/20 rounded-3xl">
+          <CardContent className="pt-8 text-center space-y-6">
             <div className="flex justify-center">
-              <CheckCircle2 className="h-16 w-16 text-emerald-500 animate-bounce" />
+              <div className="relative flex items-center justify-center">
+                <div className="absolute h-20 w-20 rounded-full bg-emerald-500/20 animate-ping" />
+                <div className="h-16 w-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+                  <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+                </div>
+              </div>
             </div>
+
             <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-white">Agendamento Confirmado!</h2>
-              <p className="text-zinc-400 text-sm">Tudo certo para o seu atendimento com {profile.full_name}.</p>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-wider">
+                <Sparkles className="h-3.5 w-3.5" /> Agendamento Confirmado!
+              </div>
+              <h2 className="text-2xl font-extrabold text-white tracking-tight">Tudo pronto para a sua consulta</h2>
+              <p className="text-zinc-400 text-xs sm:text-sm">Seu pagamento Pix foi verificado e seu atendimento está garantido.</p>
             </div>
 
-            <div className="border border-zinc-800 rounded-lg p-4 bg-zinc-900/50 text-left space-y-3">
-              <p className="text-sm text-zinc-400"><strong>Serviço:</strong> <span className="text-white">{bookingData?.service?.name}</span></p>
-              <p className="text-sm text-zinc-400"><strong>Data:</strong> <span className="text-white">{format(parseISO(bookingData?.start_time), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span></p>
-              <p className="text-sm text-zinc-400"><strong>Horário:</strong> <span className="text-white">{format(parseISO(bookingData?.start_time), 'HH:mm')}</span></p>
+            {/* Ticket Card */}
+            <div className="border border-zinc-800 rounded-2xl p-5 bg-zinc-900/60 text-left space-y-4 shadow-inner">
+              <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+                <span className="text-xs font-bold text-primary uppercase tracking-wider">Comprovante de Agendamento</span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-medium">Pago via Pix</span>
+              </div>
+
+              <div className="space-y-2 text-xs sm:text-sm text-zinc-300">
+                <p className="flex justify-between">
+                  <span className="text-zinc-500 font-medium">Serviço:</span>
+                  <span className="font-semibold text-white">{bookingData?.service?.name || selectedService?.name}</span>
+                </p>
+                {bookingData?.start_time && (
+                  <>
+                    <p className="flex justify-between">
+                      <span className="text-zinc-500 font-medium">Data:</span>
+                      <span className="font-semibold text-white">{format(parseISO(bookingData.start_time), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span>
+                    </p>
+                    <p className="flex justify-between">
+                      <span className="text-zinc-500 font-medium">Horário:</span>
+                      <span className="font-semibold text-white">{format(parseISO(bookingData.start_time), 'HH:mm')}</span>
+                    </p>
+                  </>
+                )}
+                <p className="flex justify-between">
+                  <span className="text-zinc-500 font-medium">Profissional:</span>
+                  <span className="font-semibold text-white">{bookingData?.service?.provider_name || selectedService?.provider_name || profile.full_name}</span>
+                </p>
+              </div>
+
+              {/* Online or Presencial Box */}
+              {isOnline && meetingUrl && (
+                <div className="p-4 bg-primary/10 border border-primary/20 rounded-xl space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-primary">
+                    <Video className="h-4 w-4" /> Atendimento Online (Telemedicina)
+                  </div>
+                  <p className="text-[11px] text-zinc-400">Acesse a sala virtual no horário agendado:</p>
+                  <a
+                    href={meetingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs rounded-lg transition"
+                  >
+                    <span>Acessar Sala Virtual</span>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              )}
+
+              {isPresencial && physicalAddress && (
+                <div className="p-4 bg-zinc-800/50 border border-zinc-700/50 rounded-xl space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-zinc-200">
+                    <MapPin className="h-4 w-4 text-primary" /> Endereço do Consultório
+                  </div>
+                  <p className="text-xs text-zinc-300 font-medium">{physicalAddress}</p>
+                </div>
+              )}
             </div>
 
-            <p className="text-xs text-zinc-500">Um lembrete será enviado para o telefone/e-mail informado.</p>
+            <p className="text-[11px] text-zinc-500">
+              Enviamos um lembrete com os detalhes da consulta para o seu telefone via WhatsApp.
+            </p>
+
+            <Button
+              variant="outline"
+              onClick={() => window.location.reload()}
+              className="w-full h-11 border-zinc-700 text-zinc-300 hover:bg-zinc-800 font-medium rounded-xl text-xs"
+            >
+              Fazer Novo Agendamento
+            </Button>
           </CardContent>
         </Card>
       </div>

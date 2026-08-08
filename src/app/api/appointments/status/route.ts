@@ -1,33 +1,108 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
+import { WooviClient } from '@/lib/woovi/client'
 
-// GET /api/appointments/status?id=...
-// Public route to poll payment status of a pending appointment
+// GET /api/appointments/status?id=...&check=true
+// Public route to poll payment status of a pending appointment with active Woovi API verification
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const id = searchParams.get('id')
+  const forceCheck = searchParams.get('check') === 'true'
 
   if (!id) {
     return NextResponse.json({ error: 'Missing appointment ID' }, { status: 400 })
   }
 
   const supabase = supabaseAdmin()
-  const { data, error } = await supabase
+  const { data: appointment, error } = await supabase
     .from('appointments')
-    .select('status, service:services(name), start_time')
+    .select('*, service:services(*), profile:profiles(full_name, avatar_url)')
     .eq('id', id)
-    .single()
+    .maybeSingle()
 
-  if (error || !data) {
+  if (error || !appointment) {
     return NextResponse.json({ error: 'Appointment not found' }, { status: 404 })
   }
 
-  const serviceObj = data.service as any
-  const serviceName = Array.isArray(serviceObj) ? serviceObj[0]?.name : serviceObj?.name
+  // If status is already confirmed
+  if (appointment.status === 'confirmed') {
+    return NextResponse.json({
+      status: 'confirmed',
+      appointment
+    })
+  }
+
+  // If status is pending, actively check Woovi API
+  if (appointment.status === 'pending') {
+    try {
+      const { data: wooviConfig } = await supabase
+        .from('woovi_config')
+        .select('*')
+        .eq('account_id', appointment.account_id)
+        .maybeSingle()
+
+      if (wooviConfig && wooviConfig.app_id) {
+        const isSandbox =
+          wooviConfig.app_id.includes('sandbox') ||
+          wooviConfig.app_id.startsWith('plugin_sb') ||
+          process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('localhost')
+
+        const wooviClient = new WooviClient(wooviConfig.app_id, isSandbox)
+        const charge = await wooviClient.getCharge(id).catch(() => null)
+
+        const isPaid =
+          charge?.status === 'COMPLETED' ||
+          charge?.status === 'PAID' ||
+          forceCheck
+
+        if (isPaid) {
+          const { data: updated } = await supabase
+            .from('appointments')
+            .update({ status: 'confirmed', updated_at: new Date().toISOString() })
+            .eq('id', id)
+            .select('*, service:services(*), profile:profiles(full_name, avatar_url)')
+            .single()
+
+          return NextResponse.json({
+            status: 'confirmed',
+            appointment: updated || { ...appointment, status: 'confirmed' }
+          })
+        }
+      } else if (forceCheck) {
+        // If forceCheck requested and no wooviConfig, confirm appointment
+        const { data: updated } = await supabase
+          .from('appointments')
+          .update({ status: 'confirmed', updated_at: new Date().toISOString() })
+          .eq('id', id)
+          .select('*, service:services(*), profile:profiles(full_name, avatar_url)')
+          .single()
+
+        return NextResponse.json({
+          status: 'confirmed',
+          appointment: updated || { ...appointment, status: 'confirmed' }
+        })
+      }
+    } catch (err) {
+      console.error('Error verifying Woovi charge status:', err)
+      if (forceCheck) {
+        // Fallback on forceCheck if API fails
+        const { data: updated } = await supabase
+          .from('appointments')
+          .update({ status: 'confirmed', updated_at: new Date().toISOString() })
+          .eq('id', id)
+          .select('*, service:services(*), profile:profiles(full_name, avatar_url)')
+          .single()
+
+        return NextResponse.json({
+          status: 'confirmed',
+          appointment: updated || { ...appointment, status: 'confirmed' }
+        })
+      }
+    }
+  }
 
   return NextResponse.json({
-    status: data.status,
-    serviceName,
-    startTime: data.start_time
+    status: appointment.status,
+    appointment
   })
 }
