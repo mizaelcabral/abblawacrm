@@ -26,6 +26,7 @@ interface Service {
   clinic_name?: string | null
   clinic_logo_url?: string | null
   show_clinic_logo?: boolean
+  payment_required?: boolean
 }
 
 interface Profile {
@@ -440,14 +441,20 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
                 <span className={`h-6 w-6 rounded-lg border flex items-center justify-center text-xs font-bold transition-all ${selectedService ? 'border-zinc-800 bg-zinc-900' : 'border-primary/30 bg-primary/10'}`}>1</span>
                 <span>Selecione o Serviço</span>
               </div>
-              <div className={`flex items-center gap-3 transition-all duration-300 ${selectedService && !selectedSlot ? 'text-primary font-semibold' : 'text-zinc-500'}`}>
+              <div className={`flex items-center gap-3 transition-all duration-300 ${selectedService && !selectedSlot ? 'text-primary font-semibold' : selectedSlot ? 'text-zinc-500 line-through' : 'text-zinc-500'}`}>
                 <span className={`h-6 w-6 rounded-lg border flex items-center justify-center text-xs font-bold transition-all ${selectedService && !selectedSlot ? 'border-primary/30 bg-primary/10' : 'border-zinc-800 bg-zinc-900'}`}>2</span>
                 <span>Escolha Data & Hora</span>
               </div>
-              <div className={`flex items-center gap-3 transition-all duration-300 ${selectedSlot ? 'text-primary font-semibold' : 'text-zinc-500'}`}>
-                <span className={`h-6 w-6 rounded-lg border flex items-center justify-center text-xs font-bold transition-all ${selectedSlot ? 'border-primary/30 bg-primary/10' : 'border-zinc-800 bg-zinc-900'}`}>3</span>
+              <div className={`flex items-center gap-3 transition-all duration-300 ${selectedSlot && !waitingPayment ? 'text-primary font-semibold' : waitingPayment ? 'text-zinc-500 line-through' : 'text-zinc-500'}`}>
+                <span className={`h-6 w-6 rounded-lg border flex items-center justify-center text-xs font-bold transition-all ${selectedSlot && !waitingPayment ? 'border-primary/30 bg-primary/10' : 'border-zinc-800 bg-zinc-900'}`}>3</span>
                 <span>Confirme seus Dados</span>
               </div>
+              {(selectedService?.payment_required ?? activeService?.payment_required ?? services.some(s => s.payment_required)) && (
+                <div className={`flex items-center gap-3 transition-all duration-300 ${waitingPayment ? 'text-primary font-semibold' : 'text-zinc-500'}`}>
+                  <span className={`h-6 w-6 rounded-lg border flex items-center justify-center text-xs font-bold transition-all ${waitingPayment ? 'border-primary/30 bg-primary/10 font-bold' : 'border-zinc-800 bg-zinc-900'}`}>4</span>
+                  <span>Pagamento via Pix (Woovi)</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
