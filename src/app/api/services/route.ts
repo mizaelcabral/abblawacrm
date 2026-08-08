@@ -62,7 +62,18 @@ export async function POST(request: Request) {
       duration_minutes: body.duration_minutes || 30,
       price: body.price || 0.00,
       is_active: body.is_active !== undefined ? body.is_active : true,
-      payment_required: body.payment_required !== undefined ? body.payment_required : false
+      payment_required: body.payment_required !== undefined ? body.payment_required : false,
+      location_type: body.location_type || 'online',
+      online_meeting_url: body.online_meeting_url || null,
+      physical_address: body.physical_address || null,
+      buffer_minutes: body.buffer_minutes || 0,
+      provider_name: body.provider_name || null,
+      provider_avatar_url: body.provider_avatar_url || null,
+      show_provider_avatar: body.show_provider_avatar !== undefined ? body.show_provider_avatar : false,
+      clinic_name: body.clinic_name || null,
+      clinic_logo_url: body.clinic_logo_url || null,
+      show_clinic_logo: body.show_clinic_logo !== undefined ? body.show_clinic_logo : false,
+      custom_questions: body.custom_questions || []
     })
     .select('*')
     .single()
@@ -92,7 +103,18 @@ export async function PUT(request: Request) {
       duration_minutes: body.duration_minutes,
       price: body.price,
       is_active: body.is_active,
-      payment_required: body.payment_required
+      payment_required: body.payment_required,
+      location_type: body.location_type || 'online',
+      online_meeting_url: body.online_meeting_url || null,
+      physical_address: body.physical_address || null,
+      buffer_minutes: body.buffer_minutes || 0,
+      provider_name: body.provider_name || null,
+      provider_avatar_url: body.provider_avatar_url || null,
+      show_provider_avatar: body.show_provider_avatar !== undefined ? body.show_provider_avatar : false,
+      clinic_name: body.clinic_name || null,
+      clinic_logo_url: body.clinic_logo_url || null,
+      show_clinic_logo: body.show_clinic_logo !== undefined ? body.show_clinic_logo : false,
+      custom_questions: body.custom_questions || []
     })
     .eq('id', body.id)
     .select('*')

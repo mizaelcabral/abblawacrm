@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,13 +9,13 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
-import { Calendar, Clock, User, Phone, Mail, Plus, Check, X, Settings2, Trash } from 'lucide-react'
+import { Calendar, Clock, User, Phone, Mail, Plus, Check, X, Settings2, Trash, Upload, Loader2, Code } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 import { AvailabilityGridEditor } from '@/components/appointments/AvailabilityGridEditor'
 import { EmbeddedWidgetModal } from '@/components/appointments/EmbeddedWidgetModal'
-import { Code } from 'lucide-react'
+import { uploadAccountMedia } from '@/lib/storage/upload-media'
 
 interface ServiceExtended {
   id: string
@@ -50,21 +50,109 @@ interface Appointment {
   contact: { name: string; phone: string; email: string | null }
 }
 
-interface AvailabilityItem {
-  day_of_week: number
-  start_time: string
-  end_time: string
+interface ImageUploadInputProps {
+  value: string
+  onChange: (url: string) => void
+  placeholder?: string
+  label?: string
 }
 
-const DAYS_OF_WEEK = [
-  { label: 'Domingo', value: 0 },
-  { label: 'Segunda-feira', value: 1 },
-  { label: 'Terça-feira', value: 2 },
-  { label: 'Quarta-feira', value: 3 },
-  { label: 'Quinta-feira', value: 4 },
-  { label: 'Sexta-feira', value: 5 },
-  { label: 'Sábado', value: 6 }
-]
+function ImageUploadInput({ value, onChange, placeholder = 'Carregar imagem', label }: ImageUploadInputProps) {
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
+    if (!validTypes.includes(file.type)) {
+      toast.error('Por favor, selecione uma imagem no formato PNG, JPG, JPEG ou WEBP.')
+      return
+    }
+
+    try {
+      setUploading(true)
+      const res = await uploadAccountMedia('chat-media', file)
+      onChange(res.publicUrl)
+      toast.success('Imagem enviada com sucesso!')
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err?.message || 'Erro ao fazer upload da imagem')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      {label && <Label className="text-xs">{label}</Label>}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept="image/png, image/jpeg, image/jpg, image/webp"
+        className="hidden"
+      />
+
+      {value ? (
+        <div className="flex items-center gap-3 p-2 border rounded-md bg-background">
+          <div className="relative h-10 w-10 rounded overflow-hidden border bg-muted flex items-center justify-center shrink-0">
+            <img src={value} alt="Preview" className="h-full w-full object-cover" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] text-muted-foreground truncate">{value}</p>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              Trocar
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+              onClick={() => onChange('')}
+              disabled={uploading}
+            >
+              <Trash className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full flex items-center justify-center gap-2 h-9 border-dashed text-xs text-muted-foreground hover:text-foreground"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+        >
+          {uploading ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+              <span>Enviando...</span>
+            </>
+          ) : (
+            <>
+              <Upload className="h-3.5 w-3.5" />
+              <span>{placeholder} (.png, .jpg, .jpeg, .webp)</span>
+            </>
+          )}
+        </Button>
+      )}
+    </div>
+  )
+}
 
 export default function AppointmentsPage() {
   const { profile } = useAuth()
@@ -103,6 +191,45 @@ export default function AppointmentsPage() {
   const [taskTitle, setTaskTitle] = useState('')
   const [taskDueDate, setTaskDueDate] = useState('')
 
+  const handleEditService = (svc: ServiceExtended) => {
+    setEditingService(svc)
+    setServiceName(svc.name)
+    setServiceDescription(svc.description || '')
+    setServiceDuration(svc.duration_minutes)
+    setServicePrice(svc.price)
+    setServicePaymentRequired(svc.payment_required || false)
+    setLocationType(svc.location_type || 'online')
+    setOnlineMeetingUrl(svc.online_meeting_url || '')
+    setPhysicalAddress(svc.physical_address || '')
+    setBufferMinutes(svc.buffer_minutes || 0)
+    setProviderName(svc.provider_name || '')
+    setProviderAvatarUrl(svc.provider_avatar_url || '')
+    setShowProviderAvatar(svc.show_provider_avatar || false)
+    setClinicName(svc.clinic_name || '')
+    setClinicLogoUrl(svc.clinic_logo_url || '')
+    setShowClinicLogo(svc.show_clinic_logo || false)
+    setShowServiceForm(true)
+  }
+
+  const handleNewService = () => {
+    setEditingService(null)
+    setServiceName('')
+    setServiceDescription('')
+    setServiceDuration(30)
+    setServicePrice(0)
+    setServicePaymentRequired(false)
+    setLocationType('online')
+    setOnlineMeetingUrl('')
+    setPhysicalAddress('')
+    setBufferMinutes(0)
+    setProviderName('')
+    setProviderAvatarUrl('')
+    setShowProviderAvatar(false)
+    setClinicName('')
+    setClinicLogoUrl('')
+    setShowClinicLogo(false)
+    setShowServiceForm(true)
+  }
 
   // Load Data
   const loadData = async () => {
@@ -139,7 +266,7 @@ export default function AppointmentsPage() {
     if (!serviceName) return
 
     try {
-      const url = editingService ? '/api/services' : '/api/services'
+      const url = '/api/services'
       const method = editingService ? 'PUT' : 'POST'
       const payloadData = {
         name: serviceName,
@@ -169,22 +296,8 @@ export default function AppointmentsPage() {
       if (res.ok) {
         toast.success(editingService ? 'Serviço atualizado!' : 'Serviço criado!')
         setShowServiceForm(false)
-        setEditingService(null)
-        setServiceName('')
-        setServiceDescription('')
-        setServiceDuration(30)
-        setServicePrice(0)
-        setServicePaymentRequired(false)
-        setLocationType('online')
-        setOnlineMeetingUrl('')
-        setPhysicalAddress('')
-        setBufferMinutes(0)
-        setProviderName('')
-        setProviderAvatarUrl('')
-        setShowProviderAvatar(false)
-        setClinicName('')
-        setClinicLogoUrl('')
-        setShowClinicLogo(false)
+        handleNewService()
+        setShowServiceForm(false)
         loadData()
       } else {
         toast.error('Erro ao salvar serviço')
@@ -193,8 +306,6 @@ export default function AppointmentsPage() {
       toast.error('Erro ao salvar serviço')
     }
   }
-
-
 
   // Cancel Appointment
   const handleCancelAppointment = async (id: string) => {
@@ -377,15 +488,7 @@ export default function AppointmentsPage() {
         <TabsContent value="services" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold text-foreground">Tipos de Serviço</h2>
-            <Button onClick={() => {
-              setEditingService(null)
-              setServiceName('')
-              setServiceDescription('')
-              setServiceDuration(30)
-              setServicePrice(0)
-              setServicePaymentRequired(false)
-              setShowServiceForm(true)
-            }} className="flex items-center gap-2">
+            <Button onClick={handleNewService} className="flex items-center gap-2">
               <Plus className="h-4 w-4" /> Novo Serviço
             </Button>
           </div>
@@ -526,18 +629,18 @@ export default function AppointmentsPage() {
                           />
                         </div>
                         {showProviderAvatar && (
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             <Input
                               placeholder="Nome do Profissional (Ex: Dr. João Silva)"
                               value={providerName}
                               onChange={(e) => setProviderName(e.target.value)}
                               className="text-xs"
                             />
-                            <Input
-                              placeholder="URL da Foto do Profissional (Avatar)"
+                            <ImageUploadInput
                               value={providerAvatarUrl}
-                              onChange={(e) => setProviderAvatarUrl(e.target.value)}
-                              className="text-xs"
+                              onChange={setProviderAvatarUrl}
+                              placeholder="Upload da Foto do Profissional"
+                              label="Foto do Profissional (Avatar)"
                             />
                           </div>
                         )}
@@ -553,18 +656,18 @@ export default function AppointmentsPage() {
                           />
                         </div>
                         {showClinicLogo && (
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             <Input
                               placeholder="Nome da Clínica (Ex: Clínica Vida & Saúde)"
                               value={clinicName}
                               onChange={(e) => setClinicName(e.target.value)}
                               className="text-xs"
                             />
-                            <Input
-                              placeholder="URL da Logo da Clínica/Empresa"
+                            <ImageUploadInput
                               value={clinicLogoUrl}
-                              onChange={(e) => setClinicLogoUrl(e.target.value)}
-                              className="text-xs"
+                              onChange={setClinicLogoUrl}
+                              placeholder="Upload da Logo da Clínica"
+                              label="Logo da Clínica / Empresa"
                             />
                           </div>
                         )}
@@ -612,25 +715,7 @@ export default function AppointmentsPage() {
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => {
-                        setEditingService(svc)
-                        setServiceName(svc.name)
-                        setServiceDescription(svc.description || '')
-                        setServiceDuration(svc.duration_minutes)
-                        setServicePrice(svc.price)
-                        setServicePaymentRequired(svc.payment_required || false)
-                        setLocationType(svc.location_type || 'online')
-                        setOnlineMeetingUrl(svc.online_meeting_url || '')
-                        setPhysicalAddress(svc.physical_address || '')
-                        setBufferMinutes(svc.buffer_minutes || 0)
-                        setProviderName(svc.provider_name || '')
-                        setProviderAvatarUrl(svc.provider_avatar_url || '')
-                        setShowProviderAvatar(svc.show_provider_avatar || false)
-                        setClinicName(svc.clinic_name || '')
-                        setClinicLogoUrl(svc.clinic_logo_url || '')
-                        setShowClinicLogo(svc.show_clinic_logo || false)
-                        setShowServiceForm(true)
-                      }}
+                      onClick={() => handleEditService(svc)}
                     >
                       Editar
                     </Button>
