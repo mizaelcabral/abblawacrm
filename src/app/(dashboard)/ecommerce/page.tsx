@@ -560,7 +560,7 @@ export default function EcommerceOverviewPage() {
                   
                   <div className="space-y-4 max-w-sm">
                     <Label>Gateway Ativo</Label>
-                    <Select value={activeGateway} onValueChange={setActiveGateway}>
+                    <Select value={activeGateway} onValueChange={(val) => val && setActiveGateway(val)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione um gateway" />
                       </SelectTrigger>

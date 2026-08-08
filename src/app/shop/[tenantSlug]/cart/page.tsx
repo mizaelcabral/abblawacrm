@@ -43,7 +43,7 @@ export default function CartPage() {
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
-  const [config, setConfig] = useState<WooviConfig | null>(null);
+  const [config, setConfig] = useState<any>(null);
   
   const [cartItems, setCartItems] = useState<CartItemInput[]>([]);
   const [hydratedItems, setHydratedItems] = useState<HydratedCartItem[]>([]);

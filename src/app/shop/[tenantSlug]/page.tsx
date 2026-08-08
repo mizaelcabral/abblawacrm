@@ -292,15 +292,19 @@ export default function StorefrontPage() {
           
           {/* Actions */}
           <div className="flex items-center gap-1 sm:gap-2">
-             <Button variant="ghost" size="icon" asChild className="relative hidden sm:inline-flex text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-full">
-                <a href={`/shop/${tenantSlug}/wishlist`} title="Lista de Desejos">
-                  <Heart className={`h-5 w-5 ${wishlistIds.length > 0 ? 'text-red-500 fill-red-500' : ''}`} />
-                  {wishlistIds.length > 0 && (
-                    <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white animate-in zoom-in">
-                      {wishlistIds.length}
-                    </span>
-                  )}
-                </a>
+             <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => { window.location.href = `/shop/${tenantSlug}/wishlist` }}
+                title="Lista de Desejos"
+                className="relative hidden sm:inline-flex text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-full"
+             >
+                <Heart className={`h-5 w-5 ${wishlistIds.length > 0 ? 'text-red-500 fill-red-500' : ''}`} />
+                {wishlistIds.length > 0 && (
+                  <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white animate-in zoom-in">
+                    {wishlistIds.length}
+                  </span>
+                )}
              </Button>
              <Button
                 variant="ghost"

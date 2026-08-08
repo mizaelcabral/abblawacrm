@@ -248,15 +248,15 @@ export function CubaSidebar({
                         <span className="truncate flex-1">{item.title}</span>
                       )}
 
-                      {!isCollapsed && item.badge && (
+                      {!isCollapsed && (item as any).badge && (
                         <span
                           className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold ${
                             isActive
                               ? 'bg-white/20 text-white'
-                              : item.badgeColor || 'bg-muted text-muted-foreground'
+                              : (item as any).badgeColor || 'bg-muted text-muted-foreground'
                           }`}
                         >
-                          {item.badge}
+                          {(item as any).badge}
                         </span>
                       )}
                     </Link>

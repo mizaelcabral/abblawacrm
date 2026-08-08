@@ -34,7 +34,7 @@ export default function WishlistPage() {
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
-  const [config, setConfig] = useState<WooviConfig | null>(null);
+  const [config, setConfig] = useState<any>(null);
   const [wishlistIds, setWishlistIds] = useState<string[]>([]);
   const [products, setProducts] = useState<ExtendedProduct[]>([]);
 

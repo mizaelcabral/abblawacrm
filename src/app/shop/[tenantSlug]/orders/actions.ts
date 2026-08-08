@@ -1,10 +1,9 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { cookies } from 'next/headers';
 
 export async function lookupCustomerOrders(tenantSlug: string, query: string) {
-  const supabase = createClient(cookies());
+  const supabase = await createClient();
   
   // Resolve account_id if tenantSlug is a slug
   const { data: config } = await supabase
@@ -33,7 +32,7 @@ export async function lookupCustomerOrders(tenantSlug: string, query: string) {
 }
 
 export async function getOrderDetails(orderId: string, tenantSlug: string) {
-  const supabase = createClient(cookies());
+  const supabase = await createClient();
   
   const { data: config } = await supabase
     .from('woovi_config')
