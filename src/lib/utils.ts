@@ -42,3 +42,33 @@ export function getAvatarColor(identifier?: string | null): string {
   const index = Math.abs(hash) % AVATAR_COLORS.length
   return AVATAR_COLORS[index]
 }
+
+export function getCleanSlug(profile?: {
+  slug?: string | null
+  full_name?: string | null
+  account_id?: string | null
+  id?: string | null
+} | null): string {
+  if (!profile) return ''
+
+  if (profile.slug && typeof profile.slug === 'string' && profile.slug.trim()) {
+    return profile.slug.trim()
+  }
+
+  if (profile.full_name && typeof profile.full_name === 'string' && profile.full_name.trim()) {
+    const slug = profile.full_name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/[\s_]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+
+    if (slug) return slug
+  }
+
+  return profile.account_id || profile.id || ''
+}
+

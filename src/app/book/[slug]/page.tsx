@@ -84,40 +84,91 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
 
     return () => clearInterval(interval)
   }, [waitingPayment, bookingData?.id])
-
   // Load Profile and Services
   useEffect(() => {
     async function loadProfileAndServices() {
       try {
         setLoading(true)
-        // Fetch Profile - supports both ID (UUID) and slug (text)
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(profileId)
-        
-        let query = supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url, account_id')
 
+        let targetProfile: Profile | null = null
+
+        // 1. Search in profiles (by id, account_id, or slug)
         if (isUuid) {
-          query = query.eq('id', profileId)
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, account_id')
+            .or(`id.eq.${profileId},account_id.eq.${profileId},slug.eq.${profileId}`)
+            .limit(1)
+            .maybeSingle()
+
+          if (prof) targetProfile = prof
         } else {
-          query = query.eq('slug', profileId)
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, account_id')
+            .eq('slug', profileId)
+            .limit(1)
+            .maybeSingle()
+
+          if (prof) targetProfile = prof
         }
 
-        const { data: prof, error: profError } = await query.single()
+        // 2. Fallback: Search woovi_config by store_slug
+        if (!targetProfile) {
+          const { data: woovi } = await supabase
+            .from('woovi_config')
+            .select('account_id')
+            .eq('store_slug', profileId)
+            .limit(1)
+            .maybeSingle()
 
-        if (profError || !prof) {
+          if (woovi?.account_id) {
+            const { data: prof } = await supabase
+              .from('profiles')
+              .select('id, full_name, avatar_url, account_id')
+              .eq('account_id', woovi.account_id)
+              .limit(1)
+              .maybeSingle()
+
+            if (prof) targetProfile = prof
+          }
+        }
+
+        // 3. Fallback: Search accounts by slug
+        if (!targetProfile) {
+          const { data: acc } = await supabase
+            .from('accounts')
+            .select('id')
+            .eq('slug', profileId)
+            .limit(1)
+            .maybeSingle()
+
+          if (acc?.id) {
+            const { data: prof } = await supabase
+              .from('profiles')
+              .select('id, full_name, avatar_url, account_id')
+              .eq('account_id', acc.id)
+              .limit(1)
+              .maybeSingle()
+
+            if (prof) targetProfile = prof
+          }
+        }
+
+        if (!targetProfile) {
           toast.error('Profissional não encontrado')
           setLoading(false)
           return
         }
 
-        setProfile(prof)
+        setProfile(targetProfile)
 
         // Fetch active services under the account
         const { data: svcs, error: svcsError } = await supabase
           .from('services')
           .select('*')
-          .eq('account_id', prof.account_id)
+          .eq('account_id', targetProfile.account_id)
           .eq('is_active', true)
 
         if (svcsError) {
@@ -160,6 +211,9 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
 
     fetchSlots()
   }, [selectedService, selectedDate, profile?.id])
+
+  // Active service for branding fallback in sidebar
+  const activeService = selectedService || services.find(s => (s.show_clinic_logo && s.clinic_logo_url) || (s.show_provider_avatar && s.provider_avatar_url)) || null
 
   // Confirm booking
   const handleConfirmBooking = async (e: React.FormEvent) => {
@@ -321,24 +375,30 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
         <div className="md:col-span-5 p-8 border-b md:border-b-0 md:border-r border-zinc-800/80 flex flex-col justify-between bg-zinc-900/10">
           <div className="space-y-6">
             {/* Clinic Logo Header if enabled */}
-            {selectedService?.show_clinic_logo && selectedService?.clinic_logo_url && (
+            {activeService?.show_clinic_logo && activeService?.clinic_logo_url && (
               <div className="flex items-center gap-3 pb-4 border-b border-zinc-800/80">
                 <img
-                  src={selectedService.clinic_logo_url}
-                  alt={selectedService.clinic_name || 'Clínica'}
+                  src={activeService.clinic_logo_url}
+                  alt={activeService.clinic_name || 'Clínica'}
                   className="h-10 max-w-[160px] object-contain"
                 />
-                {selectedService.clinic_name && (
-                  <span className="text-xs font-bold text-zinc-300">{selectedService.clinic_name}</span>
+                {activeService.clinic_name && (
+                  <span className="text-xs font-bold text-zinc-300">{activeService.clinic_name}</span>
                 )}
               </div>
             )}
 
             <div className="flex items-center gap-4">
-              {selectedService?.show_provider_avatar && selectedService?.provider_avatar_url ? (
+              {activeService?.show_provider_avatar && activeService?.provider_avatar_url ? (
                 <img
-                  src={selectedService.provider_avatar_url}
-                  alt={selectedService.provider_name || profile.full_name}
+                  src={activeService.provider_avatar_url}
+                  alt={activeService.provider_name || profile.full_name}
+                  className="h-16 w-16 rounded-2xl object-cover border border-primary/30 shadow-lg shadow-primary/10"
+                />
+              ) : profile.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt={profile.full_name}
                   className="h-16 w-16 rounded-2xl object-cover border border-primary/30 shadow-lg shadow-primary/10"
                 />
               ) : (
@@ -349,8 +409,8 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
               <div>
                 <span className="text-xs font-semibold text-primary uppercase tracking-wider">Profissional</span>
                 <h2 className="text-xl font-bold text-white tracking-tight">
-                  {selectedService?.show_provider_avatar && selectedService?.provider_name
-                    ? selectedService.provider_name
+                  {activeService?.show_provider_avatar && activeService?.provider_name
+                    ? activeService.provider_name
                     : profile.full_name}
                 </h2>
               </div>
@@ -365,8 +425,8 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
                 <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Serviço Selecionado</span>
                 <h4 className="font-bold text-white text-base">{selectedService.name}</h4>
                 <div className="flex flex-wrap gap-4 text-xs text-zinc-400">
-                  <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-primary" /> {selectedService.duration_minutes} min</span>
-                  <span className="flex items-center gap-1.5"><DollarSign className="h-3.5 w-3.5 text-primary" /> R$ {Number(selectedService.price).toFixed(2)}</span>
+                  <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-primary" /> {selectedService.duration_minutes} min</span>
+                  <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5 text-primary" /> R$ {Number(selectedService.price).toFixed(2)}</span>
                 </div>
               </div>
             )}
@@ -414,14 +474,55 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
                       onClick={() => setSelectedService(svc)}
                       className="flex justify-between items-center p-5 rounded-2xl border border-zinc-800 bg-zinc-900/20 hover:bg-zinc-900/50 hover:border-primary/40 transition-all duration-300 cursor-pointer group shadow-lg hover:shadow-primary/5"
                     >
-                      <div className="space-y-2">
-                        <h4 className="font-bold text-white group-hover:text-primary transition duration-300 text-lg">{svc.name}</h4>
-                        <p className="text-sm text-zinc-400">{svc.description || 'Atendimento personalizado com profissional qualificado.'}</p>
+                      <div className="space-y-3 flex-1 mr-4">
+                        {((svc.show_clinic_logo && (svc.clinic_logo_url || svc.clinic_name)) || (svc.show_provider_avatar && (svc.provider_avatar_url || svc.provider_name))) && (
+                          <div className="flex flex-wrap items-center gap-3 pb-2 border-b border-zinc-800/50">
+                            {svc.show_clinic_logo && (svc.clinic_logo_url || svc.clinic_name) && (
+                              <div className="flex items-center gap-2">
+                                {svc.clinic_logo_url && (
+                                  <img
+                                    src={svc.clinic_logo_url}
+                                    alt={svc.clinic_name || 'Clínica'}
+                                    className="h-6 max-w-[100px] object-contain"
+                                  />
+                                )}
+                                {svc.clinic_name && (
+                                  <span className="text-xs font-semibold text-zinc-300">{svc.clinic_name}</span>
+                                )}
+                              </div>
+                            )}
+
+                            {svc.show_clinic_logo && svc.show_provider_avatar && (svc.clinic_logo_url || svc.clinic_name) && (svc.provider_avatar_url || svc.provider_name) && (
+                              <span className="text-zinc-600 text-xs">•</span>
+                            )}
+
+                            {svc.show_provider_avatar && (svc.provider_avatar_url || svc.provider_name) && (
+                              <div className="flex items-center gap-2">
+                                {svc.provider_avatar_url && (
+                                  <img
+                                    src={svc.provider_avatar_url}
+                                    alt={svc.provider_name || 'Profissional'}
+                                    className="h-6 w-6 rounded-full object-cover border border-zinc-700"
+                                  />
+                                )}
+                                {svc.provider_name && (
+                                  <span className="text-xs text-zinc-400 font-medium">{svc.provider_name}</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div>
+                          <h4 className="font-bold text-white group-hover:text-primary transition duration-300 text-lg">{svc.name}</h4>
+                          <p className="text-sm text-zinc-400 mt-1">{svc.description || 'Atendimento personalizado com profissional qualificado.'}</p>
+                        </div>
+
                         <div className="flex items-center gap-2 text-xs text-zinc-500 pt-1">
                           <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {svc.duration_minutes} min</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-4 shrink-0">
                         <span className="font-bold text-base text-zinc-200">R$ {Number(svc.price).toFixed(2)}</span>
                         <div className="h-8 w-8 rounded-lg bg-zinc-800/80 group-hover:bg-primary/20 flex items-center justify-center transition duration-300">
                           <ChevronRight className="h-4 w-4 text-zinc-400 group-hover:text-primary transition duration-300" />

@@ -18,7 +18,6 @@ export function EmbeddedWidgetModal({ open, onOpenChange, bookingSlug }: Embedde
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://app.abblaw.com.br'
 
   const publicUrl = `${baseUrl}/book/${bookingSlug || 'agenda'}`
-  const widgetUrl = `${baseUrl}/widget/booking-${bookingSlug || 'agenda'}`
 
   const iframeSnippet = `<iframe\n  src="${publicUrl}?embed=true"\n  width="100%"\n  height="700px"\n  frameborder="0"\n  style="border:0; border-radius: 16px; overflow: hidden;"\n  allow="payment"\n></iframe>`
 

@@ -16,6 +16,7 @@ import { ptBR } from 'date-fns/locale'
 import { AvailabilityGridEditor } from '@/components/appointments/AvailabilityGridEditor'
 import { EmbeddedWidgetModal } from '@/components/appointments/EmbeddedWidgetModal'
 import { uploadAccountMedia } from '@/lib/storage/upload-media'
+import { getCleanSlug } from '@/lib/utils'
 
 interface ServiceExtended {
   id: string
@@ -156,6 +157,7 @@ function ImageUploadInput({ value, onChange, placeholder = 'Carregar imagem', la
 
 export default function AppointmentsPage() {
   const { profile } = useAuth()
+  const cleanSlug = getCleanSlug(profile)
   const [activeTab, setActiveTab] = useState('appointments')
 
   // Data States
@@ -375,7 +377,7 @@ export default function AppointmentsPage() {
             <Button 
               className="flex items-center gap-2"
               onClick={() => {
-                const bookingUrl = `${window.location.origin}/book/${profile.slug || profile.id}`
+                const bookingUrl = `${window.location.origin}/book/${cleanSlug}`
                 navigator.clipboard.writeText(bookingUrl)
                 toast.success('Link de agendamento copiado para o clipboard!')
               }}
@@ -735,7 +737,7 @@ export default function AppointmentsPage() {
       <EmbeddedWidgetModal
         open={showWidgetModal}
         onOpenChange={setShowWidgetModal}
-        bookingSlug={profile?.slug || profile?.id || ''}
+        bookingSlug={cleanSlug}
       />
 
       {/* Task Creation Dialog */}
