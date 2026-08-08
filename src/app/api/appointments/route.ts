@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { parseISO, addMinutes } from 'date-fns'
 import { WooviClient } from '@/lib/woovi/client'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
+import { processAppointmentConfirmation } from '@/lib/appointments/automation'
 
 // GET /api/appointments - List appointments for the logged-in user's account
 export async function GET(request: Request) {
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     .from('appointments')
     .select('*, service:services(name, duration_minutes), profile:profiles(full_name, avatar_url), contact:contacts(name, phone, email)')
     .eq('account_id', accountId)
-    .order('start_time', { ascending: true })
+    .order('start_time', { ascending: false })
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -202,41 +203,9 @@ export async function POST(request: Request) {
     }
   }
 
-  // 5. Auto-Pipeline Integration (only for direct/free bookings since webhook handles paid ones)
-  try {
-    const { data: firstPipeline } = await supabase
-      .from('pipelines')
-      .select('id')
-      .eq('account_id', accountId)
-      .limit(1)
-      .maybeSingle()
-
-    if (firstPipeline) {
-      const { data: firstStage } = await supabase
-        .from('pipeline_stages')
-        .select('id')
-        .eq('pipeline_id', firstPipeline.id)
-        .order('position', { ascending: true })
-        .limit(1)
-        .maybeSingle()
-
-      if (firstStage) {
-        await supabase
-          .from('deals')
-          .insert({
-            account_id: accountId,
-            user_id: staffProfile.user_id,
-            pipeline_id: firstPipeline.id,
-            stage_id: firstStage.id,
-            contact_id: contactId,
-            title: `Agendamento: ${service.name}`,
-            value: Number(service.price) || 0,
-            status: 'active'
-          })
-      }
-    }
-  } catch (pipelineErr) {
-    console.error('Failed to auto-create deal in pipeline:', pipelineErr)
+  // 5. Auto-Pipeline and Auto-Task Integration (only for direct/free bookings since webhook/status handles paid ones)
+  if (!paymentRequired) {
+    await processAppointmentConfirmation(appointment.id, supabase)
   }
 
   return NextResponse.json(appointment, { status: 201 })
@@ -260,5 +229,10 @@ export async function PUT(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  if (body.status === 'confirmed') {
+    await processAppointmentConfirmation(body.id, supabase)
+  }
+
   return NextResponse.json(data)
 }

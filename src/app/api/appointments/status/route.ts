@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { WooviClient } from '@/lib/woovi/client'
+import { processAppointmentConfirmation } from '@/lib/appointments/automation'
 
 // GET /api/appointments/status?id=...&check=true
 // Public route to poll payment status of a pending appointment with active Woovi API verification
@@ -24,11 +25,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Appointment not found' }, { status: 404 })
   }
 
-  // If status is already confirmed
+  // If status is already confirmed, trigger automation if task/deal missing and return
   if (appointment.status === 'confirmed') {
+    const updatedAppt = await processAppointmentConfirmation(id, supabase)
     return NextResponse.json({
       status: 'confirmed',
-      appointment
+      appointment: updatedAppt || appointment
     })
   }
 
@@ -56,46 +58,26 @@ export async function GET(request: Request) {
           forceCheck
 
         if (isPaid) {
-          const { data: updated } = await supabase
-            .from('appointments')
-            .update({ status: 'confirmed', updated_at: new Date().toISOString() })
-            .eq('id', id)
-            .select('*, service:services(*), profile:profiles(full_name, avatar_url)')
-            .single()
-
+          const updatedAppt = await processAppointmentConfirmation(id, supabase)
           return NextResponse.json({
             status: 'confirmed',
-            appointment: updated || { ...appointment, status: 'confirmed' }
+            appointment: updatedAppt || { ...appointment, status: 'confirmed' }
           })
         }
       } else if (forceCheck) {
-        // If forceCheck requested and no wooviConfig, confirm appointment
-        const { data: updated } = await supabase
-          .from('appointments')
-          .update({ status: 'confirmed', updated_at: new Date().toISOString() })
-          .eq('id', id)
-          .select('*, service:services(*), profile:profiles(full_name, avatar_url)')
-          .single()
-
+        const updatedAppt = await processAppointmentConfirmation(id, supabase)
         return NextResponse.json({
           status: 'confirmed',
-          appointment: updated || { ...appointment, status: 'confirmed' }
+          appointment: updatedAppt || { ...appointment, status: 'confirmed' }
         })
       }
     } catch (err) {
       console.error('Error verifying Woovi charge status:', err)
       if (forceCheck) {
-        // Fallback on forceCheck if API fails
-        const { data: updated } = await supabase
-          .from('appointments')
-          .update({ status: 'confirmed', updated_at: new Date().toISOString() })
-          .eq('id', id)
-          .select('*, service:services(*), profile:profiles(full_name, avatar_url)')
-          .single()
-
+        const updatedAppt = await processAppointmentConfirmation(id, supabase)
         return NextResponse.json({
           status: 'confirmed',
-          appointment: updated || { ...appointment, status: 'confirmed' }
+          appointment: updatedAppt || { ...appointment, status: 'confirmed' }
         })
       }
     }
