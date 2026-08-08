@@ -63,11 +63,16 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // ponytail: allow embedding widget iframe for chat (/widget) and booking (/book)
         source: "/widget/:path*",
         headers: [...WIDGET_SECURITY_HEADERS],
       },
       {
         source: "/widget.js",
+        headers: [...WIDGET_SECURITY_HEADERS],
+      },
+      {
+        source: "/book/:path*",
         headers: [...WIDGET_SECURITY_HEADERS],
       },
       {
@@ -84,7 +89,7 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "no-store" }],
       },
       {
-        source: "/:path((?!_next/static|_next/image|api|widget).*)",
+        source: "/:path((?!_next/static|_next/image|api|widget|book).*)",
         headers: [
           {
             key: "Cache-Control",
@@ -94,7 +99,7 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        source: "/:path((?!widget|widget\\.js).*)",
+        source: "/:path((?!widget|widget\\.js|book).*)",
         headers: [...DEFAULT_SECURITY_HEADERS],
       },
     ];
