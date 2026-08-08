@@ -482,11 +482,12 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
             </p>
 
             <Button
-              variant="outline"
+              type="button"
               onClick={() => window.location.reload()}
-              className="w-full h-11 border-zinc-700 text-zinc-300 hover:bg-zinc-800 font-medium rounded-xl text-xs"
+              className="w-full h-12 bg-zinc-900 hover:bg-zinc-800 text-white font-bold border border-zinc-700 hover:border-emerald-500/50 shadow-xl shadow-black/60 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-all duration-200"
             >
-              Fazer Novo Agendamento
+              <CalendarIcon className="h-4 w-4 text-emerald-400" />
+              <span className="text-white font-bold tracking-wide">Fazer Novo Agendamento</span>
             </Button>
           </CardContent>
         </Card>
