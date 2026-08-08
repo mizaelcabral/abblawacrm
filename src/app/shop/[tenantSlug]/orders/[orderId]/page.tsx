@@ -304,6 +304,7 @@ export default function OrderDetailsPage() {
                         Aguardando confirmação do pagamento.<br/>A página será atualizada automaticamente.
                       </p>
                     </CardContent>
+                  </>
                 )}
               </Card>
             )}

@@ -17,6 +17,15 @@ interface Service {
   description: string | null
   duration_minutes: number
   price: number
+  location_type?: 'online' | 'presencial' | 'ambos'
+  online_meeting_url?: string | null
+  physical_address?: string | null
+  provider_name?: string | null
+  provider_avatar_url?: string | null
+  show_provider_avatar?: boolean
+  clinic_name?: string | null
+  clinic_logo_url?: string | null
+  show_clinic_logo?: boolean
 }
 
 interface Profile {
@@ -107,7 +116,7 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
         // Fetch active services under the account
         const { data: svcs, error: svcsError } = await supabase
           .from('services')
-          .select('id, name, description, duration_minutes, price')
+          .select('*')
           .eq('account_id', prof.account_id)
           .eq('is_active', true)
 
@@ -311,13 +320,39 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
         {/* Profile Sidebar */}
         <div className="md:col-span-5 p-8 border-b md:border-b-0 md:border-r border-zinc-800/80 flex flex-col justify-between bg-zinc-900/10">
           <div className="space-y-6">
-            <div className="flex items-center gap-4">
-              <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary/30 to-primary/5 border border-primary/20 flex items-center justify-center text-2xl font-bold text-white shadow-lg shadow-primary/10">
-                {profile.full_name.charAt(0)}
+            {/* Clinic Logo Header if enabled */}
+            {selectedService?.show_clinic_logo && selectedService?.clinic_logo_url && (
+              <div className="flex items-center gap-3 pb-4 border-b border-zinc-800/80">
+                <img
+                  src={selectedService.clinic_logo_url}
+                  alt={selectedService.clinic_name || 'Clínica'}
+                  className="h-10 max-w-[160px] object-contain"
+                />
+                {selectedService.clinic_name && (
+                  <span className="text-xs font-bold text-zinc-300">{selectedService.clinic_name}</span>
+                )}
               </div>
+            )}
+
+            <div className="flex items-center gap-4">
+              {selectedService?.show_provider_avatar && selectedService?.provider_avatar_url ? (
+                <img
+                  src={selectedService.provider_avatar_url}
+                  alt={selectedService.provider_name || profile.full_name}
+                  className="h-16 w-16 rounded-2xl object-cover border border-primary/30 shadow-lg shadow-primary/10"
+                />
+              ) : (
+                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary/30 to-primary/5 border border-primary/20 flex items-center justify-center text-2xl font-bold text-white shadow-lg shadow-primary/10">
+                  {profile.full_name.charAt(0)}
+                </div>
+              )}
               <div>
                 <span className="text-xs font-semibold text-primary uppercase tracking-wider">Profissional</span>
-                <h2 className="text-xl font-bold text-white tracking-tight">{profile.full_name}</h2>
+                <h2 className="text-xl font-bold text-white tracking-tight">
+                  {selectedService?.show_provider_avatar && selectedService?.provider_name
+                    ? selectedService.provider_name
+                    : profile.full_name}
+                </h2>
               </div>
             </div>
             

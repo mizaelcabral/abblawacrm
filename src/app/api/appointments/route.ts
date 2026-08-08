@@ -58,10 +58,10 @@ export async function POST(request: Request) {
 
   const accountId = staffProfile.account_id
 
-  // Retrieve service duration and payment requirements
+  // Retrieve service details including location, branding and questions
   const { data: service, error: serviceError } = await supabase
     .from('services')
-    .select('name, duration_minutes, price, payment_required')
+    .select('name, duration_minutes, price, payment_required, location_type, online_meeting_url, physical_address')
     .eq('id', service_id)
     .single()
 
@@ -72,6 +72,18 @@ export async function POST(request: Request) {
   const duration = service.duration_minutes
   const startTime = parseISO(start_time)
   const endTime = addMinutes(startTime, duration)
+
+  // Determine meeting_url or location_address
+  const locationType = body.location_type || service.location_type || 'online'
+  let meetingUrl = null
+  let locationAddress = null
+
+  if (locationType === 'online' || locationType === 'ambos') {
+    meetingUrl = body.meeting_url || service.online_meeting_url || `https://meet.jit.si/abbla-${Math.random().toString(36).substring(2, 9)}`
+  }
+  if (locationType === 'presencial' || locationType === 'ambos') {
+    locationAddress = body.location_address || service.physical_address || null
+  }
 
   // 1. Find or create contact
   let contactId = null
@@ -122,7 +134,7 @@ export async function POST(request: Request) {
   const paymentRequired = service.payment_required || false
   const initialStatus = paymentRequired ? 'pending' : 'confirmed'
 
-  // 3. Insert appointment
+  // 3. Insert appointment with health & anamnesis data
   const { data: appointment, error: apptError } = await supabase
     .from('appointments')
     .insert({
@@ -133,7 +145,10 @@ export async function POST(request: Request) {
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
       status: initialStatus,
-      notes: notes || null
+      notes: notes || null,
+      meeting_url: meetingUrl,
+      location_address: locationAddress,
+      anamnesis_answers: body.anamnesis_answers || {}
     })
     .select('*, service:services(name), profile:profiles(full_name), contact:contacts(name)')
     .single()

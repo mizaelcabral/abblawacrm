@@ -13,7 +13,11 @@ import { Calendar, Clock, User, Phone, Mail, Plus, Check, X, Settings2, Trash } 
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
-interface Service {
+import { AvailabilityGridEditor } from '@/components/appointments/AvailabilityGridEditor'
+import { EmbeddedWidgetModal } from '@/components/appointments/EmbeddedWidgetModal'
+import { Code } from 'lucide-react'
+
+interface ServiceExtended {
   id: string
   name: string
   description: string | null
@@ -21,6 +25,17 @@ interface Service {
   price: number
   is_active: boolean
   payment_required?: boolean
+  location_type?: 'online' | 'presencial' | 'ambos'
+  online_meeting_url?: string | null
+  physical_address?: string | null
+  buffer_minutes?: number
+  provider_name?: string | null
+  provider_avatar_url?: string | null
+  show_provider_avatar?: boolean
+  clinic_name?: string | null
+  clinic_logo_url?: string | null
+  show_clinic_logo?: boolean
+  custom_questions?: any[]
 }
 
 interface Appointment {
@@ -57,18 +72,30 @@ export default function AppointmentsPage() {
 
   // Data States
   const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [services, setServices] = useState<Service[]>([])
-  const [availability, setAvailability] = useState<AvailabilityItem[]>([])
   const [loading, setLoading] = useState(true)
 
   // Service form states
   const [showServiceForm, setShowServiceForm] = useState(false)
-  const [editingService, setEditingService] = useState<Service | null>(null)
+  const [editingService, setEditingService] = useState<ServiceExtended | null>(null)
   const [serviceName, setServiceName] = useState('')
   const [serviceDescription, setServiceDescription] = useState('')
   const [serviceDuration, setServiceDuration] = useState(30)
   const [servicePrice, setServicePrice] = useState(0)
   const [servicePaymentRequired, setServicePaymentRequired] = useState(false)
+
+  // Extended Service form states
+  const [showWidgetModal, setShowWidgetModal] = useState(false)
+  const [services, setServices] = useState<ServiceExtended[]>([])
+  const [locationType, setLocationType] = useState<'online' | 'presencial' | 'ambos'>('online')
+  const [onlineMeetingUrl, setOnlineMeetingUrl] = useState('')
+  const [physicalAddress, setPhysicalAddress] = useState('')
+  const [bufferMinutes, setBufferMinutes] = useState(0)
+  const [providerName, setProviderName] = useState('')
+  const [providerAvatarUrl, setProviderAvatarUrl] = useState('')
+  const [showProviderAvatar, setShowProviderAvatar] = useState(false)
+  const [clinicName, setClinicName] = useState('')
+  const [clinicLogoUrl, setClinicLogoUrl] = useState('')
+  const [showClinicLogo, setShowClinicLogo] = useState(false)
 
   // Task form states
   const [showTaskForm, setShowTaskForm] = useState(false)
@@ -94,23 +121,6 @@ export default function AppointmentsPage() {
         const svcData = await svcRes.json()
         setServices(svcData)
       }
-
-      // Load availability for the current logged-in profile
-      if (profile?.id) {
-        const availRes = await fetch(`/api/appointments/availability?profile_id=${profile.id}&date=${format(new Date(), 'yyyy-MM-dd')}&service_id=dummy`, {
-          // Dummy service id, we just want to fetch config via another endpoint if needed or query DB
-        }).catch(() => null)
-        
-        // Let's load the current weekly availability by calling an endpoint or mock it for now
-        // Let's set some default availability if empty
-        setAvailability([
-          { day_of_week: 1, start_time: '09:00:00', end_time: '18:00:00' },
-          { day_of_week: 2, start_time: '09:00:00', end_time: '18:00:00' },
-          { day_of_week: 3, start_time: '09:00:00', end_time: '18:00:00' },
-          { day_of_week: 4, start_time: '09:00:00', end_time: '18:00:00' },
-          { day_of_week: 5, start_time: '09:00:00', end_time: '18:00:00' }
-        ])
-      }
     } catch (error) {
       console.error(error)
       toast.error('Erro ao carregar dados da agenda')
@@ -131,9 +141,24 @@ export default function AppointmentsPage() {
     try {
       const url = editingService ? '/api/services' : '/api/services'
       const method = editingService ? 'PUT' : 'POST'
-      const body = editingService 
-        ? { id: editingService.id, name: serviceName, description: serviceDescription, duration_minutes: serviceDuration, price: servicePrice, payment_required: servicePaymentRequired }
-        : { name: serviceName, description: serviceDescription, duration_minutes: serviceDuration, price: servicePrice, payment_required: servicePaymentRequired }
+      const payloadData = {
+        name: serviceName,
+        description: serviceDescription,
+        duration_minutes: serviceDuration,
+        price: servicePrice,
+        payment_required: servicePaymentRequired,
+        location_type: locationType,
+        online_meeting_url: onlineMeetingUrl || null,
+        physical_address: physicalAddress || null,
+        buffer_minutes: bufferMinutes,
+        provider_name: providerName || null,
+        provider_avatar_url: providerAvatarUrl || null,
+        show_provider_avatar: showProviderAvatar,
+        clinic_name: clinicName || null,
+        clinic_logo_url: clinicLogoUrl || null,
+        show_clinic_logo: showClinicLogo
+      }
+      const body = editingService ? { id: editingService.id, ...payloadData } : payloadData
 
       const res = await fetch(url, {
         method,
@@ -150,6 +175,16 @@ export default function AppointmentsPage() {
         setServiceDuration(30)
         setServicePrice(0)
         setServicePaymentRequired(false)
+        setLocationType('online')
+        setOnlineMeetingUrl('')
+        setPhysicalAddress('')
+        setBufferMinutes(0)
+        setProviderName('')
+        setProviderAvatarUrl('')
+        setShowProviderAvatar(false)
+        setClinicName('')
+        setClinicLogoUrl('')
+        setShowClinicLogo(false)
         loadData()
       } else {
         toast.error('Erro ao salvar serviço')
@@ -159,39 +194,7 @@ export default function AppointmentsPage() {
     }
   }
 
-  // Handle Availability Save
-  const handleSaveAvailability = async () => {
-    try {
-      const res = await fetch('/api/appointments/availability', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ availability })
-      })
 
-      if (res.ok) {
-        toast.success('Horários de trabalho atualizados!')
-      } else {
-        toast.error('Erro ao salvar horários')
-      }
-    } catch (error) {
-      toast.error('Erro ao salvar horários')
-    }
-  }
-
-  const toggleDayAvailability = (dayValue: number) => {
-    const exists = availability.find(a => a.day_of_week === dayValue)
-    if (exists) {
-      setAvailability(availability.filter(a => a.day_of_week !== dayValue))
-    } else {
-      setAvailability([...availability, { day_of_week: dayValue, start_time: '09:00:00', end_time: '18:00:00' }])
-    }
-  }
-
-  const updateDayTimes = (dayValue: number, start: string, end: string) => {
-    setAvailability(
-      availability.map(a => (a.day_of_week === dayValue ? { ...a, start_time: start, end_time: end } : a))
-    )
-  }
 
   // Cancel Appointment
   const handleCancelAppointment = async (id: string) => {
@@ -250,17 +253,25 @@ export default function AppointmentsPage() {
           <p className="text-muted-foreground">Gerencie seus horários de atendimento, serviços prestados e veja seus próximos agendamentos.</p>
         </div>
         {profile && (
-          <Button 
-            className="flex items-center gap-2"
-            onClick={() => {
-              // Copy booking link to clipboard
-              const bookingUrl = `${window.location.origin}/book/${profile.slug || profile.id}`
-              navigator.clipboard.writeText(bookingUrl)
-              toast.success('Link de agendamento copiado para o clipboard!')
-            }}
-          >
-            <Settings2 className="h-4 w-4" /> Link de Agendamento
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => setShowWidgetModal(true)}
+            >
+              <Code className="h-4 w-4 text-primary" /> Widget Embeddable
+            </Button>
+            <Button 
+              className="flex items-center gap-2"
+              onClick={() => {
+                const bookingUrl = `${window.location.origin}/book/${profile.slug || profile.id}`
+                navigator.clipboard.writeText(bookingUrl)
+                toast.success('Link de agendamento copiado para o clipboard!')
+              }}
+            >
+              <Settings2 className="h-4 w-4" /> Link de Agendamento
+            </Button>
+          </div>
         )}
       </div>
 
@@ -334,7 +345,7 @@ export default function AppointmentsPage() {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            className="flex items-center gap-1 border-zinc-700 hover:bg-zinc-800 text-zinc-300"
+                            className="flex items-center gap-1 border-primary/30 text-primary hover:bg-primary/10 hover:text-primary font-medium text-xs"
                             onClick={() => {
                               setTaskAppt(appt)
                               setTaskTitle(`Retornar para o cliente: ${appt.contact?.name}`)
@@ -342,15 +353,15 @@ export default function AppointmentsPage() {
                               setShowTaskForm(true)
                             }}
                           >
-                            <Plus className="h-4 w-4" /> Criar Tarefa
+                            <Plus className="h-3.5 w-3.5" /> Criar Tarefa
                           </Button>
                           <Button 
-                            variant="destructive" 
+                            variant="outline" 
                             size="sm"
-                            className="flex items-center gap-1"
+                            className="flex items-center gap-1 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive font-medium text-xs"
                             onClick={() => handleCancelAppointment(appt.id)}
                           >
-                            <X className="h-4 w-4" /> Cancelar
+                            <X className="h-3.5 w-3.5" /> Cancelar
                           </Button>
                         </div>
                       )}
@@ -405,7 +416,7 @@ export default function AppointmentsPage() {
                       placeholder="Detalhes sobre o atendimento..." 
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="duration">Duração (minutos)</Label>
                       <Input 
@@ -415,6 +426,16 @@ export default function AppointmentsPage() {
                         onChange={(e) => setServiceDuration(Number(e.target.value))} 
                         min={10} 
                         required 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="buffer">Intervalo/Buffer (minutos)</Label>
+                      <Input 
+                        id="buffer" 
+                        type="number" 
+                        value={bufferMinutes} 
+                        onChange={(e) => setBufferMinutes(Number(e.target.value))} 
+                        min={0} 
                       />
                     </div>
                     <div className="space-y-2">
@@ -429,6 +450,128 @@ export default function AppointmentsPage() {
                       />
                     </div>
                   </div>
+
+                  <div className="space-y-2 pt-2">
+                    <Label>Modalidade de Atendimento</Label>
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="radio"
+                          name="locationType"
+                          value="online"
+                          checked={locationType === 'online'}
+                          onChange={() => setLocationType('online')}
+                        />
+                        Online (Telemedicina / Reunião)
+                      </label>
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="radio"
+                          name="locationType"
+                          value="presencial"
+                          checked={locationType === 'presencial'}
+                          onChange={() => setLocationType('presencial')}
+                        />
+                        Presencial (Consultório)
+                      </label>
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="radio"
+                          name="locationType"
+                          value="ambos"
+                          checked={locationType === 'ambos'}
+                          onChange={() => setLocationType('ambos')}
+                        />
+                        Ambos
+                      </label>
+                    </div>
+                  </div>
+
+                  {(locationType === 'online' || locationType === 'ambos') && (
+                    <div className="space-y-2">
+                      <Label htmlFor="online_meeting_url">Link Fixo da Sala Online (Opcional)</Label>
+                      <Input
+                        id="online_meeting_url"
+                        value={onlineMeetingUrl}
+                        onChange={(e) => setOnlineMeetingUrl(e.target.value)}
+                        placeholder="Ex: https://meet.google.com/abc-defg-hij ou link do Dr. Consulta"
+                      />
+                      <p className="text-[11px] text-muted-foreground">Se em branco, um link seguro do Jitsi será gerado automaticamente para cada consulta.</p>
+                    </div>
+                  )}
+
+                  {(locationType === 'presencial' || locationType === 'ambos') && (
+                    <div className="space-y-2">
+                      <Label htmlFor="physical_address">Endereço da Clínica / Consultório</Label>
+                      <Input
+                        id="physical_address"
+                        value={physicalAddress}
+                        onChange={(e) => setPhysicalAddress(e.target.value)}
+                        placeholder="Ex: Av. Paulista, 1000 - Sala 42, São Paulo - SP"
+                      />
+                    </div>
+                  )}
+
+                  <div className="border-t pt-4 space-y-4">
+                    <h4 className="font-semibold text-sm">Personalização Visual e Branding (Opcional)</h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-3 p-3 border rounded-lg bg-muted/20">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="show_provider_avatar" className="font-medium cursor-pointer">Ativar Foto do Profissional</Label>
+                          <Switch
+                            id="show_provider_avatar"
+                            checked={showProviderAvatar}
+                            onCheckedChange={setShowProviderAvatar}
+                          />
+                        </div>
+                        {showProviderAvatar && (
+                          <div className="space-y-2">
+                            <Input
+                              placeholder="Nome do Profissional (Ex: Dr. João Silva)"
+                              value={providerName}
+                              onChange={(e) => setProviderName(e.target.value)}
+                              className="text-xs"
+                            />
+                            <Input
+                              placeholder="URL da Foto do Profissional (Avatar)"
+                              value={providerAvatarUrl}
+                              onChange={(e) => setProviderAvatarUrl(e.target.value)}
+                              className="text-xs"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-3 p-3 border rounded-lg bg-muted/20">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="show_clinic_logo" className="font-medium cursor-pointer">Ativar Logo da Clínica</Label>
+                          <Switch
+                            id="show_clinic_logo"
+                            checked={showClinicLogo}
+                            onCheckedChange={setShowClinicLogo}
+                          />
+                        </div>
+                        {showClinicLogo && (
+                          <div className="space-y-2">
+                            <Input
+                              placeholder="Nome da Clínica (Ex: Clínica Vida & Saúde)"
+                              value={clinicName}
+                              onChange={(e) => setClinicName(e.target.value)}
+                              className="text-xs"
+                            />
+                            <Input
+                              placeholder="URL da Logo da Clínica/Empresa"
+                              value={clinicLogoUrl}
+                              onChange={(e) => setClinicLogoUrl(e.target.value)}
+                              className="text-xs"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex items-center gap-2 py-2">
                     <Switch
                       id="payment_required"
@@ -476,6 +619,16 @@ export default function AppointmentsPage() {
                         setServiceDuration(svc.duration_minutes)
                         setServicePrice(svc.price)
                         setServicePaymentRequired(svc.payment_required || false)
+                        setLocationType(svc.location_type || 'online')
+                        setOnlineMeetingUrl(svc.online_meeting_url || '')
+                        setPhysicalAddress(svc.physical_address || '')
+                        setBufferMinutes(svc.buffer_minutes || 0)
+                        setProviderName(svc.provider_name || '')
+                        setProviderAvatarUrl(svc.provider_avatar_url || '')
+                        setShowProviderAvatar(svc.show_provider_avatar || false)
+                        setClinicName(svc.clinic_name || '')
+                        setClinicLogoUrl(svc.clinic_logo_url || '')
+                        setShowClinicLogo(svc.show_clinic_logo || false)
                         setShowServiceForm(true)
                       }}
                     >
@@ -490,62 +643,15 @@ export default function AppointmentsPage() {
 
         {/* Tab 3: Availability Settings */}
         <TabsContent value="availability" className="space-y-4">
-          <Card className="border-border">
-            <CardHeader>
-              <CardTitle>Configuração de Horários de Trabalho</CardTitle>
-              <CardDescription>Defina em quais dias e horários você está disponível para receber agendamentos.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                {DAYS_OF_WEEK.map((day) => {
-                  const activeConfig = availability.find(a => a.day_of_week === day.value)
-                  const isActive = !!activeConfig
-
-                  return (
-                    <div key={day.value} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-muted/20 border border-border rounded-lg gap-4">
-                      <div className="flex items-center gap-3">
-                        <Switch 
-                          checked={isActive} 
-                          onCheckedChange={() => toggleDayAvailability(day.value)} 
-                        />
-                        <span className="font-medium text-foreground">{day.label}</span>
-                      </div>
-
-                      {isActive && activeConfig && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Input 
-                            type="time" 
-                            className="w-24 bg-background border-border"
-                            value={activeConfig.start_time.substring(0, 5)} 
-                            onChange={(e) => updateDayTimes(day.value, `${e.target.value}:00`, activeConfig.end_time)} 
-                          />
-                          <span className="text-muted-foreground">até</span>
-                          <Input 
-                            type="time" 
-                            className="w-24 bg-background border-border"
-                            value={activeConfig.end_time.substring(0, 5)} 
-                            onChange={(e) => updateDayTimes(day.value, activeConfig.start_time, `${e.target.value}:00`)} 
-                          />
-                        </div>
-                      )}
-
-                      {!isActive && (
-                        <span className="text-sm text-muted-foreground italic">Não disponível / Fechado</span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-
-              <div className="flex justify-end">
-                <Button onClick={handleSaveAvailability} className="flex items-center gap-2">
-                  <Check className="h-4 w-4" /> Salvar Horários
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <AvailabilityGridEditor />
         </TabsContent>
       </Tabs>
+
+      <EmbeddedWidgetModal
+        open={showWidgetModal}
+        onOpenChange={setShowWidgetModal}
+        bookingSlug={profile?.slug || profile?.id || ''}
+      />
 
       {/* Task Creation Dialog */}
       {showTaskForm && taskAppt && (

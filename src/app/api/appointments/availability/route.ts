@@ -14,10 +14,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'profile_id, date, and service_id are required' }, { status: 400 })
   }
 
-  // Get service duration
+  // Get service duration and buffer_minutes
   const { data: service, error: serviceError } = await supabase
     .from('services')
-    .select('duration_minutes')
+    .select('duration_minutes, buffer_minutes')
     .eq('id', serviceId)
     .single()
 
@@ -25,7 +25,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Service not found' }, { status: 404 })
   }
 
-  const duration = service.duration_minutes
+  const duration = service.duration_minutes || 30
+  const buffer = service.buffer_minutes || 0
+
+  // Check for date exceptions (blocked days, vacations, holidays)
+  const { data: dateException } = await supabase
+    .from('availability_exceptions')
+    .select('*')
+    .eq('profile_id', profileId)
+    .eq('exception_date', dateStr)
+    .maybeSingle()
+
+  if (dateException && dateException.is_blocked) {
+    return NextResponse.json({
+      slots: [],
+      is_blocked: true,
+      reason: dateException.reason || 'Dia indisponível'
+    })
+  }
 
   // Calculate day of week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
   const date = parse(dateStr, 'yyyy-MM-dd', new Date())
@@ -73,20 +90,24 @@ export async function GET(request: Request) {
       const slotStart = currentSlot
       const slotEnd = addMinutes(currentSlot, duration)
 
-      // Check if slot overlaps with any existing appointment
+      // Check if slot overlaps with any existing appointment (including buffer time)
       const hasOverlap = (appointments ?? []).some(appt => {
         const apptStart = parseISO(appt.start_time)
         const apptEnd = parseISO(appt.end_time)
 
+        // Add buffer before and after existing appointment
+        const bufferedApptStart = addMinutes(apptStart, -buffer)
+        const bufferedApptEnd = addMinutes(apptEnd, buffer)
+
         // Overlap logic: (StartA < EndB) and (EndA > StartB)
-        return slotStart < apptEnd && slotEnd > apptStart
+        return slotStart < bufferedApptEnd && slotEnd > bufferedApptStart
       })
 
       if (!hasOverlap) {
         availableSlots.push(format(currentSlot, 'HH:mm'))
       }
 
-      currentSlot = addMinutes(currentSlot, 30) // Slots start every 30 minutes
+      currentSlot = addMinutes(currentSlot, duration + buffer) // Advance slot by duration + buffer
     }
   }
 
