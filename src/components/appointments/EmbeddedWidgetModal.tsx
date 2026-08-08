@@ -32,18 +32,19 @@ export function EmbeddedWidgetModal({ open, onOpenChange, bookingSlug }: Embedde
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <Code className="h-5 w-5 text-primary" /> Widget de Agendamento Embeddable
+      <DialogContent className="sm:max-w-2xl w-full p-6">
+        <DialogHeader className="pr-8">
+          <DialogTitle className="flex items-center gap-2 text-xl font-semibold">
+            <Code className="h-5 w-5 text-primary shrink-0" />
+            <span>Widget de Agendamento Embeddable</span>
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="mt-1 text-sm">
             Incorpore este formulário de agendamento diretamente no seu site, landing page ou WordPress.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="iframe" className="w-full mt-4">
-          <TabsList className="grid grid-cols-3 mb-4">
+        <Tabs defaultValue="iframe" className="w-full mt-3">
+          <TabsList className="grid grid-cols-3 mb-4 w-full">
             <TabsTrigger value="iframe">iFrame Embed</TabsTrigger>
             <TabsTrigger value="script">Script Tag (JS)</TabsTrigger>
             <TabsTrigger value="link">Link Direto</TabsTrigger>
@@ -53,8 +54,8 @@ export function EmbeddedWidgetModal({ open, onOpenChange, bookingSlug }: Embedde
             <p className="text-xs text-muted-foreground">
               Copie o código abaixo e cole no HTML da sua Landing Page ou elemento HTML/Elementor do seu site:
             </p>
-            <div className="relative p-3 bg-zinc-950 text-zinc-100 rounded-lg text-xs font-mono overflow-x-auto border">
-              <pre>{iframeSnippet}</pre>
+            <div className="relative p-3 bg-zinc-950 text-zinc-100 rounded-lg text-xs font-mono border overflow-x-auto max-w-full">
+              <pre className="whitespace-pre-wrap break-all leading-relaxed">{iframeSnippet}</pre>
             </div>
             <Button
               onClick={() => handleCopy(iframeSnippet, 'iframe')}
@@ -70,8 +71,8 @@ export function EmbeddedWidgetModal({ open, onOpenChange, bookingSlug }: Embedde
             <p className="text-xs text-muted-foreground">
               Utilize o script tag para renderização dinâmica em container do seu site:
             </p>
-            <div className="relative p-3 bg-zinc-950 text-zinc-100 rounded-lg text-xs font-mono overflow-x-auto border">
-              <pre>{scriptSnippet}</pre>
+            <div className="relative p-3 bg-zinc-950 text-zinc-100 rounded-lg text-xs font-mono border overflow-x-auto max-w-full">
+              <pre className="whitespace-pre-wrap break-all leading-relaxed">{scriptSnippet}</pre>
             </div>
             <Button
               onClick={() => handleCopy(scriptSnippet, 'script')}
@@ -87,10 +88,10 @@ export function EmbeddedWidgetModal({ open, onOpenChange, bookingSlug }: Embedde
             <p className="text-xs text-muted-foreground">
               Link direto da sua página pública de agendamento para compartilhar no WhatsApp, Instagram ou Bio:
             </p>
-            <div className="p-3 bg-muted rounded-lg text-xs font-mono break-all flex items-center justify-between">
-              <span>{publicUrl}</span>
-              <a href={publicUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                <ExternalLink className="h-4 w-4 inline ml-2" />
+            <div className="p-3 bg-muted rounded-lg text-xs font-mono break-all flex items-center justify-between gap-2 overflow-hidden border">
+              <span className="truncate min-w-0">{publicUrl}</span>
+              <a href={publicUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline shrink-0 flex items-center">
+                <ExternalLink className="h-4 w-4 ml-1" />
               </a>
             </div>
             <Button
