@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { Calendar as CalendarIcon, Clock, User, Phone, Mail, CheckCircle2, ChevronRight, FileText, DollarSign, Video, MapPin, ExternalLink, Loader2, Sparkles } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, User, Phone, Mail, CheckCircle2, ChevronRight, FileText, DollarSign, Video, MapPin, ExternalLink, Loader2, Sparkles, Sun, Moon } from 'lucide-react'
 import { format, addDays, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
@@ -43,6 +43,7 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
   const [profile, setProfile] = useState<Profile | null>(null)
   const [services, setServices] = useState<Service[]>([])
   const [loading, setLoading] = useState(true)
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
   // Booking Flow State
   const [selectedService, setSelectedService] = useState<Service | null>(null)
@@ -288,12 +289,38 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
     }
   }
 
+  const isDark = theme === 'dark'
+
+  const renderThemeToggle = () => (
+    <button
+      type="button"
+      onClick={() => setTheme(prev => prev === 'light' ? 'dark' : 'light')}
+      className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-md transition-all duration-200 border cursor-pointer shrink-0 ${
+        isDark
+          ? 'bg-zinc-900/90 border-zinc-700 text-zinc-200 hover:bg-zinc-800 hover:text-white'
+          : 'bg-white/90 border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+      }`}
+    >
+      {isDark ? (
+        <>
+          <Sun className="h-3.5 w-3.5 text-amber-400" />
+          <span>Modo Claro</span>
+        </>
+      ) : (
+        <>
+          <Moon className="h-3.5 w-3.5 text-indigo-600" />
+          <span>Modo Escuro</span>
+        </>
+      )}
+    </button>
+  )
+
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#09090b] text-white">
+      <div className={`flex min-h-screen items-center justify-center transition-colors duration-300 ${isDark ? 'bg-[#09090b] text-white' : 'bg-slate-50 text-slate-900'}`}>
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="text-sm text-zinc-400">Carregando formulário de agendamento...</p>
+          <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>Carregando formulário de agendamento...</p>
         </div>
       </div>
     )
@@ -301,10 +328,10 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
 
   if (!profile) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#09090b] text-white">
+      <div className={`flex min-h-screen items-center justify-center transition-colors duration-300 ${isDark ? 'bg-[#09090b] text-white' : 'bg-slate-50 text-slate-900'}`}>
         <div className="text-center space-y-4">
           <h1 className="text-2xl font-bold text-red-500">Link Inválido</h1>
-          <p className="text-zinc-400">O profissional requisitado não foi localizado no sistema.</p>
+          <p className={isDark ? 'text-zinc-400' : 'text-slate-500'}>O profissional requisitado não foi localizado no sistema.</p>
         </div>
       </div>
     )
@@ -312,15 +339,18 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
 
   if (waitingPayment && bookingData) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#09090b] text-white p-4">
-        <Card className="w-full max-w-md border-zinc-800 bg-zinc-950/80 backdrop-blur-xl shadow-2xl">
+      <div className={`min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-300 ${isDark ? 'bg-[#09090b] text-white' : 'bg-slate-50 text-slate-900'}`}>
+        <div className="w-full max-w-md flex justify-end mb-3">
+          {renderThemeToggle()}
+        </div>
+        <Card className={`w-full max-w-md border backdrop-blur-xl shadow-2xl transition-colors duration-300 ${isDark ? 'border-zinc-800 bg-zinc-950/80 text-white' : 'border-slate-200 bg-white text-slate-900 shadow-slate-200/80'}`}>
           <CardContent className="pt-6 text-center space-y-6">
             <div className="flex justify-center">
               <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-white tracking-tight">Aguardando Pagamento Pix</h2>
-              <p className="text-zinc-400 text-sm">Realize o Pix para confirmar seu agendamento imediatamente.</p>
+              <h2 className={`text-2xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>Aguardando Pagamento Pix</h2>
+              <p className={`text-sm ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>Realize o Pix para confirmar seu agendamento imediatamente.</p>
             </div>
 
             {bookingData.woovi_qrcode_image && (
@@ -331,18 +361,18 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
 
             {bookingData.woovi_brcode && (
               <div className="space-y-2">
-                <p className="text-xs text-zinc-400 font-medium">Pix Copia e Cola:</p>
-                <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl p-2 max-w-sm mx-auto">
+                <p className={`text-xs font-medium ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>Pix Copia e Cola:</p>
+                <div className={`flex items-center gap-2 border rounded-xl p-2 max-w-sm mx-auto ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-slate-50 border-slate-300'}`}>
                   <input
                     type="text"
                     readOnly
                     value={bookingData.woovi_brcode}
-                    className="bg-transparent text-xs text-zinc-300 flex-1 outline-none truncate font-mono px-1"
+                    className={`bg-transparent text-xs flex-1 outline-none truncate font-mono px-1 ${isDark ? 'text-zinc-300' : 'text-slate-800'}`}
                   />
                   <Button
                     size="sm"
                     variant="outline"
-                    className="text-xs px-3 border-zinc-700 hover:bg-zinc-800 text-zinc-300 shrink-0"
+                    className={`text-xs px-3 shrink-0 ${isDark ? 'border-zinc-700 hover:bg-zinc-800 text-zinc-300' : 'border-slate-300 hover:bg-slate-200 text-slate-700'}`}
                     onClick={() => {
                       navigator.clipboard.writeText(bookingData.woovi_brcode)
                       setCopied(true)
@@ -356,12 +386,12 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
               </div>
             )}
 
-            <div className="border border-zinc-800 rounded-xl p-4 bg-zinc-900/50 text-left space-y-2 text-xs text-zinc-300">
-              <p><strong>Serviço:</strong> <span className="text-white">{bookingData?.service?.name || selectedService?.name}</span></p>
+            <div className={`border rounded-xl p-4 text-left space-y-2 text-xs ${isDark ? 'border-zinc-800 bg-zinc-900/50 text-zinc-300' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+              <p><strong>Serviço:</strong> <span className={isDark ? 'text-white' : 'text-slate-900'}>{bookingData?.service?.name || selectedService?.name}</span></p>
               {bookingData?.start_time && (
                 <>
-                  <p><strong>Data:</strong> <span className="text-white">{format(parseISO(bookingData.start_time), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span></p>
-                  <p><strong>Horário:</strong> <span className="text-white">{format(parseISO(bookingData.start_time), 'HH:mm')}</span></p>
+                  <p><strong>Data:</strong> <span className={isDark ? 'text-white' : 'text-slate-900'}>{format(parseISO(bookingData.start_time), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span></p>
+                  <p><strong>Horário:</strong> <span className={isDark ? 'text-white' : 'text-slate-900'}>{format(parseISO(bookingData.start_time), 'HH:mm')}</span></p>
                 </>
               )}
             </div>
@@ -384,7 +414,7 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
               )}
             </Button>
 
-            <p className="text-[11px] text-zinc-500 animate-pulse">Detectando pagamento Pix automaticamente...</p>
+            <p className={`text-[11px] animate-pulse ${isDark ? 'text-zinc-500' : 'text-slate-400'}`}>Detectando pagamento Pix automaticamente...</p>
           </CardContent>
         </Card>
       </div>
@@ -398,8 +428,11 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
     const physicalAddress = bookingData?.location_address || selectedService?.physical_address
 
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#09090b] text-white p-4">
-        <Card className="w-full max-w-lg border-zinc-800 bg-zinc-950/90 backdrop-blur-2xl shadow-2xl shadow-emerald-950/20 rounded-3xl">
+      <div className={`min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-300 ${isDark ? 'bg-[#09090b] text-white' : 'bg-slate-50 text-slate-900'}`}>
+        <div className="w-full max-w-lg flex justify-end mb-3">
+          {renderThemeToggle()}
+        </div>
+        <Card className={`w-full max-w-lg border backdrop-blur-2xl shadow-2xl rounded-3xl transition-colors duration-300 ${isDark ? 'border-zinc-800 bg-zinc-950/90 text-white shadow-emerald-950/20' : 'border-slate-200 bg-white text-slate-900 shadow-slate-200/80'}`}>
           <CardContent className="pt-8 text-center space-y-6">
             <div className="flex justify-center">
               <div className="relative flex items-center justify-center">
@@ -411,40 +444,40 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
             </div>
 
             <div className="space-y-2">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-wider">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-wider">
                 <Sparkles className="h-3.5 w-3.5" /> Agendamento Confirmado!
               </div>
-              <h2 className="text-2xl font-extrabold text-white tracking-tight">Tudo pronto para a sua consulta</h2>
-              <p className="text-zinc-400 text-xs sm:text-sm">Seu pagamento Pix foi verificado e seu atendimento está garantido.</p>
+              <h2 className={`text-2xl font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>Tudo pronto para a sua consulta</h2>
+              <p className={`text-xs sm:text-sm ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>Seu pagamento Pix foi verificado e seu atendimento está garantido.</p>
             </div>
 
             {/* Ticket Card */}
-            <div className="border border-zinc-800 rounded-2xl p-5 bg-zinc-900/60 text-left space-y-4 shadow-inner">
-              <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+            <div className={`border rounded-2xl p-5 text-left space-y-4 shadow-inner ${isDark ? 'border-zinc-800 bg-zinc-900/60' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`flex items-center justify-between pb-3 border-b ${isDark ? 'border-zinc-800' : 'border-slate-200'}`}>
                 <span className="text-xs font-bold text-primary uppercase tracking-wider">Comprovante de Agendamento</span>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-medium">Pago via Pix</span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 font-medium">Pago via Pix</span>
               </div>
 
-              <div className="space-y-2 text-xs sm:text-sm text-zinc-300">
+              <div className={`space-y-2 text-xs sm:text-sm ${isDark ? 'text-zinc-300' : 'text-slate-700'}`}>
                 <p className="flex justify-between">
-                  <span className="text-zinc-500 font-medium">Serviço:</span>
-                  <span className="font-semibold text-white">{bookingData?.service?.name || selectedService?.name}</span>
+                  <span className={isDark ? 'text-zinc-500' : 'text-slate-400'}>Serviço:</span>
+                  <span className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{bookingData?.service?.name || selectedService?.name}</span>
                 </p>
                 {bookingData?.start_time && (
                   <>
                     <p className="flex justify-between">
-                      <span className="text-zinc-500 font-medium">Data:</span>
-                      <span className="font-semibold text-white">{format(parseISO(bookingData.start_time), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span>
+                      <span className={isDark ? 'text-zinc-500' : 'text-slate-400'}>Data:</span>
+                      <span className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{format(parseISO(bookingData.start_time), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span>
                     </p>
                     <p className="flex justify-between">
-                      <span className="text-zinc-500 font-medium">Horário:</span>
-                      <span className="font-semibold text-white">{format(parseISO(bookingData.start_time), 'HH:mm')}</span>
+                      <span className={isDark ? 'text-zinc-500' : 'text-slate-400'}>Horário:</span>
+                      <span className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{format(parseISO(bookingData.start_time), 'HH:mm')}</span>
                     </p>
                   </>
                 )}
                 <p className="flex justify-between">
-                  <span className="text-zinc-500 font-medium">Profissional:</span>
-                  <span className="font-semibold text-white">{bookingData?.service?.provider_name || selectedService?.provider_name || profile.full_name}</span>
+                  <span className={isDark ? 'text-zinc-500' : 'text-slate-400'}>Profissional:</span>
+                  <span className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{bookingData?.service?.provider_name || selectedService?.provider_name || profile.full_name}</span>
                 </p>
               </div>
 
@@ -454,12 +487,12 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
                   <div className="flex items-center gap-2 text-xs font-bold text-primary">
                     <Video className="h-4 w-4" /> Atendimento Online (Telemedicina)
                   </div>
-                  <p className="text-[11px] text-zinc-400">Acesse a sala virtual no horário agendado:</p>
+                  <p className={`text-[11px] ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>Acesse a sala virtual no horário agendado:</p>
                   <a
                     href={meetingUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs rounded-lg transition"
+                    className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs rounded-lg transition shadow-md"
                   >
                     <span>Acessar Sala Virtual</span>
                     <ExternalLink className="h-3.5 w-3.5" />
@@ -468,25 +501,29 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
               )}
 
               {isPresencial && physicalAddress && (
-                <div className="p-4 bg-zinc-800/50 border border-zinc-700/50 rounded-xl space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-bold text-zinc-200">
-                    <MapPin className="h-4 w-4 text-primary" /> Endereço do Consultório
+                <div className={`p-4 border rounded-xl space-y-2 ${isDark ? 'bg-zinc-800/50 border-zinc-700/50' : 'bg-white border-slate-200'}`}>
+                  <div className="flex items-center gap-2 text-xs font-bold text-primary">
+                    <MapPin className="h-4 w-4" /> Endereço do Consultório
                   </div>
-                  <p className="text-xs text-zinc-300 font-medium">{physicalAddress}</p>
+                  <p className={`text-xs font-medium ${isDark ? 'text-zinc-300' : 'text-slate-700'}`}>{physicalAddress}</p>
                 </div>
               )}
             </div>
 
-            <p className="text-[11px] text-zinc-500">
+            <p className={`text-[11px] ${isDark ? 'text-zinc-500' : 'text-slate-400'}`}>
               Enviamos um lembrete com os detalhes da consulta para o seu telefone via WhatsApp.
             </p>
 
             <Button
               type="button"
               onClick={() => window.location.reload()}
-              className="w-full h-12 bg-zinc-900 hover:bg-zinc-800 text-white font-bold border border-zinc-700 hover:border-emerald-500/50 shadow-xl shadow-black/60 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-all duration-200"
+              className={`w-full h-12 font-bold border shadow-xl rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-all duration-200 ${
+                isDark
+                  ? 'bg-zinc-900 hover:bg-zinc-800 text-white border-zinc-700 hover:border-emerald-500/50 shadow-black/60'
+                  : 'bg-slate-900 hover:bg-slate-800 text-white border-slate-800 hover:border-emerald-600/50 shadow-slate-300/50'
+              }`}
             >
-              <CalendarIcon className="h-4 w-4 text-emerald-400" />
+              <CalendarIcon className="h-4 w-4 text-emerald-500" />
               <span className="text-white font-bold tracking-wide">Fazer Novo Agendamento</span>
             </Button>
           </CardContent>
@@ -496,22 +533,40 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#09090b] via-[#121214] to-[#09090b] text-white py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
-      <div className="w-full max-w-5xl bg-zinc-950/40 backdrop-blur-xl border border-zinc-800/80 rounded-3xl overflow-hidden shadow-2xl shadow-black/80 grid grid-cols-1 md:grid-cols-12">
+    <div className={`min-h-screen py-10 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center transition-colors duration-300 ${
+      isDark
+        ? 'bg-gradient-to-br from-[#09090b] via-[#121214] to-[#09090b] text-white'
+        : 'bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-900'
+    }`}>
+      
+      {/* Top Header Bar with Theme Toggle */}
+      <div className="w-full max-w-5xl flex justify-end mb-3 px-2">
+        {renderThemeToggle()}
+      </div>
+
+      <div className={`w-full max-w-5xl backdrop-blur-xl border rounded-3xl overflow-hidden shadow-2xl transition-colors duration-300 grid grid-cols-1 md:grid-cols-12 ${
+        isDark
+          ? 'bg-zinc-950/40 border-zinc-800/80 shadow-black/80'
+          : 'bg-white/90 border-slate-200/90 shadow-slate-300/60'
+      }`}>
         
         {/* Profile Sidebar */}
-        <div className="md:col-span-5 p-8 border-b md:border-b-0 md:border-r border-zinc-800/80 flex flex-col justify-between bg-zinc-900/10">
+        <div className={`md:col-span-5 p-8 border-b md:border-b-0 md:border-r flex flex-col justify-between transition-colors duration-300 ${
+          isDark
+            ? 'border-zinc-800/80 bg-zinc-900/10'
+            : 'border-slate-200 bg-slate-50/50'
+        }`}>
           <div className="space-y-6">
             {/* Clinic Logo Header if enabled */}
             {activeService?.show_clinic_logo && activeService?.clinic_logo_url && (
-              <div className="flex items-center gap-3 pb-4 border-b border-zinc-800/80">
+              <div className={`flex items-center gap-3 pb-4 border-b ${isDark ? 'border-zinc-800/80' : 'border-slate-200'}`}>
                 <img
                   src={activeService.clinic_logo_url}
                   alt={activeService.clinic_name || 'Clínica'}
                   className="h-10 max-w-[160px] object-contain"
                 />
                 {activeService.clinic_name && (
-                  <span className="text-xs font-bold text-zinc-300">{activeService.clinic_name}</span>
+                  <span className={`text-xs font-bold ${isDark ? 'text-zinc-300' : 'text-slate-700'}`}>{activeService.clinic_name}</span>
                 )}
               </div>
             )}
@@ -530,13 +585,13 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
                   className="h-16 w-16 rounded-2xl object-cover border border-primary/30 shadow-lg shadow-primary/10"
                 />
               ) : (
-                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary/30 to-primary/5 border border-primary/20 flex items-center justify-center text-2xl font-bold text-white shadow-lg shadow-primary/10">
+                <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary/30 to-primary/5 border border-primary/20 flex items-center justify-center text-2xl font-bold text-primary shadow-lg shadow-primary/10">
                   {profile.full_name.charAt(0)}
                 </div>
               )}
               <div>
                 <span className="text-xs font-semibold text-primary uppercase tracking-wider">Profissional</span>
-                <h2 className="text-xl font-bold text-white tracking-tight">
+                <h2 className={`text-xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>
                   {activeService?.show_provider_avatar && activeService?.provider_name
                     ? activeService.provider_name
                     : profile.full_name}
@@ -544,15 +599,15 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
               </div>
             </div>
             
-            <p className="text-zinc-400 text-sm leading-relaxed">
+            <p className={`text-sm leading-relaxed ${isDark ? 'text-zinc-400' : 'text-slate-600'}`}>
               Agende um horário para atendimento online ou presencial com toda a conveniência.
             </p>
 
             {selectedService && (
-              <div className="mt-8 p-5 bg-primary/5 border border-primary/10 rounded-2xl space-y-3 animate-fade-in">
+              <div className="mt-8 p-5 bg-primary/5 border border-primary/15 rounded-2xl space-y-3 animate-fade-in">
                 <span className="text-[10px] font-bold text-primary uppercase tracking-widest">Serviço Selecionado</span>
-                <h4 className="font-bold text-white text-base">{selectedService.name}</h4>
-                <div className="flex flex-wrap gap-4 text-xs text-zinc-400">
+                <h4 className={`font-bold text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>{selectedService.name}</h4>
+                <div className={`flex flex-wrap gap-4 text-xs ${isDark ? 'text-zinc-400' : 'text-slate-600'}`}>
                   <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-primary" /> {selectedService.duration_minutes} min</span>
                   <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5 text-primary" /> R$ {Number(selectedService.price).toFixed(2)}</span>
                 </div>
@@ -562,23 +617,23 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
 
           {/* Steps Indicator */}
           <div className="mt-12 space-y-4">
-            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Etapas do Agendamento</h3>
+            <h3 className={`text-xs font-bold uppercase tracking-widest ${isDark ? 'text-zinc-500' : 'text-slate-400'}`}>Etapas do Agendamento</h3>
             <div className="space-y-3">
-              <div className={`flex items-center gap-3 transition-all duration-300 ${selectedService ? 'text-zinc-500 line-through' : 'text-primary font-semibold'}`}>
-                <span className={`h-6 w-6 rounded-lg border flex items-center justify-center text-xs font-bold transition-all ${selectedService ? 'border-zinc-800 bg-zinc-900' : 'border-primary/30 bg-primary/10'}`}>1</span>
+              <div className={`flex items-center gap-3 transition-all duration-300 ${selectedService ? (isDark ? 'text-zinc-500 line-through' : 'text-slate-400 line-through') : 'text-primary font-semibold'}`}>
+                <span className={`h-6 w-6 rounded-lg border flex items-center justify-center text-xs font-bold transition-all ${selectedService ? (isDark ? 'border-zinc-800 bg-zinc-900' : 'border-slate-300 bg-slate-200 text-slate-500') : 'border-primary/30 bg-primary/10 text-primary'}`}>1</span>
                 <span>Selecione o Serviço</span>
               </div>
-              <div className={`flex items-center gap-3 transition-all duration-300 ${selectedService && !selectedSlot ? 'text-primary font-semibold' : selectedSlot ? 'text-zinc-500 line-through' : 'text-zinc-500'}`}>
-                <span className={`h-6 w-6 rounded-lg border flex items-center justify-center text-xs font-bold transition-all ${selectedService && !selectedSlot ? 'border-primary/30 bg-primary/10' : 'border-zinc-800 bg-zinc-900'}`}>2</span>
+              <div className={`flex items-center gap-3 transition-all duration-300 ${selectedService && !selectedSlot ? 'text-primary font-semibold' : selectedSlot ? (isDark ? 'text-zinc-500 line-through' : 'text-slate-400 line-through') : (isDark ? 'text-zinc-500' : 'text-slate-400')}`}>
+                <span className={`h-6 w-6 rounded-lg border flex items-center justify-center text-xs font-bold transition-all ${selectedService && !selectedSlot ? 'border-primary/30 bg-primary/10 text-primary' : (isDark ? 'border-zinc-800 bg-zinc-900' : 'border-slate-300 bg-slate-200 text-slate-500')}`}>2</span>
                 <span>Escolha Data & Hora</span>
               </div>
-              <div className={`flex items-center gap-3 transition-all duration-300 ${selectedSlot && !waitingPayment ? 'text-primary font-semibold' : waitingPayment ? 'text-zinc-500 line-through' : 'text-zinc-500'}`}>
-                <span className={`h-6 w-6 rounded-lg border flex items-center justify-center text-xs font-bold transition-all ${selectedSlot && !waitingPayment ? 'border-primary/30 bg-primary/10' : 'border-zinc-800 bg-zinc-900'}`}>3</span>
+              <div className={`flex items-center gap-3 transition-all duration-300 ${selectedSlot && !waitingPayment ? 'text-primary font-semibold' : waitingPayment ? (isDark ? 'text-zinc-500 line-through' : 'text-slate-400 line-through') : (isDark ? 'text-zinc-500' : 'text-slate-400')}`}>
+                <span className={`h-6 w-6 rounded-lg border flex items-center justify-center text-xs font-bold transition-all ${selectedSlot && !waitingPayment ? 'border-primary/30 bg-primary/10 text-primary' : (isDark ? 'border-zinc-800 bg-zinc-900' : 'border-slate-300 bg-slate-200 text-slate-500')}`}>3</span>
                 <span>Confirme seus Dados</span>
               </div>
               {(selectedService?.payment_required ?? activeService?.payment_required ?? services.some(s => s.payment_required)) && (
-                <div className={`flex items-center gap-3 transition-all duration-300 ${waitingPayment ? 'text-primary font-semibold' : 'text-zinc-500'}`}>
-                  <span className={`h-6 w-6 rounded-lg border flex items-center justify-center text-xs font-bold transition-all ${waitingPayment ? 'border-primary/30 bg-primary/10 font-bold' : 'border-zinc-800 bg-zinc-900'}`}>4</span>
+                <div className={`flex items-center gap-3 transition-all duration-300 ${waitingPayment ? 'text-primary font-semibold' : (isDark ? 'text-zinc-500' : 'text-slate-400')}`}>
+                  <span className={`h-6 w-6 rounded-lg border flex items-center justify-center text-xs font-bold transition-all ${waitingPayment ? 'border-primary/30 bg-primary/10 font-bold text-primary' : (isDark ? 'border-zinc-800 bg-zinc-900' : 'border-slate-300 bg-slate-200 text-slate-500')}`}>4</span>
                   <span>Pagamento via Pix (Woovi)</span>
                 </div>
               )}
@@ -593,24 +648,28 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
           {!selectedService && (
             <div className="space-y-6">
               <div>
-                <h3 className="text-2xl font-bold tracking-tight text-white">Serviços Disponíveis</h3>
-                <p className="text-sm text-zinc-400 mt-1">Selecione o atendimento que deseja realizar.</p>
+                <h3 className={`text-2xl font-bold tracking-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>Serviços Disponíveis</h3>
+                <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>Selecione o atendimento que deseja realizar.</p>
               </div>
               <div className="space-y-4">
                 {services.length === 0 ? (
-                  <div className="border border-dashed border-zinc-800 rounded-3xl py-12 text-center bg-zinc-900/5">
-                    <p className="text-sm text-zinc-500 italic">Nenhum serviço ativo cadastrado para este profissional.</p>
+                  <div className={`border border-dashed rounded-3xl py-12 text-center ${isDark ? 'border-zinc-800 bg-zinc-900/5' : 'border-slate-300 bg-slate-50'}`}>
+                    <p className={`text-sm italic ${isDark ? 'text-zinc-500' : 'text-slate-400'}`}>Nenhum serviço ativo cadastrado para este profissional.</p>
                   </div>
                 ) : (
                   services.map((svc) => (
                     <div 
                       key={svc.id} 
                       onClick={() => setSelectedService(svc)}
-                      className="flex justify-between items-center p-5 rounded-2xl border border-zinc-800 bg-zinc-900/20 hover:bg-zinc-900/50 hover:border-primary/40 transition-all duration-300 cursor-pointer group shadow-lg hover:shadow-primary/5"
+                      className={`flex justify-between items-center p-5 rounded-2xl border transition-all duration-300 cursor-pointer group shadow-md ${
+                        isDark
+                          ? 'border-zinc-800 bg-zinc-900/20 hover:bg-zinc-900/50 hover:border-primary/40'
+                          : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-primary/50 shadow-slate-200/50'
+                      }`}
                     >
                       <div className="space-y-3 flex-1 mr-4">
                         {((svc.show_clinic_logo && (svc.clinic_logo_url || svc.clinic_name)) || (svc.show_provider_avatar && (svc.provider_avatar_url || svc.provider_name))) && (
-                          <div className="flex flex-wrap items-center gap-3 pb-2 border-b border-zinc-800/50">
+                          <div className={`flex flex-wrap items-center gap-3 pb-2 border-b ${isDark ? 'border-zinc-800/50' : 'border-slate-200'}`}>
                             {svc.show_clinic_logo && (svc.clinic_logo_url || svc.clinic_name) && (
                               <div className="flex items-center gap-2">
                                 {svc.clinic_logo_url && (
@@ -621,13 +680,13 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
                                   />
                                 )}
                                 {svc.clinic_name && (
-                                  <span className="text-xs font-semibold text-zinc-300">{svc.clinic_name}</span>
+                                  <span className={`text-xs font-semibold ${isDark ? 'text-zinc-300' : 'text-slate-700'}`}>{svc.clinic_name}</span>
                                 )}
                               </div>
                             )}
 
                             {svc.show_clinic_logo && svc.show_provider_avatar && (svc.clinic_logo_url || svc.clinic_name) && (svc.provider_avatar_url || svc.provider_name) && (
-                              <span className="text-zinc-600 text-xs">•</span>
+                              <span className={isDark ? 'text-zinc-600' : 'text-slate-300'}>•</span>
                             )}
 
                             {svc.show_provider_avatar && (svc.provider_avatar_url || svc.provider_name) && (
@@ -636,11 +695,11 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
                                   <img
                                     src={svc.provider_avatar_url}
                                     alt={svc.provider_name || 'Profissional'}
-                                    className="h-6 w-6 rounded-full object-cover border border-zinc-700"
+                                    className={`h-6 w-6 rounded-full object-cover border ${isDark ? 'border-zinc-700' : 'border-slate-300'}`}
                                   />
                                 )}
                                 {svc.provider_name && (
-                                  <span className="text-xs text-zinc-400 font-medium">{svc.provider_name}</span>
+                                  <span className={`text-xs font-medium ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>{svc.provider_name}</span>
                                 )}
                               </div>
                             )}
@@ -648,18 +707,18 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
                         )}
 
                         <div>
-                          <h4 className="font-bold text-white group-hover:text-primary transition duration-300 text-lg">{svc.name}</h4>
-                          <p className="text-sm text-zinc-400 mt-1">{svc.description || 'Atendimento personalizado com profissional qualificado.'}</p>
+                          <h4 className={`font-bold transition duration-300 text-lg ${isDark ? 'text-white group-hover:text-primary' : 'text-slate-900 group-hover:text-primary'}`}>{svc.name}</h4>
+                          <p className={`text-sm mt-1 ${isDark ? 'text-zinc-400' : 'text-slate-600'}`}>{svc.description || 'Atendimento personalizado com profissional qualificado.'}</p>
                         </div>
 
-                        <div className="flex items-center gap-2 text-xs text-zinc-500 pt-1">
-                          <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {svc.duration_minutes} min</span>
+                        <div className={`flex items-center gap-2 text-xs pt-1 ${isDark ? 'text-zinc-500' : 'text-slate-400'}`}>
+                          <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-primary" /> {svc.duration_minutes} min</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4 shrink-0">
-                        <span className="font-bold text-base text-zinc-200">R$ {Number(svc.price).toFixed(2)}</span>
-                        <div className="h-8 w-8 rounded-lg bg-zinc-800/80 group-hover:bg-primary/20 flex items-center justify-center transition duration-300">
-                          <ChevronRight className="h-4 w-4 text-zinc-400 group-hover:text-primary transition duration-300" />
+                        <span className={`font-bold text-base ${isDark ? 'text-zinc-200' : 'text-slate-900'}`}>R$ {Number(svc.price).toFixed(2)}</span>
+                        <div className={`h-8 w-8 rounded-lg flex items-center justify-center transition duration-300 ${isDark ? 'bg-zinc-800/80 group-hover:bg-primary/20' : 'bg-slate-100 group-hover:bg-primary/10'}`}>
+                          <ChevronRight className={`h-4 w-4 transition duration-300 ${isDark ? 'text-zinc-400 group-hover:text-primary' : 'text-slate-500 group-hover:text-primary'}`} />
                         </div>
                       </div>
                     </div>
@@ -672,22 +731,22 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
           {/* Step 2: Date & Slot Selection */}
           {selectedService && !selectedSlot && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between border-b border-zinc-800/80 pb-4">
+              <div className={`flex items-center justify-between border-b pb-4 ${isDark ? 'border-zinc-800/80' : 'border-slate-200'}`}>
                 <div>
-                  <h3 className="text-xl font-bold text-white">Escolha data & horário</h3>
-                  <p className="text-xs text-zinc-400 mt-0.5">Selecione o dia e o horário de sua preferência.</p>
+                  <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Escolha data & horário</h3>
+                  <p className={`text-xs mt-0.5 ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>Selecione o dia e o horário de sua preferência.</p>
                 </div>
-                <Button variant="ghost" className="text-xs text-zinc-400 hover:text-white border border-zinc-800 hover:bg-zinc-900 rounded-lg px-3 py-1.5" onClick={() => setSelectedService(null)}>Voltar</Button>
+                <Button variant="ghost" className={`text-xs border rounded-lg px-3 py-1.5 ${isDark ? 'text-zinc-400 hover:text-white border-zinc-800 hover:bg-zinc-900' : 'text-slate-600 hover:text-slate-900 border-slate-300 hover:bg-slate-100'}`} onClick={() => setSelectedService(null)}>Voltar</Button>
               </div>
 
               <div className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="date" className="text-sm font-semibold text-zinc-300">Data do Atendimento</Label>
+                  <Label htmlFor="date" className={`text-sm font-semibold ${isDark ? 'text-zinc-300' : 'text-slate-700'}`}>Data do Atendimento</Label>
                   <div className="relative">
                     <Input 
                       id="date"
                       type="date"
-                      className="bg-zinc-900/60 border-zinc-800 text-white rounded-xl py-6 pl-4 pr-10 focus:border-primary/50 transition"
+                      className={`rounded-xl py-6 pl-4 pr-10 transition font-medium ${isDark ? 'bg-zinc-900/60 border-zinc-800 text-white focus:border-primary/50' : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white'}`}
                       min={format(new Date(), 'yyyy-MM-dd')}
                       max={format(addDays(new Date(), 30), 'yyyy-MM-dd')}
                       value={selectedDate}
@@ -697,14 +756,14 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
                 </div>
 
                 <div className="space-y-3">
-                  <Label className="text-sm font-semibold text-zinc-300">Horários Disponíveis</Label>
+                  <Label className={`text-sm font-semibold ${isDark ? 'text-zinc-300' : 'text-slate-700'}`}>Horários Disponíveis</Label>
                   {loadingSlots ? (
                     <div className="flex justify-center py-8">
                       <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                     </div>
                   ) : availableSlots.length === 0 ? (
-                    <div className="border border-dashed border-zinc-800 rounded-2xl py-8 text-center bg-zinc-900/5">
-                      <p className="text-sm text-zinc-500 italic">Nenhum horário disponível para este dia.</p>
+                    <div className={`border border-dashed rounded-2xl py-8 text-center ${isDark ? 'border-zinc-800 bg-zinc-900/5' : 'border-slate-300 bg-slate-50'}`}>
+                      <p className={`text-sm italic ${isDark ? 'text-zinc-500' : 'text-slate-400'}`}>Nenhum horário disponível para este dia.</p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -713,7 +772,11 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
                           key={slot}
                           type="button"
                           onClick={() => setSelectedSlot(slot)}
-                          className="py-3 px-4 rounded-xl border border-zinc-800 bg-zinc-900/20 hover:bg-primary/10 hover:border-primary text-sm font-bold text-zinc-300 hover:text-white transition duration-300 shadow-md"
+                          className={`py-3 px-4 rounded-xl border text-sm font-bold transition duration-300 shadow-sm ${
+                            isDark
+                              ? 'border-zinc-800 bg-zinc-900/20 hover:bg-primary/10 hover:border-primary text-zinc-300 hover:text-white'
+                              : 'border-slate-200 bg-white hover:bg-primary/10 hover:border-primary text-slate-700 hover:text-primary'
+                          }`}
                         >
                           {slot}
                         </button>
@@ -728,20 +791,20 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
           {/* Step 3: Complete Booking Form */}
           {selectedService && selectedSlot && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between border-b border-zinc-800/80 pb-4">
+              <div className={`flex items-center justify-between border-b pb-4 ${isDark ? 'border-zinc-800/80' : 'border-slate-200'}`}>
                 <div>
-                  <h3 className="text-xl font-bold text-white">Insira seus dados</h3>
-                  <p className="text-xs text-zinc-400 mt-0.5">Preencha as informações para confirmar o agendamento.</p>
+                  <h3 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Insira seus dados</h3>
+                  <p className={`text-xs mt-0.5 ${isDark ? 'text-zinc-400' : 'text-slate-500'}`}>Preencha as informações para confirmar o agendamento.</p>
                 </div>
-                <Button variant="ghost" className="text-xs text-zinc-400 hover:text-white border border-zinc-800 hover:bg-zinc-900 rounded-lg px-3 py-1.5" onClick={() => setSelectedSlot(null)}>Voltar</Button>
+                <Button variant="ghost" className={`text-xs border rounded-lg px-3 py-1.5 ${isDark ? 'text-zinc-400 hover:text-white border-zinc-800 hover:bg-zinc-900' : 'text-slate-600 hover:text-slate-900 border-slate-300 hover:bg-slate-100'}`} onClick={() => setSelectedSlot(null)}>Voltar</Button>
               </div>
 
               <form onSubmit={handleConfirmBooking} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="clientName" className="text-sm text-zinc-300">Seu Nome Completo *</Label>
+                  <Label htmlFor="clientName" className={`text-sm ${isDark ? 'text-zinc-300' : 'text-slate-700'}`}>Seu Nome Completo *</Label>
                   <Input 
                     id="clientName"
-                    className="bg-zinc-900/60 border-zinc-800 text-white rounded-xl py-5"
+                    className={`rounded-xl py-5 ${isDark ? 'bg-zinc-900/60 border-zinc-800 text-white placeholder:text-zinc-500' : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white'}`}
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
                     placeholder="Ex: João Silva"
@@ -750,10 +813,10 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="clientPhone" className="text-sm text-zinc-300">WhatsApp / Telefone *</Label>
+                    <Label htmlFor="clientPhone" className={`text-sm ${isDark ? 'text-zinc-300' : 'text-slate-700'}`}>WhatsApp / Telefone *</Label>
                     <Input 
                       id="clientPhone"
-                      className="bg-zinc-900/60 border-zinc-800 text-white rounded-xl py-5"
+                      className={`rounded-xl py-5 ${isDark ? 'bg-zinc-900/60 border-zinc-800 text-white placeholder:text-zinc-500' : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white'}`}
                       value={clientPhone}
                       onChange={(e) => setClientPhone(e.target.value)}
                       placeholder="Ex: 11999999999"
@@ -761,11 +824,11 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="clientEmail" className="text-sm text-zinc-300">E-mail (opcional)</Label>
+                    <Label htmlFor="clientEmail" className={`text-sm ${isDark ? 'text-zinc-300' : 'text-slate-700'}`}>E-mail (opcional)</Label>
                     <Input 
                       id="clientEmail"
                       type="email"
-                      className="bg-zinc-900/60 border-zinc-800 text-white rounded-xl py-5"
+                      className={`rounded-xl py-5 ${isDark ? 'bg-zinc-900/60 border-zinc-800 text-white placeholder:text-zinc-500' : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white'}`}
                       value={clientEmail}
                       onChange={(e) => setClientEmail(e.target.value)}
                       placeholder="Ex: joao@gmail.com"
@@ -773,10 +836,10 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="clientNotes" className="text-sm text-zinc-300">Observações (opcional)</Label>
+                  <Label htmlFor="clientNotes" className={`text-sm ${isDark ? 'text-zinc-300' : 'text-slate-700'}`}>Observações (opcional)</Label>
                   <Input 
                     id="clientNotes"
-                    className="bg-zinc-900/60 border-zinc-800 text-white rounded-xl py-5"
+                    className={`rounded-xl py-5 ${isDark ? 'bg-zinc-900/60 border-zinc-800 text-white placeholder:text-zinc-500' : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white'}`}
                     value={clientNotes}
                     onChange={(e) => setClientNotes(e.target.value)}
                     placeholder="Informações relevantes para o seu atendimento..."
