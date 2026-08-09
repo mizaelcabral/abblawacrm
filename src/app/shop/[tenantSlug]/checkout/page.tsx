@@ -23,6 +23,7 @@ import {
   AlertCircle,
   Building,
   Lock,
+  ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -367,17 +368,19 @@ export default function CheckoutPage() {
   // Tela de Senha
   if (config?.password_protected && !authenticated) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4 text-center selection:bg-primary selection:text-primary-foreground">
-        <div className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-6 shadow-lg">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-muted/20 p-4 text-center selection:bg-primary selection:text-primary-foreground">
+        <div className="w-full max-w-md rounded-3xl border border-border/80 bg-white p-8 shadow-sm overflow-hidden space-y-6">
           <div className="flex justify-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <Lock className="h-6 w-6" />
             </div>
           </div>
-          <h2 className="text-xl font-bold">Loja Protegida por Senha</h2>
-          <p className="text-sm text-muted-foreground">
-            Digite a senha de acesso fornecida pelo lojista para continuar.
-          </p>
+          <div className="space-y-1">
+            <h2 className="text-xl font-bold">Loja Protegida por Senha</h2>
+            <p className="text-sm text-muted-foreground">
+              Digite a senha de acesso fornecida pelo lojista para continuar.
+            </p>
+          </div>
           <form onSubmit={handleVerifyPassword} className="space-y-4">
             <Input
               type="password"
@@ -385,8 +388,9 @@ export default function CheckoutPage() {
               value={passwordInput}
               onChange={(e) => setPasswordInput(e.target.value)}
               required
+              className="rounded-xl h-11 bg-muted/20 border-border/80 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
             />
-            <Button type="submit" disabled={verifying} className="w-full">
+            <Button type="submit" disabled={verifying} className="w-full rounded-2xl h-13 text-base font-bold shadow-md shadow-primary/20 hover:opacity-95 transition-all">
               {verifying ? 'Verificando...' : 'Acessar Loja'}
             </Button>
           </form>
@@ -397,10 +401,13 @@ export default function CheckoutPage() {
 
   if (cartItems.length === 0 && step === 'form') {
     return (
-      <div className="flex h-screen flex-col items-center justify-center bg-background p-4 text-center">
-        <ShoppingBag className="h-12 w-12 text-muted-foreground opacity-55 mb-2" />
+      <div className="flex h-screen flex-col items-center justify-center bg-muted/20 p-4 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-muted/30 text-muted-foreground mb-4">
+          <ShoppingBag className="h-8 w-8 opacity-50" />
+        </div>
         <h2 className="text-xl font-bold">Carrinho Vazio</h2>
-        <Button variant="link" onClick={() => router.push(`/shop/${tenantSlug}`)} className="text-primary mt-1">
+        <p className="text-sm text-muted-foreground mt-1 mb-4">Você ainda não adicionou produtos ao carrinho.</p>
+        <Button onClick={() => router.push(`/shop/${tenantSlug}`)} className="rounded-2xl h-11 px-6 font-bold shadow-md shadow-primary/20">
           Ir para a vitrine
         </Button>
       </div>
@@ -408,13 +415,13 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/20 pb-16 pt-8 text-foreground selection:bg-primary selection:text-primary-foreground">
-      {/* Logo / Header do Tenant */}
-      <header className="mb-8">
-        <div className="mx-auto max-w-4xl px-4">
+    <div className="min-h-screen bg-muted/20 pb-16 text-foreground selection:bg-primary selection:text-primary-foreground">
+      {/* Header expansivo com Glassmorphism */}
+      <header className="sticky top-0 z-30 w-full border-b border-border bg-white/95 backdrop-blur-md shadow-sm mb-8">
+        <div className="mx-auto max-w-[1720px] w-full flex h-16 items-center justify-between gap-4 px-4 sm:px-8 lg:px-12">
           <button
             onClick={() => router.push(`/shop/${tenantSlug}`)}
-            className="flex items-center gap-3 focus:outline-none"
+            className="flex items-center gap-3 focus:outline-none hover:opacity-90 transition-opacity"
             aria-label="Voltar para a loja"
           >
             {storeLogoUrl ? (
@@ -430,19 +437,29 @@ export default function CheckoutPage() {
               </div>
             )}
           </button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push(`/shop/${tenantSlug}`)}
+            className="text-xs font-medium text-muted-foreground hover:text-foreground gap-2 rounded-xl"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Voltar para a Loja</span>
+          </Button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 grid gap-8 md:grid-cols-5">
+      <main className="mx-auto max-w-[1720px] w-full px-4 sm:px-8 lg:px-12 grid gap-8 lg:grid-cols-12 items-start">
         
-        {/* Lado Esquerdo: Formulário / Pagamento (Cols 3) */}
-        <div className="md:col-span-3 space-y-6">
+        {/* Lado Esquerdo (Contact info, Shipping address, Payment form / Pix step) */}
+        <div className="lg:col-span-7 xl:col-span-8 space-y-6">
           {step === 'form' && (
             <form onSubmit={handleSubmitCheckout} className="space-y-6">
               {/* Informações Pessoais */}
-              <Card className="border-border">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
+              <Card className="rounded-3xl border border-border/80 bg-white shadow-sm overflow-hidden">
+                <CardHeader className="p-6 sm:p-8 pb-4 border-b border-border/40">
+                  <CardTitle className="text-lg font-bold flex items-center gap-2">
                     <MessageSquare className="h-5 w-5 text-primary" />
                     Informações de Contato
                   </CardTitle>
@@ -450,31 +467,33 @@ export default function CheckoutPage() {
                     Usaremos estes dados para enviar a confirmação do pagamento e suporte.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="p-6 sm:p-8 space-y-5">
                   <div className="space-y-1.5">
-                    <Label htmlFor="custName">Nome Completo</Label>
+                    <Label htmlFor="custName" className="text-sm font-medium">Nome Completo</Label>
                     <Input
                       id="custName"
-                      placeholder="Seu nome"
+                      placeholder="Seu nome completo"
                       value={customerInfo.name}
                       onChange={(e) => setCustomerInfo({ ...customerInfo, name: e.target.value })}
                       required
+                      className="rounded-xl h-11 bg-muted/20 border-border/80 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
                     />
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                      <Label htmlFor="custPhone">WhatsApp (com DDD)</Label>
+                      <Label htmlFor="custPhone" className="text-sm font-medium">WhatsApp (com DDD)</Label>
                       <Input
                         id="custPhone"
                         placeholder="Ex: (11) 99999-9999"
                         value={customerInfo.phone}
                         onChange={(e) => setCustomerInfo({ ...customerInfo, phone: e.target.value })}
                         required
+                        className="rounded-xl h-11 bg-muted/20 border-border/80 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="custEmail">E-mail</Label>
+                      <Label htmlFor="custEmail" className="text-sm font-medium">E-mail</Label>
                       <Input
                         id="custEmail"
                         type="email"
@@ -482,6 +501,7 @@ export default function CheckoutPage() {
                         value={customerInfo.email}
                         onChange={(e) => setCustomerInfo({ ...customerInfo, email: e.target.value })}
                         required
+                        className="rounded-xl h-11 bg-muted/20 border-border/80 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
                       />
                     </div>
                   </div>
@@ -490,9 +510,9 @@ export default function CheckoutPage() {
 
               {/* Endereço de Entrega (se produto físico) */}
               {hasPhysical ? (
-                <Card className="border-border">
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
+                <Card className="rounded-3xl border border-border/80 bg-white shadow-sm overflow-hidden">
+                  <CardHeader className="p-6 sm:p-8 pb-4 border-b border-border/40">
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">
                       <Truck className="h-5 w-5 text-primary" />
                       Endereço de Entrega
                     </CardTitle>
@@ -500,15 +520,15 @@ export default function CheckoutPage() {
                       Insira o local para envio das mercadorias físicas.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="p-6 sm:p-8 space-y-5">
                     {/* Exibe endereços salvos autocompletados */}
                     {savedAddresses.length > 0 && (
-                      <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-2 mb-2">
+                      <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 space-y-2 mb-2">
                         <Label className="text-xs font-bold text-primary flex items-center gap-1.5">
                           <MapPin className="h-4 w-4" /> Endereços de recompra encontrados:
                         </Label>
                         <div className="flex flex-wrap gap-2">
-                          {savedAddresses.map((addr, i) => (
+                          {savedAddresses.map((addr) => (
                             <button
                               key={addr.id}
                               type="button"
@@ -525,7 +545,7 @@ export default function CheckoutPage() {
                                 });
                                 toast.success('Endereço carregado!');
                               }}
-                              className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-left hover:border-primary hover:bg-primary/5 transition-all max-w-xs truncate"
+                              className="rounded-xl border border-border bg-white px-3 py-2 text-xs text-left hover:border-primary hover:bg-primary/5 transition-all max-w-xs truncate shadow-xs"
                             >
                               {addr.street}, {addr.number} ({addr.neighborhood})
                             </button>
@@ -536,72 +556,78 @@ export default function CheckoutPage() {
 
                     <div className="grid gap-4 sm:grid-cols-3">
                       <div className="space-y-1.5 sm:col-span-1">
-                        <Label htmlFor="cep">CEP</Label>
+                        <Label htmlFor="cep" className="text-sm font-medium">CEP</Label>
                         <Input
                           id="cep"
                           placeholder="00000-000"
                           value={shippingAddress.postal_code}
                           onChange={(e) => setShippingAddress({ ...shippingAddress, postal_code: e.target.value })}
                           required
+                          className="rounded-xl h-11 bg-muted/20 border-border/80 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
                         />
                       </div>
                       <div className="space-y-1.5 sm:col-span-2">
-                        <Label htmlFor="street">Logradouro</Label>
+                        <Label htmlFor="street" className="text-sm font-medium">Logradouro</Label>
                         <Input
                           id="street"
                           placeholder="Rua, Avenida..."
                           value={shippingAddress.street}
                           onChange={(e) => setShippingAddress({ ...shippingAddress, street: e.target.value })}
                           required
+                          className="rounded-xl h-11 bg-muted/20 border-border/80 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
                         />
                       </div>
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-3">
                       <div className="space-y-1.5">
-                        <Label htmlFor="number">Número</Label>
+                        <Label htmlFor="number" className="text-sm font-medium">Número</Label>
                         <Input
                           id="number"
                           placeholder="123"
                           value={shippingAddress.number}
                           onChange={(e) => setShippingAddress({ ...shippingAddress, number: e.target.value })}
                           required
+                          className="rounded-xl h-11 bg-muted/20 border-border/80 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="complement">Complemento</Label>
+                        <Label htmlFor="complement" className="text-sm font-medium">Complemento</Label>
                         <Input
                           id="complement"
                           placeholder="Apto, Bloco (opcional)"
                           value={shippingAddress.complement}
                           onChange={(e) => setShippingAddress({ ...shippingAddress, complement: e.target.value })}
+                          className="rounded-xl h-11 bg-muted/20 border-border/80 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="neighborhood">Bairro</Label>
+                        <Label htmlFor="neighborhood" className="text-sm font-medium">Bairro</Label>
                         <Input
                           id="neighborhood"
                           placeholder="Bairro"
                           value={shippingAddress.neighborhood}
                           onChange={(e) => setShippingAddress({ ...shippingAddress, neighborhood: e.target.value })}
                           required
+                          className="rounded-xl h-11 bg-muted/20 border-border/80 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
                         />
                       </div>
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-1.5">
-                        <Label htmlFor="city">Cidade</Label>
+                        <Label htmlFor="city" className="text-sm font-medium">Cidade</Label>
                         <Input
                           id="city"
                           placeholder="Cidade"
                           value={shippingAddress.city}
                           onChange={(e) => setShippingAddress({ ...shippingAddress, city: e.target.value })}
                           required
+                          className="rounded-xl h-11 bg-muted/20 border-border/80 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="state">Estado (UF)</Label>
+                        <Label htmlFor="state" className="text-sm font-medium">Estado (UF)</Label>
                         <Input
                           id="state"
                           placeholder="SP"
@@ -609,6 +635,7 @@ export default function CheckoutPage() {
                           value={shippingAddress.state}
                           onChange={(e) => setShippingAddress({ ...shippingAddress, state: e.target.value.toUpperCase() })}
                           required
+                          className="rounded-xl h-11 bg-muted/20 border-border/80 focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary transition-all text-sm"
                         />
                       </div>
                     </div>
@@ -621,14 +648,14 @@ export default function CheckoutPage() {
                           setShippingAddress({ ...shippingAddress, saveAddress: !!checked })
                         }
                       />
-                      <Label htmlFor="saveAddress" className="text-xs text-muted-foreground leading-none">
+                      <Label htmlFor="saveAddress" className="text-xs text-muted-foreground leading-none cursor-pointer">
                         Salvar este endereço para facilitar futuras compras de recompra.
                       </Label>
                     </div>
                   </CardContent>
                 </Card>
               ) : (
-                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 flex gap-3 text-sm text-primary">
+                <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 flex gap-3 text-sm text-primary">
                   <AlertCircle className="h-5 w-5 shrink-0" />
                   <div>
                     <span className="font-bold block">Pedido 100% Digital</span>
@@ -637,9 +664,9 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              <Card className="border-border">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
+              <Card className="rounded-3xl border border-border/80 bg-white shadow-sm overflow-hidden">
+                <CardHeader className="p-6 sm:p-8 pb-4 border-b border-border/40">
+                  <CardTitle className="text-lg font-bold flex items-center gap-2">
                     <CreditCard className="h-5 w-5 text-primary" />
                     Forma de Pagamento
                   </CardTitle>
@@ -647,17 +674,17 @@ export default function CheckoutPage() {
                     Selecione como deseja pagar.
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-6 sm:p-8 space-y-5">
                   <RadioGroup
                     value={selectedGateway}
                     onValueChange={setSelectedGateway}
                     className="grid gap-4"
                   >
-                    <div className="flex items-center space-x-3 rounded-xl border border-border p-4 bg-background">
+                    <div className="flex items-center space-x-3 rounded-2xl border border-border p-4 bg-muted/10 hover:border-primary/50 transition-all">
                       <RadioGroupItem value="woovi" id="woovi" />
                       <Label htmlFor="woovi" className="flex flex-1 items-center justify-between cursor-pointer">
                         <span className="font-semibold text-sm">Pix (Woovi/Rove)</span>
-                        <QrCode className="h-5 w-5 text-muted-foreground" />
+                        <QrCode className="h-5 w-5 text-primary" />
                       </Label>
                     </div>
                   </RadioGroup>
@@ -667,7 +694,7 @@ export default function CheckoutPage() {
               <Button
                 type="submit"
                 disabled={submitting}
-                className="w-full rounded-2xl h-12 text-base font-bold shadow-md shadow-primary/20"
+                className="w-full rounded-2xl h-13 text-base font-bold shadow-md shadow-primary/20 hover:opacity-95 transition-all"
               >
                 {submitting ? 'Gerando Pix Woovi...' : 'Avançar para Pagamento Pix'}
               </Button>
@@ -676,8 +703,8 @@ export default function CheckoutPage() {
 
           {/* STEP 2: Tela de Pagamento Pix */}
           {step === 'payment' && createdOrder && (
-            <Card className="border-primary/30 shadow-lg text-center">
-              <CardHeader className="pb-2">
+            <Card className="rounded-3xl border border-border/80 bg-white shadow-sm overflow-hidden text-center">
+              <CardHeader className="p-6 sm:p-8 pb-4 border-b border-border/40">
                 <CardTitle className="text-2xl font-extrabold flex items-center justify-center gap-2">
                   <CreditCard className="h-6 w-6 text-primary" />
                   Pagamento Pix Woovi
@@ -686,18 +713,18 @@ export default function CheckoutPage() {
                   Pague com Pix para receber seus produtos instantaneamente.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="p-6 sm:p-8 space-y-6">
                 
                 {/* Timer */}
                 {timeLeft > 0 ? (
-                  <div className="flex items-center justify-center gap-1.5 text-sm font-semibold bg-muted rounded-full py-1.5 px-4 w-max mx-auto text-amber-500 border border-amber-500/20">
+                  <div className="flex items-center justify-center gap-1.5 text-sm font-semibold bg-amber-500/10 rounded-full py-1.5 px-4 w-max mx-auto text-amber-600 border border-amber-500/20">
                     <Clock className="h-4 w-4 animate-spin" />
                     <span>Aguardando pagamento: {formatTime(timeLeft)}</span>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center gap-2 text-sm font-semibold bg-red-500/10 rounded-xl p-4 mx-auto text-red-500 border border-red-500/20">
+                  <div className="flex flex-col items-center justify-center gap-2 text-sm font-semibold bg-red-500/10 rounded-2xl p-4 mx-auto text-red-500 border border-red-500/20">
                     <AlertCircle className="h-6 w-6" />
-                    <span className="text-lg">Pix Expirado!</span>
+                    <span className="text-lg font-bold">Pix Expirado!</span>
                     <span className="font-normal text-xs text-muted-foreground text-center">
                       O tempo limite para pagamento deste Pix acabou.<br/>
                       Por favor, recarregue a página e faça um novo pedido.
@@ -708,11 +735,11 @@ export default function CheckoutPage() {
                 {/* QR Code */}
                 {timeLeft > 0 && (
                   createdOrder.woovi_qrcode_image ? (
-                    <div className="mx-auto border border-border rounded-2xl p-4 bg-white h-52 w-52 flex items-center justify-center shadow-inner">
+                    <div className="mx-auto border border-border/80 rounded-2xl p-4 bg-white h-56 w-56 flex items-center justify-center shadow-sm">
                       <img src={createdOrder.woovi_qrcode_image} alt="Pix QR Code" className="h-full w-full object-contain" />
                     </div>
                   ) : (
-                    <div className="mx-auto border border-dashed border-muted rounded-2xl p-6 h-52 w-52 flex flex-col items-center justify-center text-muted-foreground text-xs">
+                    <div className="mx-auto border border-dashed border-border/80 rounded-2xl p-6 h-56 w-56 flex flex-col items-center justify-center text-muted-foreground text-xs">
                       <QrCode className="h-10 w-10 mb-2 opacity-50" />
                       <span>QR Code indisponível</span>
                     </div>
@@ -723,7 +750,7 @@ export default function CheckoutPage() {
                 {timeLeft > 0 && createdOrder.woovi_brcode && (
                   <div className="space-y-2 text-left max-w-sm mx-auto">
                     <Label className="text-xs font-bold text-muted-foreground block text-center">Código Pix Copia e Cola:</Label>
-                    <div className="flex gap-2 border border-border rounded-xl p-2 bg-muted/50 break-all font-mono text-[10px] items-center">
+                    <div className="flex gap-2 border border-border/80 rounded-xl p-2.5 bg-muted/20 break-all font-mono text-[10px] items-center">
                       <span className="flex-1 max-h-12 overflow-y-auto select-all leading-normal">
                         {createdOrder.woovi_brcode}
                       </span>
@@ -732,7 +759,7 @@ export default function CheckoutPage() {
                         size="icon"
                         variant="ghost"
                         onClick={() => copyToClipboard(createdOrder.woovi_brcode)}
-                        className="h-8 w-8 shrink-0 hover:bg-background"
+                        className="h-8 w-8 shrink-0 hover:bg-background rounded-lg"
                       >
                         <Copy className="h-4 w-4" />
                       </Button>
@@ -740,7 +767,7 @@ export default function CheckoutPage() {
                   </div>
                 )}
 
-                <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-3 text-xs text-emerald-500 max-w-sm mx-auto">
+                <div className="rounded-2xl bg-emerald-500/5 border border-emerald-500/20 p-3.5 text-xs text-emerald-600 max-w-sm mx-auto">
                   <span className="font-semibold block mb-0.5">Confirmação Instantânea</span>
                   Assim que pagar, a tela irá atualizar automaticamente para a confirmação de envio.
                 </div>
@@ -750,24 +777,23 @@ export default function CheckoutPage() {
 
           {/* STEP 3: Sucesso do Pagamento */}
           {step === 'success' && createdOrder && (
-            <Card className="border-emerald-500/30 shadow-lg text-center bg-card">
-              <CardHeader>
+            <Card className="rounded-3xl border border-emerald-500/30 shadow-sm text-center bg-white overflow-hidden">
+              <CardHeader className="p-6 sm:p-8 pb-4 border-b border-border/40">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500 mb-4 animate-bounce">
                   <CheckCircle2 className="h-8 w-8" />
                 </div>
-                <CardTitle className="text-2xl font-extrabold text-emerald-500">Pagamento Confirmado!</CardTitle>
+                <CardTitle className="text-2xl font-extrabold text-emerald-600">Pagamento Confirmado!</CardTitle>
                 <CardDescription>
                   Seu Pix foi processado e aprovado com sucesso.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="p-6 sm:p-8 space-y-6">
                 <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
                   Muito obrigado por sua compra! O recibo de pagamento e as informações de entrega foram enviados automaticamente em seu WhatsApp.
                 </p>
 
-                {/* Exibe botão de voltar */}
                 <Button
-                  className="rounded-2xl h-11 px-6 shadow-md shadow-primary/20"
+                  className="rounded-2xl h-13 px-8 text-base font-bold shadow-md shadow-primary/20 hover:opacity-95 transition-all"
                   onClick={() => router.push(`/shop/${tenantSlug}`)}
                 >
                   Voltar para a Vitrine
@@ -777,26 +803,43 @@ export default function CheckoutPage() {
           )}
         </div>
 
-        {/* Lado Direito: Resumo do Pedido (Cols 2) */}
-        <div className="md:col-span-2 space-y-6">
-          <Card className="border-border">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-bold">Resumo do Pedido</CardTitle>
+        {/* Lado Direito: Resumo do Pedido */}
+        <div className="lg:col-span-5 xl:col-span-4 space-y-6 sticky top-24">
+          <Card className="rounded-3xl border border-border/80 bg-white shadow-sm overflow-hidden">
+            <CardHeader className="p-6 sm:p-8 pb-4 border-b border-border/40">
+              <CardTitle className="text-lg font-bold flex items-center justify-between">
+                <span>Resumo do Pedido</span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  {hydratedItems.reduce((acc, i) => acc + i.quantity, 0)} {hydratedItems.reduce((acc, i) => acc + i.quantity, 0) === 1 ? 'item' : 'itens'}
+                </span>
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Itens */}
-              <div className="divide-y divide-border/60 max-h-60 overflow-y-auto pr-1">
+            <CardContent className="p-6 sm:p-8 space-y-5">
+              {/* Itens com Imagens de Capa, quantidades, detalhes e preços */}
+              <div className="divide-y divide-border/40 max-h-[360px] overflow-y-auto pr-1 space-y-3">
                 {hydratedItems.map((item) => {
-                  const attrs = Object.entries(item.attributes).map(([k, v]) => `${v}`).join(' / ');
+                  const attrs = Object.entries(item.attributes).map(([, v]) => `${v}`).join(' / ');
                   return (
-                    <div key={item.variationId} className="py-2.5 flex justify-between items-center text-sm">
-                      <div className="min-w-0 flex-1 pr-3">
-                        <div className="font-semibold text-foreground truncate">{item.productName}</div>
+                    <div key={item.variationId} className="pt-3 first:pt-0 flex items-center gap-3.5 text-sm">
+                      {item.coverImage ? (
+                        <div className="h-14 w-14 rounded-xl border border-border/60 bg-muted/20 overflow-hidden shrink-0">
+                          <img src={item.coverImage} alt={item.productName} className="h-full w-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="h-14 w-14 rounded-xl border border-border/60 bg-muted/30 flex items-center justify-center shrink-0 text-muted-foreground">
+                          <ShoppingBag className="h-6 w-6 opacity-40" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <div className="font-semibold text-foreground truncate text-sm">{item.productName}</div>
                         <div className="text-xs text-muted-foreground truncate">
-                          Qtd: {item.quantity} {attrs && `| ${attrs}`}
+                          Qtd: <span className="font-medium text-foreground">{item.quantity}</span> {attrs && `| ${attrs}`}
+                        </div>
+                        <div className="text-xs font-medium text-muted-foreground">
+                          R$ {item.price.toFixed(2)} / un
                         </div>
                       </div>
-                      <div className="font-bold text-foreground shrink-0">
+                      <div className="font-bold text-foreground text-sm shrink-0">
                         R$ {(item.price * item.quantity).toFixed(2)}
                       </div>
                     </div>
@@ -805,7 +848,7 @@ export default function CheckoutPage() {
               </div>
 
               {/* Totais */}
-              <div className="border-t border-border pt-4 text-xs space-y-2">
+              <div className="border-t border-border/60 pt-4 text-xs space-y-2.5">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Subtotal itens:</span>
                   <span className="font-medium text-foreground">R$ {itemsSubtotal.toFixed(2)}</span>
@@ -816,9 +859,11 @@ export default function CheckoutPage() {
                     <span className="font-medium text-foreground">R$ {shippingFeeTotal.toFixed(2)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-sm font-bold border-t border-border pt-2 text-foreground">
-                  <span>Total Geral:</span>
-                  <span className="text-primary text-base font-extrabold">R$ {orderTotal.toFixed(2)}</span>
+                <div className="flex justify-between items-baseline border-t border-border/60 pt-3 text-foreground">
+                  <span className="text-sm font-bold">Total Geral:</span>
+                  <span className="text-2xl sm:text-3xl font-extrabold text-primary tracking-tight">
+                    R$ {orderTotal.toFixed(2)}
+                  </span>
                 </div>
               </div>
 
@@ -827,9 +872,9 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => router.push(`/shop/${tenantSlug}`)}
-                  className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors pt-1"
+                  className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors pt-2"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                  <ArrowLeft className="h-3.5 w-3.5" />
                   Voltar e editar carrinho
                 </button>
               )}
@@ -837,8 +882,8 @@ export default function CheckoutPage() {
           </Card>
         </div>
 
-
       </main>
     </div>
   );
 }
+

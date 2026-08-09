@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import type { Product, ProductCategory, ProductVariation, WooviConfig } from '@/types';
 import { CartDrawer } from '@/components/shop/cart-drawer';
@@ -30,6 +30,7 @@ type ExtendedProduct = Product & {
 
 export default function StorefrontPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const tenantSlug = params.tenantSlug as string; // account_id or slug
   const supabase = createClient();
 
@@ -40,6 +41,21 @@ export default function StorefrontPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const cat = searchParams.get('category');
+    if (cat) {
+      setSelectedCategory(cat);
+    }
+    const type = searchParams.get('type');
+    if (type) {
+      setSelectedType(type);
+    }
+    const search = searchParams.get('search');
+    if (search) {
+      setSearchQuery(search);
+    }
+  }, [searchParams]);
 
   // Password protection state
   const [passwordInput, setPasswordInput] = useState('');
@@ -263,8 +279,8 @@ export default function StorefrontPage() {
   return (
     <div className="min-h-screen bg-[#f8f9fa] pb-16 text-foreground antialiased selection:bg-primary selection:text-primary-foreground">
       {/* Header Fixo */}
-      <header className="sticky top-0 z-30 w-full border-b border-border bg-white shadow-sm">
-        <div className="mx-auto max-w-7xl flex h-16 items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-30 w-full border-b border-border bg-white/95 backdrop-blur-md shadow-sm">
+        <div className="mx-auto max-w-[1720px] w-full flex h-16 items-center justify-between gap-4 px-4 sm:px-8 lg:px-12">
           {/* Logo */}
           <div className="flex items-center gap-4 flex-shrink-0">
             {config.store_logo_url ? (
@@ -323,18 +339,18 @@ export default function StorefrontPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-6 sm:mt-8">
+      <main className="mx-auto max-w-[1720px] w-full px-4 sm:px-8 lg:px-12 mt-6 sm:mt-8">
          <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
             
             {/* Sidebar Filters */}
-            <aside className={`lg:block w-full lg:w-64 shrink-0 space-y-6 ${isMobileFiltersOpen ? 'block' : 'hidden'}`}>
-               <div className="bg-white rounded-xl border border-border p-5 shadow-sm space-y-6">
+            <aside className={`lg:block w-full lg:w-72 shrink-0 space-y-6 ${isMobileFiltersOpen ? 'block' : 'hidden'}`}>
+               <div className="bg-white rounded-2xl border border-border/80 p-6 shadow-sm space-y-6">
                  {/* Categorias */}
                  <div>
                     <h3 className="font-semibold mb-3 text-sm text-foreground uppercase tracking-wider">Categorias</h3>
                     <div className="space-y-1">
                        <button 
-                         className={`flex items-center justify-between w-full text-sm px-2 py-1.5 rounded-md transition-colors ${selectedCategory === 'all' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+                         className={`px-3 py-2 rounded-xl text-sm font-medium transition-all flex items-center justify-between w-full ${selectedCategory === 'all' ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'}`}
                          onClick={() => { setSelectedCategory('all'); setIsMobileFiltersOpen(false); }}
                        >
                          <span>Todas as categorias</span>
@@ -343,7 +359,7 @@ export default function StorefrontPage() {
                        {categories.map((cat) => (
                           <button 
                             key={cat.id}
-                            className={`flex items-center justify-between w-full text-sm px-2 py-1.5 rounded-md transition-colors ${selectedCategory === cat.id ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+                            className={`px-3 py-2 rounded-xl text-sm font-medium transition-all flex items-center justify-between w-full ${selectedCategory === cat.id ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'}`}
                             onClick={() => { setSelectedCategory(cat.id); setIsMobileFiltersOpen(false); }}
                           >
                             <span className="truncate pr-2 text-left">{cat.name}</span>
@@ -363,15 +379,15 @@ export default function StorefrontPage() {
                     <div className="space-y-2 px-1">
                        {['all', 'physical', 'digital'].map((type) => (
                           <label key={type} className="flex items-center gap-3 cursor-pointer text-sm text-muted-foreground hover:text-foreground group">
-                            <input 
-                               type="radio" 
-                               name="product_type" 
-                               value={type} 
-                               checked={selectedType === type}
-                               onChange={(e) => setSelectedType(e.target.value)}
-                               className="text-primary focus:ring-primary h-4 w-4 border-gray-300"
-                            />
-                            <span className="group-hover:translate-x-0.5 transition-transform">{type === 'all' ? 'Todos os tipos' : type === 'physical' ? 'Físico' : 'Digital'}</span>
+                             <input 
+                                type="radio" 
+                                name="product_type" 
+                                value={type} 
+                                checked={selectedType === type}
+                                onChange={(e) => setSelectedType(e.target.value)}
+                                className="text-primary focus:ring-primary h-4 w-4 border-gray-300"
+                             />
+                             <span className="group-hover:translate-x-0.5 transition-transform">{type === 'all' ? 'Todos os tipos' : type === 'physical' ? 'Físico' : 'Digital'}</span>
                           </label>
                        ))}
                     </div>
@@ -385,11 +401,11 @@ export default function StorefrontPage() {
                     <div className="space-y-2 px-1">
                        {['Abbla', 'Premium', 'Essencial'].map((brand) => (
                           <label key={brand} className="flex items-center gap-3 cursor-pointer text-sm text-muted-foreground hover:text-foreground group">
-                            <input 
-                               type="checkbox" 
-                               className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
-                            />
-                            <span className="group-hover:translate-x-0.5 transition-transform">{brand}</span>
+                             <input 
+                                type="checkbox" 
+                                className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                             />
+                             <span className="group-hover:translate-x-0.5 transition-transform">{brand}</span>
                           </label>
                        ))}
                     </div>
@@ -454,11 +470,11 @@ export default function StorefrontPage() {
                      return (
                        <div
                          key={p.id}
-                         className="group flex flex-col justify-between rounded-xl border border-border bg-white overflow-hidden shadow-sm hover:shadow-md hover:border-primary/20 transition-all duration-300"
+                         className="group flex flex-col justify-between rounded-2xl border border-border/80 bg-white overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1.5 hover:border-primary/30 transition-all duration-300"
                        >
                          <div>
                            {/* Imagem do Produto com Hover Effect */}
-                           <a href={`/shop/${tenantSlug}/product/${p.slug || p.id}`} className="block relative aspect-[4/3] w-full bg-muted/30 flex items-center justify-center overflow-hidden">
+                           <a href={`/shop/${tenantSlug}/product/${p.slug || p.id}`} className="block relative aspect-square w-full bg-muted/30 flex items-center justify-center overflow-hidden">
                              {coverImg ? (
                                <img
                                  src={coverImg}
@@ -469,7 +485,7 @@ export default function StorefrontPage() {
                                <ShoppingBag className="h-12 w-12 text-muted-foreground opacity-30" />
                              )}
                               <div className="absolute top-3 left-3">
-                                <Badge variant={p.product_type === 'digital' ? 'secondary' : 'default'} className="text-[10px] uppercase font-bold shadow-sm backdrop-blur-md bg-background/90">
+                                <Badge variant="outline" className="bg-white/80 backdrop-blur-md text-foreground border border-border/60 shadow-xs text-[10px] uppercase font-bold tracking-wider rounded-full px-2.5 py-1">
                                   {p.product_type === 'digital' ? 'Digital' : 'Físico'}
                                 </Badge>
                               </div>
@@ -480,17 +496,17 @@ export default function StorefrontPage() {
                                   e.stopPropagation();
                                   handleToggleWishlist(p.id);
                                 }}
-                                className="absolute top-3 right-3 h-8 w-8 rounded-full bg-white/90 backdrop-blur-md text-gray-400 hover:text-red-500 transition-colors flex items-center justify-center shadow-sm z-10"
+                                className="absolute top-3 right-3 h-9 w-9 rounded-full bg-white/80 backdrop-blur-md text-gray-500 hover:text-red-500 hover:bg-white hover:scale-110 transition-all flex items-center justify-center shadow-md z-10"
                                 title={wishlistIds.includes(p.id) ? "Remover da Lista de Desejos" : "Adicionar à Lista de Desejos"}
                               >
                                 <Heart className={`h-4 w-4 ${wishlistIds.includes(p.id) ? 'fill-red-500 text-red-500' : ''}`} />
                               </button>
                            </a>
 
-                           <div className="p-4 space-y-2.5">
+                           <div className="p-5 space-y-2.5">
                              {/* Avaliação (Mock) & Categoria */}
                              <div className="flex items-center justify-between">
-                                <div className="text-[11px] font-semibold text-primary uppercase tracking-wide flex items-center gap-1">
+                                <div className="text-[11px] font-bold text-primary uppercase tracking-wider flex items-center gap-1">
                                   {p.category?.name || 'Sem Categoria'}
                                 </div>
                                 <div className="flex items-center gap-0.5 text-amber-400">
@@ -504,19 +520,19 @@ export default function StorefrontPage() {
                              
                              {/* Título & Descrição */}
                              <a href={`/shop/${tenantSlug}/product/${p.slug || p.id}`} className="block">
-                               <h3 className="font-bold text-[15px] leading-tight line-clamp-1 group-hover:text-primary transition-colors">{p.name}</h3>
+                               <h3 className="font-bold text-base sm:text-lg text-foreground group-hover:text-primary transition-colors line-clamp-1 leading-snug">{p.name}</h3>
                              </a>
-                             <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed h-8">
+                             <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed h-9 mt-1">
                                {p.description || 'Produto incrível com a melhor qualidade para você.'}
                              </p>
                            </div>
                          </div>
 
-                         <div className="p-4 pt-2 border-t border-border/40 mt-2 bg-gray-50/50">
+                         <div className="p-5 pt-3 border-t border-border/40 bg-gray-50/30">
                            <div className="flex items-end justify-between mb-3">
                              <div>
                                <span className="text-[10px] text-muted-foreground block uppercase font-medium tracking-wide">A partir de</span>
-                               <span className="text-lg font-black text-foreground">
+                               <span className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight">
                                  R$ {minPrice.toFixed(2)}
                                </span>
                              </div>
@@ -525,23 +541,22 @@ export default function StorefrontPage() {
                            <div className="flex gap-2">
                              <a
                                href={`/shop/${tenantSlug}/product/${p.slug || p.id}`}
-                               className="flex-1 inline-flex items-center justify-center rounded-lg border border-input bg-white text-sm font-semibold hover:bg-gray-50 hover:text-primary transition-colors h-9"
+                               className="flex-1 inline-flex items-center justify-center rounded-xl border border-input bg-white text-sm font-semibold hover:bg-muted/50 hover:text-primary hover:border-primary/50 transition-all h-10 shadow-2xs"
                              >
                                Detalhes
                              </a>
                              
                              {variations.length === 1 && (
-                               <Button
-                                 variant="default"
-                                 size="icon"
+                               <button
+                                 type="button"
                                  onClick={(e) => {
                                    e.preventDefault();
                                    handleAddToCart(defaultVariation.id);
                                  }}
-                                 className="h-9 w-9 shrink-0 rounded-lg shadow-sm hover:scale-105 active:scale-95 transition-transform"
+                                 className="h-10 w-10 shrink-0 rounded-xl bg-primary text-primary-foreground hover:opacity-90 shadow-sm active:scale-95 transition-transform flex items-center justify-center"
                                >
                                  <Plus className="h-4 w-4" />
-                               </Button>
+                               </button>
                              )}
                            </div>
                          </div>
@@ -552,7 +567,7 @@ export default function StorefrontPage() {
                )}
             </div>
          </div>
-      </main>
+       </main>
 
       {/* Cart Drawer */}
       <CartDrawer
