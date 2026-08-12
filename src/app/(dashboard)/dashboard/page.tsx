@@ -142,18 +142,22 @@ export default function DashboardPage() {
 
   const handleTaskCompleted = useCallback((taskId: string) => {
     const db = createClient()
-    void db
-      .from('tasks')
-      .update({ status: 'completed', completed_at: new Date().toISOString() })
-      .eq('id', taskId)
-      .then(({ error }) => {
+    void (async () => {
+      try {
+        const { error } = await db
+          .from('tasks')
+          .update({ status: 'completed', completed_at: new Date().toISOString() })
+          .eq('id', taskId)
         if (error) {
           console.error('[dashboard] update task failed:', error)
           return
         }
-        return loadTasksSummary(db).then((t) => setTasks(t))
-      })
-      .catch((err) => console.error('[dashboard] handleTaskCompleted failed:', err))
+        const t = await loadTasksSummary(db)
+        setTasks(t)
+      } catch (err) {
+        console.error('[dashboard] handleTaskCompleted failed:', err)
+      }
+    })()
   }, [])
 
   return (
