@@ -43,6 +43,7 @@ import { CubaTasksWidget } from '@/components/dashboard/cuba-tasks-widget'
 import { CubaAppointmentsWidget } from '@/components/dashboard/cuba-appointments-widget'
 import { ConversationsChart } from '@/components/dashboard/conversations-chart'
 import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
+import { CubaTargetGauge } from '@/components/dashboard/cuba-target-gauge'
 import { SkeletonCard } from '@/components/dashboard/skeleton'
 
 type RangeDays = 7 | 30 | 90
@@ -248,22 +249,23 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Row 4: Conversations Chart (7 cols) + Response Time Chart & Activity Feed (5 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Conversations Chart (7 cols) */}
-        <div className="lg:col-span-7 flex flex-col">
+      {/* Row 4: Analytics & Activity (7 cols Left + 5 cols Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column (7 cols): Conversations Chart + Top Contacts / Activity Table */}
+        <div className="lg:col-span-7 flex flex-col space-y-6">
           <ConversationsChart
             series={series}
             loading={seriesLoading}
             range={range}
             onRangeChange={handleRangeChange}
           />
+          <CubaTopContacts items={activity} loading={activityLoading} />
         </div>
 
-        {/* Response Time Chart & Activity Feed (5 cols) */}
+        {/* Right Column (5 cols): Response Time Chart + Target Gauge */}
         <div className="lg:col-span-5 flex flex-col space-y-6">
           <ResponseTimeChart data={responseTime} loading={responseTimeLoading} />
-          <CubaTopContacts items={activity} loading={activityLoading} />
+          <CubaTargetGauge data={pipeline} loading={pipelineLoading} />
         </div>
       </div>
     </div>
