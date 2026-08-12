@@ -4,27 +4,43 @@ import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { formatCurrency } from '@/lib/currency'
-import { MessageSquare, UserPlus, DollarSign, Send } from 'lucide-react'
+import {
+  MessageSquare,
+  UserPlus,
+  DollarSign,
+  TrendingUp,
+  CheckSquare,
+  Calendar,
+} from 'lucide-react'
 
 import {
   loadActivity,
+  loadAppointmentsSummary,
   loadConversationsSeries,
+  loadEcommerceSummary,
   loadMetrics,
   loadPipelineDonut,
   loadResponseTime,
+  loadTasksSummary,
 } from '@/lib/dashboard/queries'
 import type {
   ActivityItem,
+  AppointmentsSummary,
   ConversationsSeriesPoint,
+  EcommerceSummary,
   MetricsBundle,
   PipelineDonutData,
   ResponseTimeSummary,
+  TasksSummary,
 } from '@/lib/dashboard/types'
 
 import { CubaWelcomeCard } from '@/components/dashboard/cuba-welcome-card'
 import { CubaMetricCard } from '@/components/dashboard/cuba-metric-card'
 import { CubaTopContacts } from '@/components/dashboard/cuba-top-contacts'
-import { CubaTargetGauge } from '@/components/dashboard/cuba-target-gauge'
+import { CubaPipelineWidget } from '@/components/dashboard/cuba-pipeline-widget'
+import { CubaSalesWidget } from '@/components/dashboard/cuba-sales-widget'
+import { CubaTasksWidget } from '@/components/dashboard/cuba-tasks-widget'
+import { CubaAppointmentsWidget } from '@/components/dashboard/cuba-appointments-widget'
 import { ConversationsChart } from '@/components/dashboard/conversations-chart'
 import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
 import { SkeletonCard } from '@/components/dashboard/skeleton'
@@ -53,6 +69,15 @@ export default function DashboardPage() {
   const [activity, setActivity] = useState<ActivityItem[] | null>(null)
   const [activityLoading, setActivityLoading] = useState(true)
 
+  const [tasks, setTasks] = useState<TasksSummary | null>(null)
+  const [tasksLoading, setTasksLoading] = useState(true)
+
+  const [appointments, setAppointments] = useState<AppointmentsSummary | null>(null)
+  const [appointmentsLoading, setAppointmentsLoading] = useState(true)
+
+  const [ecommerce, setEcommerce] = useState<EcommerceSummary | null>(null)
+  const [ecommerceLoading, setEcommerceLoading] = useState(true)
+
   const loadAll = useCallback(() => {
     const db = createClient()
 
@@ -80,6 +105,21 @@ export default function DashboardPage() {
       .then((a) => setActivity(a))
       .catch((err) => console.error('[dashboard] activity failed:', err))
       .finally(() => setActivityLoading(false))
+
+    void loadTasksSummary(db)
+      .then((t) => setTasks(t))
+      .catch((err) => console.error('[dashboard] tasks failed:', err))
+      .finally(() => setTasksLoading(false))
+
+    void loadAppointmentsSummary(db)
+      .then((a) => setAppointments(a))
+      .catch((err) => console.error('[dashboard] appointments failed:', err))
+      .finally(() => setAppointmentsLoading(false))
+
+    void loadEcommerceSummary(db)
+      .then((e) => setEcommerce(e))
+      .catch((err) => console.error('[dashboard] ecommerce failed:', err))
+      .finally(() => setEcommerceLoading(false))
   }, [])
 
   useEffect(() => {
@@ -100,19 +140,35 @@ export default function DashboardPage() {
     [series],
   )
 
+  const handleTaskCompleted = useCallback((taskId: string) => {
+    const db = createClient()
+    void db
+      .from('tasks')
+      .update({ status: 'completed', completed_at: new Date().toISOString() })
+      .eq('id', taskId)
+      .then(({ error }) => {
+        if (error) {
+          console.error('[dashboard] update task failed:', error)
+          return
+        }
+        return loadTasksSummary(db).then((t) => setTasks(t))
+      })
+      .catch((err) => console.error('[dashboard] handleTaskCompleted failed:', err))
+  }, [])
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 w-full max-w-full">
-      {/* Cuba Top Row: Welcome Banner + 4 KPI Cards */}
+      {/* Row 1: Cuba Welcome Banner + 6 KPI Metric Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Welcome Card (Spans 7 cols on LG) */}
-        <div className="lg:col-span-7 flex flex-col">
+        {/* Welcome Card (Spans 5 cols on LG) */}
+        <div className="lg:col-span-5 flex flex-col">
           <CubaWelcomeCard />
         </div>
 
-        {/* 4 Metric Cards (Spans 5 cols on LG in 2x2 grid) */}
-        <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* 6 Metric Cards (Spans 7 cols on LG in 3x2 grid) */}
+        <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {metricsLoading || !metrics ? (
-            Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
+            Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
           ) : (
             <>
               <CubaMetricCard
@@ -143,24 +199,55 @@ export default function DashboardPage() {
                 subtitle={`${metrics.openDealsCount} negócio${metrics.openDealsCount === 1 ? '' : 's'}`}
               />
               <CubaMetricCard
-                title="Mensagens Enviadas"
-                value={metrics.messagesSentToday.current.toLocaleString()}
-                icon={Send}
+                title="Receita Mensal"
+                value={formatCurrency(ecommerce?.monthlyRevenue ?? 0, defaultCurrency)}
+                icon={TrendingUp}
                 variant="warning"
-                delta={{
-                  value: `${metrics.messagesSentToday.current - metrics.messagesSentToday.previous >= 0 ? '+' : ''}${metrics.messagesSentToday.current - metrics.messagesSentToday.previous}`,
-                  isPositive: metrics.messagesSentToday.current >= metrics.messagesSentToday.previous,
-                }}
+                subtitle={`${ecommerce?.paidOrdersCount ?? 0} pedido${(ecommerce?.paidOrdersCount ?? 0) === 1 ? '' : 's'} pago${(ecommerce?.paidOrdersCount ?? 0) === 1 ? '' : 's'}`}
+              />
+              <CubaMetricCard
+                title="Tarefas Pendentes"
+                value={(tasks?.pendingCount ?? 0).toLocaleString()}
+                icon={CheckSquare}
+                variant="primary"
+                subtitle={`${tasks?.overdueCount ?? 0} atrasada${(tasks?.overdueCount ?? 0) === 1 ? '' : 's'}`}
+              />
+              <CubaMetricCard
+                title="Agendamentos Hoje"
+                value={(appointments?.todayCount ?? 0).toLocaleString()}
+                icon={Calendar}
+                variant="success"
+                subtitle={`${appointments?.confirmedCount ?? 0} confirmado${(appointments?.confirmedCount ?? 0) === 1 ? '' : 's'}`}
               />
             </>
           )}
         </div>
       </div>
 
-      {/* Middle Row: Conversations Main Chart + Monthly Target Gauge */}
+      {/* Row 2: Sales & Pipeline (CubaPipelineWidget 8 cols + CubaSalesWidget 4 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Main Chart (Spans 8 cols on LG) */}
         <div className="lg:col-span-8 flex flex-col">
+          <CubaPipelineWidget data={pipeline} loading={pipelineLoading} currency={defaultCurrency} />
+        </div>
+        <div className="lg:col-span-4 flex flex-col">
+          <CubaSalesWidget data={ecommerce} loading={ecommerceLoading} currency={defaultCurrency} />
+        </div>
+      </div>
+
+      {/* Row 3: Operations (CubaTasksWidget 6 cols + CubaAppointmentsWidget 6 cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        <div className="lg:col-span-6 flex flex-col">
+          <CubaTasksWidget data={tasks} loading={tasksLoading} onTaskCompleted={handleTaskCompleted} />
+        </div>
+        <div className="lg:col-span-6 flex flex-col">
+          <CubaAppointmentsWidget data={appointments} loading={appointmentsLoading} />
+        </div>
+      </div>
+
+      {/* Row 4: Conversations Chart (7 cols) + Response Time Chart & Activity Feed (5 cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Conversations Chart (7 cols) */}
+        <div className="lg:col-span-7 flex flex-col">
           <ConversationsChart
             series={series}
             loading={seriesLoading}
@@ -169,24 +256,13 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Target Gauge (Spans 4 cols on LG) */}
-        <div className="lg:col-span-4 flex flex-col">
-          <CubaTargetGauge data={pipeline} loading={pipelineLoading} />
-        </div>
-      </div>
-
-      {/* Bottom Row: Top Contacts Table + Response Time Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Top Contacts / Activity Table (Spans 7 cols on LG) */}
-        <div className="lg:col-span-7 flex flex-col">
-          <CubaTopContacts items={activity} loading={activityLoading} />
-        </div>
-
-        {/* Response Time Chart (Spans 5 cols on LG) */}
-        <div className="lg:col-span-5 flex flex-col">
+        {/* Response Time Chart & Activity Feed (5 cols) */}
+        <div className="lg:col-span-5 flex flex-col space-y-6">
           <ResponseTimeChart data={responseTime} loading={responseTimeLoading} />
+          <CubaTopContacts items={activity} loading={activityLoading} />
         </div>
       </div>
     </div>
   )
 }
+
