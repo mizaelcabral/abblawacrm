@@ -9,12 +9,18 @@ import {
 } from './date-utils'
 import type {
   ActivityItem,
+  AppointmentItem,
+  AppointmentsSummary,
   ConversationsSeriesPoint,
+  EcommerceSummary,
   MetricsBundle,
   PipelineDonutData,
   PipelineStageSlice,
+  ProductItem,
   ResponseTimeBucket,
   ResponseTimeSummary,
+  TaskItem,
+  TasksSummary,
 } from './types'
 
 // ------------------------------------------------------------
@@ -395,4 +401,164 @@ export async function loadActivity(db: DB, limit = 20): Promise<ActivityItem[]> 
   return items
     .sort((a, b) => (a.at > b.at ? -1 : a.at < b.at ? 1 : 0))
     .slice(0, limit)
+}
+
+// --- 6. Expanded Dashboard Summaries ----------------------------------
+
+export async function loadTasksSummary(db: DB): Promise<TasksSummary> {
+  const todayStart = startOfLocalDay().toISOString()
+  const now = new Date().toISOString()
+
+  const [countsRes, urgentRes] = await Promise.all([
+    db.from('tasks').select('status, due_at, completed_at'),
+    db
+      .from('tasks')
+      .select('id, title, status, due_at, contact:contacts(name, phone)')
+      .neq('status', 'completed')
+      .order('due_at', { ascending: true, nullsFirst: false })
+      .limit(5),
+  ])
+
+  const rows = (countsRes.data ?? []) as { status: string; due_at: string | null; completed_at: string | null }[]
+  
+  let pendingCount = 0
+  let inProgressCount = 0
+  let reviewCount = 0
+  let overdueCount = 0
+  let completedTodayCount = 0
+
+  for (const r of rows) {
+    if (r.status === 'completed') {
+      if (r.completed_at && r.completed_at >= todayStart) {
+        completedTodayCount++
+      }
+      continue
+    }
+    if (r.status === 'pending') pendingCount++
+    if (r.status === 'in_progress') inProgressCount++
+    if (r.status === 'review_required') reviewCount++
+    if (r.due_at && r.due_at < now) overdueCount++
+  }
+
+  const urgentTasks: TaskItem[] = (urgentRes.data ?? []).map((t: any) => {
+    const contact = Array.isArray(t.contact) ? t.contact[0] : t.contact
+    return {
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      dueAt: t.due_at,
+      contactName: contact?.name || contact?.phone || null,
+    }
+  })
+
+  return {
+    pendingCount,
+    inProgressCount,
+    reviewCount,
+    overdueCount,
+    completedTodayCount,
+    urgentTasks,
+  }
+}
+
+export async function loadAppointmentsSummary(db: DB): Promise<AppointmentsSummary> {
+  const todayStart = startOfLocalDay().toISOString()
+  const endOfToday = daysAgoStart(-1).toISOString()
+  const sevenDaysAhead = daysAgoStart(-7).toISOString()
+
+  const [allRes, todayRes] = await Promise.all([
+    db.from('appointments').select('status, start_time').gte('start_time', todayStart).lte('start_time', sevenDaysAhead),
+    db
+      .from('appointments')
+      .select('id, start_time, end_time, status, meeting_url, location_address, contact:contacts(name, phone), service:services(name)')
+      .gte('start_time', todayStart)
+      .lt('start_time', endOfToday)
+      .order('start_time', { ascending: true })
+      .limit(4),
+  ])
+
+  const allRows = (allRes.data ?? []) as { status: string; start_time: string }[]
+  let todayCount = 0
+  let upcomingCount = 0
+  let confirmedCount = 0
+  let pendingCount = 0
+  let cancelledCount = 0
+
+  for (const r of allRows) {
+    if (r.start_time >= todayStart && r.start_time < endOfToday) todayCount++
+    if (r.start_time >= endOfToday) upcomingCount++
+    if (r.status === 'confirmed') confirmedCount++
+    if (r.status === 'pending') pendingCount++
+    if (r.status === 'cancelled') cancelledCount++
+  }
+
+  const todayAppointments: AppointmentItem[] = (todayRes.data ?? []).map((a: any) => {
+    const contact = Array.isArray(a.contact) ? a.contact[0] : a.contact
+    const service = Array.isArray(a.service) ? a.service[0] : a.service
+    return {
+      id: a.id,
+      startTime: a.start_time,
+      endTime: a.end_time,
+      status: a.status,
+      contactName: contact?.name || contact?.phone || 'Cliente',
+      serviceName: service?.name || 'Agendamento',
+      meetingUrl: a.meeting_url || null,
+      locationAddress: a.location_address || null,
+    }
+  })
+
+  return {
+    todayCount,
+    upcomingCount,
+    confirmedCount,
+    pendingCount,
+    cancelledCount,
+    todayAppointments,
+  }
+}
+
+export async function loadEcommerceSummary(db: DB): Promise<EcommerceSummary> {
+  const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()
+  const todayStart = startOfLocalDay().toISOString()
+
+  const [ordersRes, productsRes] = await Promise.all([
+    db.from('orders').select('total_amount, status, created_at').gte('created_at', firstDayOfMonth),
+    db.from('store_products').select('id, name, price').eq('is_active', true).limit(3),
+  ])
+
+  const orders = (ordersRes.data ?? []) as { total_amount: number; status: string; created_at: string }[]
+  let monthlyRevenue = 0
+  let todayRevenue = 0
+  let paidOrdersCount = 0
+  let pendingOrdersCount = 0
+
+  for (const o of orders) {
+    if (o.status === 'paid' || o.status === 'completed') {
+      monthlyRevenue += o.total_amount || 0
+      paidOrdersCount++
+      if (o.created_at >= todayStart) {
+        todayRevenue += o.total_amount || 0
+      }
+    } else if (o.status === 'pending' || o.status === 'awaiting_payment') {
+      pendingOrdersCount++
+    }
+  }
+
+  const averageTicket = paidOrdersCount > 0 ? monthlyRevenue / paidOrdersCount : 0
+
+  const topProducts: ProductItem[] = (productsRes.data ?? []).map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    price: p.price || 0,
+    salesCount: 0,
+  }))
+
+  return {
+    monthlyRevenue,
+    todayRevenue,
+    paidOrdersCount,
+    pendingOrdersCount,
+    averageTicket,
+    topProducts,
+  }
 }
