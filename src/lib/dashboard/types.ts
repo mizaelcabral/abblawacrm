@@ -65,3 +65,57 @@ export interface ActivityItem {
   /** Optional deep-link for the whole row (not all items have a target). */
   href?: string
 }
+
+export interface TaskItem {
+  id: string
+  title: string
+  status: 'pending' | 'in_progress' | 'review_required' | 'completed'
+  dueAt: string | null
+  contactName: string | null
+}
+
+export interface TasksSummary {
+  pendingCount: number
+  inProgressCount: number
+  reviewCount: number
+  overdueCount: number
+  completedTodayCount: number
+  urgentTasks: TaskItem[]
+}
+
+export interface AppointmentItem {
+  id: string
+  startTime: string
+  endTime: string
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed'
+  contactName: string
+  serviceName: string
+  meetingUrl: string | null
+  locationAddress: string | null
+}
+
+export interface AppointmentsSummary {
+  todayCount: number
+  upcomingCount: number
+  confirmedCount: number
+  pendingCount: number
+  cancelledCount: number
+  todayAppointments: AppointmentItem[]
+}
+
+export interface ProductItem {
+  id: string
+  name: string
+  price: number
+  salesCount: number
+}
+
+export interface EcommerceSummary {
+  monthlyRevenue: number
+  todayRevenue: number
+  paidOrdersCount: number
+  pendingOrdersCount: number
+  averageTicket: number
+  topProducts: ProductItem[]
+}
+
