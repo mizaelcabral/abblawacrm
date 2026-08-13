@@ -159,28 +159,77 @@ function MediaImage({ url, alt, className }: { url: string; alt: string; classNa
   );
 }
 
-function MessageContent({ message }: { message: Message }) {
+import { LinkPreview } from "./link-preview";
+
+// ponytail: helper to parse text and turn URLs into clickable anchor tags while preventing text overflow
+function renderTextWithLinks(text: string, isAgent: boolean) {
+  if (!text) return null;
+
+  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
+  const parts = text.split(urlRegex);
+
+  return parts.map((part, index) => {
+    if (urlRegex.test(part)) {
+      // Re-test because split retains matched strings
+      const href = part.startsWith("www.") ? `https://${part}` : part;
+      return (
+        <a
+          key={index}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            "underline font-medium break-all [overflow-wrap:anywhere]",
+            isAgent
+              ? "text-blue-200 hover:text-white"
+              : "text-primary hover:underline"
+          )}
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
+function extractFirstUrl(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const match = text.match(/(https?:\/\/[^\s]+|www\.[^\s]+)/);
+  if (!match) return null;
+  const rawUrl = match[0];
+  return rawUrl.startsWith("www.") ? `https://${rawUrl}` : rawUrl;
+}
+
+function MessageContent({ message, isAgent }: { message: Message; isAgent: boolean }) {
+  const firstUrl = extractFirstUrl(message.content_text);
+
   switch (message.content_type) {
     case "text":
       return (
-        <p className="whitespace-pre-wrap break-words text-sm">
-          {message.content_text}
-        </p>
+        <div className="min-w-0 max-w-full">
+          <p className="whitespace-pre-wrap break-all [overflow-wrap:anywhere] text-sm leading-relaxed">
+            {renderTextWithLinks(message.content_text || "", isAgent)}
+          </p>
+          {firstUrl && <LinkPreview url={firstUrl} isAgent={isAgent} />}
+        </div>
       );
 
     case "image":
       return (
-        <div>
+        <div className="min-w-0 max-w-full">
           {message.media_url ? (
             <MediaImage url={message.media_url} alt="Shared image" />
           ) : (
             <MediaUnavailable label="Image" />
           )}
           {message.content_text && (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
-              {message.content_text}
+            <p className="mt-1 whitespace-pre-wrap break-all [overflow-wrap:anywhere] text-sm">
+              {renderTextWithLinks(message.content_text, isAgent)}
             </p>
           )}
+          {firstUrl && <LinkPreview url={firstUrl} isAgent={isAgent} />}
         </div>
       );
 
@@ -201,7 +250,7 @@ function MessageContent({ message }: { message: Message }) {
 
     case "video":
       return (
-        <div>
+        <div className="min-w-0 max-w-full">
           {message.media_url ? (
             <video
               src={message.media_url}
@@ -212,9 +261,9 @@ function MessageContent({ message }: { message: Message }) {
           ) : (
             <MediaUnavailable label="Video" />
           )}
-          {message.content_text && message.content_text !== '[Vídeo]' && (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
-              {message.content_text}
+          {message.content_text && message.content_text !== "[Vídeo]" && (
+            <p className="mt-1 whitespace-pre-wrap break-all [overflow-wrap:anywhere] text-sm">
+              {renderTextWithLinks(message.content_text, isAgent)}
             </p>
           )}
         </div>
@@ -222,15 +271,15 @@ function MessageContent({ message }: { message: Message }) {
 
     case "audio":
       return (
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 min-w-0 max-w-full">
           {message.media_url ? (
             <audio src={message.media_url} controls className="max-w-60" />
           ) : (
             <MediaUnavailable label="Audio" />
           )}
-          {message.content_text && message.content_text !== '[Mensagem de voz]' && (
-            <p className="mt-1.5 whitespace-pre-wrap break-words text-sm opacity-90">
-              {message.content_text}
+          {message.content_text && message.content_text !== "[Mensagem de voz]" && (
+            <p className="mt-1.5 whitespace-pre-wrap break-all [overflow-wrap:anywhere] text-sm opacity-90">
+              {renderTextWithLinks(message.content_text, isAgent)}
             </p>
           )}
         </div>
@@ -256,16 +305,17 @@ function MessageContent({ message }: { message: Message }) {
 
     case "template":
       return (
-        <div>
+        <div className="min-w-0 max-w-full">
           <span className="mb-1 inline-flex items-center gap-1 rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-medium text-primary">
             <LayoutTemplate className="h-3 w-3" />
             Template
           </span>
           {message.content_text && (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
-              {message.content_text}
+            <p className="mt-1 whitespace-pre-wrap break-all [overflow-wrap:anywhere] text-sm">
+              {renderTextWithLinks(message.content_text, isAgent)}
             </p>
           )}
+          {firstUrl && <LinkPreview url={firstUrl} isAgent={isAgent} />}
         </div>
       );
 
@@ -278,19 +328,14 @@ function MessageContent({ message }: { message: Message }) {
       );
 
     case "interactive": {
-      // Customer tapped a reply button or list row on a message the bot
-      // sent. We show the tapped option's title (already in content_text,
-      // set by parseMessageContent in the webhook) with a small affordance
-      // so agents reading the inbox can tell at a glance that this is a
-      // tap rather than the customer typing the same words.
       return (
-        <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col gap-0.5 min-w-0 max-w-full">
           <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             <CornerDownLeft className="h-3 w-3" />
             Button reply
           </span>
-          <p className="whitespace-pre-wrap break-words text-sm">
-            {message.content_text || "[Interactive reply]"}
+          <p className="whitespace-pre-wrap break-all [overflow-wrap:anywhere] text-sm">
+            {renderTextWithLinks(message.content_text || "[Interactive reply]", isAgent)}
           </p>
         </div>
       );
@@ -298,8 +343,8 @@ function MessageContent({ message }: { message: Message }) {
 
     default:
       return (
-        <p className="whitespace-pre-wrap break-words text-sm">
-          {message.content_text || "[Unsupported message type]"}
+        <p className="whitespace-pre-wrap break-all [overflow-wrap:anywhere] text-sm">
+          {renderTextWithLinks(message.content_text || "[Unsupported message type]", isAgent)}
         </p>
       );
   }
@@ -315,18 +360,16 @@ export const MessageBubble = memo(function MessageBubble({
   const isAgent = message.sender_type === "agent" || message.sender_type === "bot";
   const time = format(new Date(message.created_at), "HH:mm");
 
-  // Row alignment + width cap are owned by <MessageActions> so its hover
-  // group matches the bubble's content area, not the full row.
   return (
     <div
       className={cn(
-        "flex flex-col",
+        "flex flex-col min-w-0 max-w-full",
         isAgent ? "items-end" : "items-start",
       )}
     >
       <div
         className={cn(
-          "relative rounded-2xl px-3 py-2",
+          "relative rounded-2xl px-3 py-2 min-w-0 max-w-full overflow-hidden",
           message.content_type === "sticker"
             ? "bg-transparent text-foreground shadow-none"
             : isAgent
@@ -341,7 +384,7 @@ export const MessageBubble = memo(function MessageBubble({
             onPrimary={isAgent}
           />
         )}
-        <MessageContent message={message} />
+        <MessageContent message={message} isAgent={isAgent} />
         <div
           className={cn(
             "mt-1 flex items-center gap-1",
@@ -351,10 +394,6 @@ export const MessageBubble = memo(function MessageBubble({
           <span
             className={cn(
               "text-[10px]",
-              // Outbound bubbles sit on the primary fill, so the
-              // timestamp must read against that (not the neutral
-              // foreground) — otherwise it goes low-contrast in light
-              // mode. Inbound bubbles use the muted surface.
               isAgent && message.content_type !== "sticker"
                 ? "text-primary-foreground/70"
                 : "text-muted-foreground",
@@ -375,3 +414,4 @@ export const MessageBubble = memo(function MessageBubble({
     </div>
   );
 });
+
