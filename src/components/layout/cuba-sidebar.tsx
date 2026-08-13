@@ -212,9 +212,9 @@ export function CubaSidebar({
         {/* Navigation Items Scroll Area */}
         <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6 no-scrollbar">
           {displayGroups.map((group, idx) => (
-            <div key={idx} className="space-y-1.5">
+            <div key={idx} className="space-y-2">
               {!isCollapsed && (
-                <h2 className="px-3 text-[10px] font-extrabold tracking-wider text-muted-foreground/70 uppercase">
+                <h2 className="px-3 text-xs font-bold tracking-wider text-muted-foreground/80 uppercase">
                   {group.groupTitle}
                 </h2>
               )}
@@ -232,25 +232,25 @@ export function CubaSidebar({
                       href={item.href}
                       onClick={onCloseMobile}
                       title={isCollapsed ? item.title : undefined}
-                      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-medium transition-all duration-150 ${
+                      className={`group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all duration-150 ${
                         isActive
-                          ? 'cuba-gradient-primary text-white shadow-md shadow-indigo-500/20 font-semibold'
-                          : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                          ? 'cuba-gradient-primary text-white shadow-md shadow-indigo-500/20 font-bold'
+                          : 'text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-foreground'
                       }`}
                     >
                       <Icon
-                        className={`h-4 w-4 shrink-0 transition-transform group-hover:scale-110 ${
+                        className={`h-4.5 w-4.5 shrink-0 transition-transform group-hover:scale-110 ${
                           isActive ? 'text-white' : 'text-muted-foreground group-hover:text-primary'
                         }`}
                       />
 
                       {!isCollapsed && (
-                        <span className="truncate flex-1">{item.title}</span>
+                        <span className="truncate flex-1 text-sm font-semibold leading-snug">{item.title}</span>
                       )}
 
                       {!isCollapsed && (item as any).badge && (
                         <span
-                          className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-bold ${
                             isActive
                               ? 'bg-white/20 text-white'
                               : (item as any).badgeColor || 'bg-muted text-muted-foreground'
@@ -269,19 +269,19 @@ export function CubaSidebar({
 
         {/* Footer Card: Pro Upgrade / Help Badge (Cuba Style) */}
         {!isCollapsed && (
-          <div className="p-3 m-3 rounded-2xl cuba-gradient-welcome text-white shadow-lg">
+          <div className="p-3.5 m-3 rounded-2xl cuba-gradient-welcome text-white shadow-lg">
             <div className="flex items-center gap-2 mb-1.5">
               <div className="p-1.5 rounded-lg bg-white/20 backdrop-blur-xs">
                 <Sparkles className="w-4 h-4 text-amber-300 animate-spin" />
               </div>
-              <span className="text-xs font-bold">ABBLA AI CRM</span>
+              <span className="text-sm font-bold">ABBLA AI CRM</span>
             </div>
-            <p className="text-[11px] text-white/90 leading-tight mb-2.5">
+            <p className="text-xs text-white/90 leading-tight mb-3">
               WhatsApp API & Automação de E-commerce ativa.
             </p>
             <a
               href="/settings?tab=whatsapp"
-              className="block w-full text-center py-1.5 px-3 rounded-xl bg-white text-indigo-700 text-xs font-bold hover:bg-opacity-95 transition-all shadow-xs"
+              className="block w-full text-center py-2 px-3 rounded-xl bg-white text-indigo-700 text-xs font-bold hover:bg-opacity-95 transition-all shadow-xs"
             >
               Gerenciar Instância
             </a>
