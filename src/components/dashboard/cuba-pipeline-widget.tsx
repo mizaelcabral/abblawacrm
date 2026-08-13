@@ -1,7 +1,7 @@
 "use client"
 
 import Link from 'next/link'
-import { Briefcase, ArrowRight, TrendingUp } from 'lucide-react'
+import { Briefcase, ArrowRight, TrendingUp, DollarSign, Award, Target } from 'lucide-react'
 import type { PipelineDonutData } from '@/lib/dashboard/types'
 import { formatCurrency, DEFAULT_CURRENCY } from '@/lib/currency'
 import { Skeleton } from './skeleton'
@@ -20,6 +20,19 @@ export function CubaPipelineWidget({
   const totalValue = data?.totalValue ?? 0
   const totalDeals =
     data?.stages.reduce((acc, stage) => acc + (stage.dealCount || 0), 0) ?? 0
+
+  // Calculate funnel insights metrics
+  const avgTicket = totalDeals > 0 ? totalValue / totalDeals : 0
+  const topStage = data?.stages && data.stages.length > 0
+    ? [...data.stages].sort((a, b) => b.totalValue - a.totalValue)[0]
+    : null
+
+  const wonStage = data?.stages
+    ? data.stages.find(s => s.name.toLowerCase().includes('ganho') || s.name.toLowerCase().includes('fechado'))
+    : null
+  const wonCount = wonStage?.dealCount ?? 0
+  const wonValue = wonStage?.totalValue ?? 0
+  const conversionRate = totalDeals > 0 ? (wonCount / totalDeals) * 100 : 0
 
   return (
     <div className="cuba-card p-5 sm:p-6 flex flex-col justify-between h-full space-y-5">
@@ -53,9 +66,10 @@ export function CubaPipelineWidget({
               <Skeleton key={i} className="h-28 w-full rounded-2xl" />
             ))}
           </div>
+          <Skeleton className="h-16 w-full rounded-2xl" />
         </div>
       ) : (
-        <div className="space-y-5 flex-1 flex flex-col">
+        <div className="space-y-5 flex-1 flex flex-col justify-between">
           {/* Total Summary Box + Multi-segment Continuous Pipeline Bar */}
           <div className="p-4 rounded-2xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/15 space-y-3">
             <div className="flex items-center justify-between gap-4">
@@ -161,6 +175,47 @@ export function CubaPipelineWidget({
               </div>
             )}
           </div>
+
+          {/* Bottom Insights & Performance Strip to fill remaining vertical space */}
+          {data && data.stages.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-border/40 mt-auto">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 border border-border/50">
+                <div className="h-9 w-9 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Ticket Médio</p>
+                  <p className="text-xs sm:text-sm font-extrabold text-foreground tracking-tight tabular-nums truncate">
+                    {formatCurrency(avgTicket, currency)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 border border-border/50">
+                <div className="h-9 w-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <Award className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Etapa Principal</p>
+                  <p className="text-xs sm:text-sm font-extrabold text-foreground tracking-tight truncate">
+                    {topStage ? topStage.name : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/30 border border-border/50">
+                <div className="h-9 w-9 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Target className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Taxa de Conversão</p>
+                  <p className="text-xs sm:text-sm font-extrabold text-foreground tracking-tight tabular-nums truncate">
+                    {conversionRate.toFixed(1)}% <span className="text-[10px] font-normal text-muted-foreground">({wonCount} fechados)</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
