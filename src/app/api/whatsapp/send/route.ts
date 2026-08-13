@@ -595,8 +595,15 @@ export async function POST(request: Request) {
         }
       } catch (err: any) {
         console.error('WhatsApp Web send failed:', err);
+        const rawMsg = err.message || String(err);
+        if (rawMsg.includes("Connection Closed") || rawMsg.includes("Connection Lost")) {
+          return NextResponse.json(
+            { error: "A conexão do WhatsApp foi encerrada (Connection Closed). Vá em Configurações > WhatsApp para escanear o QR Code e reconectar." },
+            { status: 502 }
+          );
+        }
         return NextResponse.json(
-          { error: `WhatsApp Web API error: ${err.message || err}` },
+          { error: `WhatsApp Web API error: ${rawMsg}` },
           { status: 502 }
         );
       }
