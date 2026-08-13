@@ -163,17 +163,17 @@ export default function DashboardPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 w-full max-w-full">
-      {/* Row 1: Cuba Welcome Banner + 6 KPI Metric Cards */}
+      {/* Row 1: Cuba Welcome Banner (7 cols) + 4 Top KPI Metric Cards (5 cols in 2x2) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Welcome Card (Spans 5 cols on LG) */}
-        <div className="lg:col-span-5 flex flex-col">
+        {/* Welcome Card (Spans 7 cols on LG - Landscape reference Cuba) */}
+        <div className="lg:col-span-7 flex flex-col">
           <CubaWelcomeCard />
         </div>
 
-        {/* 6 Metric Cards (Spans 7 cols on LG in 3x2 grid) */}
-        <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* 4 Primary Metric Cards (Spans 5 cols on LG in 2x2 grid) */}
+        <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
           {metricsLoading || !metrics ? (
-            Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
+            Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
           ) : (
             <>
               <CubaMetricCard
@@ -210,32 +210,36 @@ export default function DashboardPage() {
                 variant="warning"
                 subtitle={`${ecommerce?.paidOrdersCount ?? 0} pedido${(ecommerce?.paidOrdersCount ?? 0) === 1 ? '' : 's'} pago${(ecommerce?.paidOrdersCount ?? 0) === 1 ? '' : 's'}`}
               />
-              <CubaMetricCard
-                title="Tarefas Pendentes"
-                value={(tasks?.pendingCount ?? 0).toLocaleString()}
-                icon={CheckSquare}
-                variant="primary"
-                subtitle={`${tasks?.overdueCount ?? 0} atrasada${(tasks?.overdueCount ?? 0) === 1 ? '' : 's'}`}
-              />
-              <CubaMetricCard
-                title="Agendamentos Hoje"
-                value={(appointments?.todayCount ?? 0).toLocaleString()}
-                icon={Calendar}
-                variant="success"
-                subtitle={`${appointments?.confirmedCount ?? 0} confirmado${(appointments?.confirmedCount ?? 0) === 1 ? '' : 's'}`}
-              />
             </>
           )}
         </div>
       </div>
 
-      {/* Row 2: Sales & Pipeline (CubaPipelineWidget 8 cols + CubaSalesWidget 4 cols) */}
+      {/* Row 2: Pipeline Funnel Breakdown (8 cols) + E-Commerce / Quick Metrics (4 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         <div className="lg:col-span-8 flex flex-col">
           <CubaPipelineWidget data={pipeline} loading={pipelineLoading} currency={defaultCurrency} />
         </div>
-        <div className="lg:col-span-4 flex flex-col">
-          <CubaSalesWidget data={ecommerce} loading={ecommerceLoading} currency={defaultCurrency} />
+        <div className="lg:col-span-4 flex flex-col space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <CubaMetricCard
+              title="Tarefas Pendentes"
+              value={(tasks?.pendingCount ?? 0).toLocaleString()}
+              icon={CheckSquare}
+              variant="primary"
+              subtitle={`${tasks?.overdueCount ?? 0} atrasada${(tasks?.overdueCount ?? 0) === 1 ? '' : 's'}`}
+            />
+            <CubaMetricCard
+              title="Agendamentos Hoje"
+              value={(appointments?.todayCount ?? 0).toLocaleString()}
+              icon={Calendar}
+              variant="success"
+              subtitle={`${appointments?.confirmedCount ?? 0} confirmado${(appointments?.confirmedCount ?? 0) === 1 ? '' : 's'}`}
+            />
+          </div>
+          <div className="flex-1">
+            <CubaSalesWidget data={ecommerce} loading={ecommerceLoading} currency={defaultCurrency} />
+          </div>
         </div>
       </div>
 
