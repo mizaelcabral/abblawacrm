@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ModeToggle } from '@/components/layout/mode-toggle'
 import { NotificationMenu } from '@/components/layout/notification-menu'
+import { GlobalSearchModal } from '@/components/layout/global-search-modal'
 import { Logo } from './logo'
 
 interface CubaHeaderProps {
@@ -48,6 +49,18 @@ export function CubaHeader({ onToggleSidebar }: CubaHeaderProps) {
   const pathname = usePathname()
   const { profile, signOut } = useAuth()
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setIsSearchOpen((prev) => !prev)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const breadcrumb = routeBreadcrumbs[pathname] || {
     category: 'Dashboard',
@@ -113,14 +126,18 @@ export function CubaHeader({ onToggleSidebar }: CubaHeaderProps) {
 
       {/* Center: Search Bar (Fluid flex max-w so it never overlaps breadcrumbs or controls on 13"-15" laptops) */}
       <div className="hidden md:flex items-center flex-1 max-w-xs lg:max-w-sm xl:max-w-md mx-2 lg:mx-4 min-w-0">
-        <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <div
+          onClick={() => setIsSearchOpen(true)}
+          className="relative w-full cursor-pointer group"
+        >
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors pointer-events-none" />
           <input
             type="text"
+            readOnly
             placeholder="Buscar contatos, conversas, produtos..."
-            className="w-full h-9 pl-9 pr-12 rounded-full border border-border/80 bg-muted/40 text-xs text-foreground placeholder:text-muted-foreground focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-150"
+            className="w-full h-9 pl-9 pr-12 rounded-full border border-border/80 bg-muted/40 text-xs text-foreground placeholder:text-muted-foreground cursor-pointer hover:bg-muted/70 hover:border-primary/50 focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all duration-150"
           />
-          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden lg:inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-80">
+          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden lg:inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-80 group-hover:border-primary/40">
             ⌘K
           </kbd>
         </div>
@@ -128,6 +145,17 @@ export function CubaHeader({ onToggleSidebar }: CubaHeaderProps) {
 
       {/* Right side controls */}
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        {/* Mobile / Tablet Search Trigger Button */}
+        <button
+          type="button"
+          onClick={() => setIsSearchOpen(true)}
+          className="flex md:hidden h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title="Pesquisar"
+          aria-label="Abrir pesquisa"
+        >
+          <Search className="w-4 h-4" />
+        </button>
+
         {/* Language Indicator */}
         <div className="hidden xl:flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium text-muted-foreground hover:bg-muted transition-colors cursor-pointer" title="Idioma: Português (Brasil)">
           <Globe className="w-3.5 h-3.5 text-indigo-500" />
@@ -237,6 +265,12 @@ export function CubaHeader({ onToggleSidebar }: CubaHeaderProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Global Search Modal */}
+      <GlobalSearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+      />
     </header>
   )
 }
