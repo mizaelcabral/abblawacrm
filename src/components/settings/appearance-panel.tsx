@@ -14,7 +14,7 @@ import { SettingsPanelHead } from "./settings-panel-head";
 export function AppearancePanel() {
   const { mode, setMode } = useTheme();
   return (
-    <section className="max-w-3xl animate-in fade-in-50 duration-200">
+    <section className="w-full max-w-full animate-in fade-in-50 duration-200">
       <SettingsPanelHead
         title="Aparência"
         description="Escolha o tema visual do aplicativo (Modo Claro ou Modo Escuro). A alteração é salva neste dispositivo e aplicada em tempo real."
