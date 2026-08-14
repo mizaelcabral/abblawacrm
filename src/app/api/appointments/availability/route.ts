@@ -77,8 +77,14 @@ export async function GET(request: Request) {
 
   const availableSlots: string[] = []
 
+  // If no custom availability windows exist, default to Monday-Friday 08:00 to 18:00
+  let availabilityWindows = availability ?? []
+  if (availabilityWindows.length === 0 && dayOfWeek >= 1 && dayOfWeek <= 5) {
+    availabilityWindows = [{ start_time: '08:00:00', end_time: '18:00:00' } as any]
+  }
+
   // Generate slots for each availability window
-  for (const window of availability ?? []) {
+  for (const window of availabilityWindows) {
     const startTimeStr = window.start_time // HH:MM:SS
     const endTimeStr = window.end_time // HH:MM:SS
 

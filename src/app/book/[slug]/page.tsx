@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getCleanSlug } from '@/lib/utils'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -185,6 +186,44 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
           }
         }
 
+        // 4. Fallback: Search profiles by full_name matching normalized slug (e.g. mizael-cabral -> Mizael Cabral)
+        if (!targetProfile) {
+          const searchName = profileId.replace(/-/g, '%')
+          const { data: profsByName } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, account_id, slug')
+            .ilike('full_name', `%${searchName}%`)
+
+          if (profsByName && profsByName.length > 0) {
+            const match = profsByName.find((p) => getCleanSlug(p) === profileId) || profsByName[0]
+            targetProfile = match
+          }
+        }
+
+        // 5. Universal Fallback: Fetch profiles and match using getCleanSlug
+        if (!targetProfile) {
+          const { data: allProfs } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, account_id, slug')
+            .limit(100)
+
+          if (allProfs) {
+            const match = allProfs.find((p) => getCleanSlug(p) === profileId)
+            if (match) targetProfile = match
+          }
+        }
+
+        // 6. Single Account Fallback: If only 1 profile exists, load it
+        if (!targetProfile) {
+          const { data: singleProf } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, account_id, slug')
+            .limit(1)
+            .maybeSingle()
+
+          if (singleProf) targetProfile = singleProf
+        }
+
         if (!targetProfile) {
           toast.error('Profissional não encontrado')
           setLoading(false)
@@ -194,13 +233,21 @@ export default function PublicBookingPage({ params }: { params: Promise<{ slug: 
         setProfile(targetProfile)
 
         // Fetch active services under the account
-        const { data: svcs, error: svcsError } = await supabase
+        let { data: svcs, error: svcsError } = await supabase
           .from('services')
           .select('*')
           .eq('account_id', targetProfile.account_id)
           .eq('is_active', true)
 
-        if (svcsError) {
+        if (!svcs || svcs.length === 0) {
+          const { data: allSvcs } = await supabase
+            .from('services')
+            .select('*')
+            .eq('account_id', targetProfile.account_id)
+          if (allSvcs && allSvcs.length > 0) svcs = allSvcs
+        }
+
+        if (svcsError && (!svcs || svcs.length === 0)) {
           toast.error('Erro ao buscar serviços')
         } else {
           setServices(svcs ?? [])
