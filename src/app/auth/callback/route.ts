@@ -21,10 +21,10 @@ export async function GET(request: Request) {
     let redirectUrl = `${targetOrigin}${cleanNextPath}`;
     redirectUrl = redirectUrl.replace(/#_=_$/, '');
 
-    // 1. Create the redirect response object FIRST
+    // Create the redirect response object first
     const response = NextResponse.redirect(redirectUrl);
 
-    // 2. Initialize Supabase client, binding cookie writes directly to response.cookies
+    // Initialize Supabase client
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -35,23 +35,25 @@ export async function GET(request: Request) {
           },
           setAll(cookiesToSet) {
             cookiesToSet.forEach(({ name, value, options }) => {
+              const cookieOptions = { ...options };
+              if (!cookieOptions.domain) delete cookieOptions.domain;
               try {
-                cookieStore.set(name, value, options);
+                cookieStore.set(name, value, cookieOptions);
               } catch {
-                // Ignore cookieStore mutation errors in server contexts
+                // Ignore in server contexts
               }
-              response.cookies.set(name, value, options);
+              response.cookies.set(name, value, cookieOptions);
             });
           },
         },
       }
     );
 
-    // 3. Exchange OAuth code for session (triggers setAll above)
+    // Exchange OAuth code for session
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error && data?.user) {
-      // Ensure user profile terms & privacy consent are recorded
+      // Record terms/privacy consent
       try {
         await supabase
           .from('profiles')
@@ -66,6 +68,18 @@ export async function GET(request: Request) {
       } catch {
         // Non-blocking
       }
+
+      // Explicitly mirror all freshly set auth cookies onto response
+      const allCookies = cookieStore.getAll();
+      allCookies.forEach((c) => {
+        if (c.name.includes('auth-token') || c.name.includes('supabase') || c.name.includes('sb-')) {
+          response.cookies.set(c.name, c.value, {
+            path: '/',
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production',
+          });
+        }
+      });
 
       return response;
     }
