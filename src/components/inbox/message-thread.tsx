@@ -65,6 +65,7 @@ interface MessageThreadProps {
   onMessagesLoaded: (messages: Message[]) => void;
   onNewMessage: (message: Message) => void;
   onUpdateMessage: (id: string, updates: Partial<Message>) => void;
+  onDeleteMessage?: (messageId: string) => void;
   onStatusChange: (conversationId: string, status: ConversationStatus) => void;
   onAssignChange: (
     conversationId: string,
@@ -144,6 +145,7 @@ export function MessageThread({
   onMessagesLoaded,
   onNewMessage,
   onUpdateMessage,
+  onDeleteMessage,
   onStatusChange,
   onAssignChange,
   onBack,
@@ -156,6 +158,24 @@ export function MessageThread({
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [reactions, setReactions] = useState<MessageReaction[]>([]);
+
+  const handleDeleteMessage = useCallback(async (messageId: string) => {
+    try {
+      const db = createClient();
+      const { error } = await db
+        .from("messages")
+        .delete()
+        .eq("id", messageId);
+
+      if (error) throw error;
+
+      toast.success("Mensagem excluída com sucesso");
+      onDeleteMessage?.(messageId);
+    } catch (err: any) {
+      console.error("[MessageThread] Failed to delete message:", err);
+      toast.error("Erro ao excluir mensagem: " + (err.message || String(err)));
+    }
+  }, [onDeleteMessage]);
   // Purely visual spin state for the manual-refresh button. The actual
   // refetch is fire-and-forget through `onRefresh` (which bumps the
   // parent's resyncToken); the 700ms spin is just feedback so the click
@@ -1112,6 +1132,7 @@ export function MessageThread({
                         onReact={(emoji) => {
                           if (emoji) void postReaction(msg.id, emoji);
                         }}
+                        onDelete={() => handleDeleteMessage(msg.id)}
                       >
                         <MessageBubble
                           message={msg}

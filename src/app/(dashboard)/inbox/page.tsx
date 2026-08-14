@@ -435,6 +435,12 @@ function InboxPageContent() {
     []
   );
 
+  const handleDeleteMessage = useCallback((messageId: string) => {
+    startTransition(() => {
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    });
+  }, []);
+
   const handleStatusChange = useCallback(
     (conversationId: string, status: ConversationStatus) => {
       startTransition(() => {
@@ -543,6 +549,7 @@ function InboxPageContent() {
             onMessagesLoaded={handleMessagesLoaded}
             onNewMessage={handleNewMessage}
             onUpdateMessage={handleUpdateMessage}
+            onDeleteMessage={handleDeleteMessage}
             onStatusChange={handleStatusChange}
             onAssignChange={handleAssignChange}
             onBack={handleCloseConversation}
