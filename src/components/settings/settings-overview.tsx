@@ -365,27 +365,27 @@ export function SettingsOverview({
   return (
     <section className="animate-in fade-in-50 duration-200">
       {/* Identity */}
-      <Card className="flex-row items-center gap-4 px-5 py-5">
-        <Avatar size="lg" className="size-14">
+      <Card className="flex-row items-center gap-5 px-6 py-6 rounded-2xl border-border/80 shadow-xs">
+        <Avatar size="lg" className="size-16 border-2 border-primary/20">
           {profile?.avatar_url ? (
             <AvatarImage src={profile.avatar_url} alt={displayName} />
           ) : null}
-          <AvatarFallback className="bg-primary/10 text-xl text-primary">
+          <AvatarFallback className="bg-primary/10 text-2xl font-bold text-primary">
             {initial}
           </AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-base font-semibold text-foreground">
+          <div className="truncate text-lg font-bold text-foreground">
             {displayName}
           </div>
           {profile?.email ? (
-            <div className="truncate text-sm text-muted-foreground">
+            <div className="truncate text-sm text-muted-foreground mt-0.5">
               {profile.email}
             </div>
           ) : null}
         </div>
         {roleMeta && RoleIcon ? (
-          <SettingsChip variant={roleMeta.variant}>
+          <SettingsChip variant={roleMeta.variant} className="px-3 py-1 text-xs">
             <RoleIcon />
             {roleMeta.label}
           </SettingsChip>
@@ -393,7 +393,7 @@ export function SettingsOverview({
       </Card>
 
       {/* Status tiles */}
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-6 grid gap-4.5 sm:grid-cols-2 xl:grid-cols-3">
         {tiles.map(({ section, loading, subtitle }) => {
           const meta = SECTION_META[section];
           const Icon = meta.icon;
@@ -403,28 +403,28 @@ export function SettingsOverview({
               type="button"
               onClick={() => onSelect(section)}
               className={cn(
-                'group flex items-start gap-3.5 rounded-xl border border-border bg-card p-4 text-left transition-colors',
-                'hover:border-primary-soft-2 hover:bg-card-2',
+                'group min-h-[112px] flex items-center gap-4 rounded-2xl border border-border/80 bg-card p-5.5 text-left transition-all duration-200 shadow-xs',
+                'hover:border-primary/50 hover:bg-muted/30 hover:shadow-md hover:-translate-y-0.5',
               )}
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                <Icon className="size-4" />
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
+                <Icon className="size-5.5" />
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-foreground">
+              <span className="min-w-0 flex-1 flex flex-col justify-center gap-1">
+                <span className="block text-base font-semibold text-foreground group-hover:text-primary transition-colors">
                   {meta.label}
                 </span>
-                <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
                   {loading ? (
                     <>
-                      <Loader2 className="size-3 animate-spin" /> Carregando…
+                      <Loader2 className="size-3.5 animate-spin text-primary" /> Carregando…
                     </>
                   ) : (
                     subtitle
                   )}
                 </span>
               </span>
-              <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              <ChevronRight className="size-5 shrink-0 text-muted-foreground/60 transition-all group-hover:text-primary group-hover:translate-x-1" />
             </button>
           );
         })}
