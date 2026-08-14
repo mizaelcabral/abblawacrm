@@ -131,7 +131,7 @@ function SuperAdminLayoutInner({ children }: { children: ReactNode }) {
         )}
 
         {/* Main Content Area */}
-        <main className="flex-1 p-6 md:p-10 overflow-y-auto max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-6 md:p-8 lg:p-10 overflow-y-auto w-full max-w-full">
           {children}
         </main>
       </div>
