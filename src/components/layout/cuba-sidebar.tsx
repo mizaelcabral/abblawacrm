@@ -192,12 +192,13 @@ export function CubaSidebar({
         }`}
       >
         {/* Top Header Logo */}
-        <div className="flex h-16 shrink-0 items-center justify-between px-4 border-b border-border/40">
+        <div className={`flex h-16 shrink-0 items-center justify-between border-b border-border/40 px-4 ${isCollapsed ? 'justify-center px-0' : ''}`}>
           <Link
             href="/dashboard"
             className="flex items-center gap-2 overflow-hidden"
+            title="Abbla Hub"
           >
-            <Logo />
+            <Logo collapsed={isCollapsed} />
           </Link>
 
           {/* Close button for mobile */}
