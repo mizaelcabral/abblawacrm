@@ -100,12 +100,12 @@ export function SocialAuthButtons({
           type="button"
           variant="outline"
           disabled={loadingProvider !== null}
-          onClick={() => handleSocialLogin("twitter")}
+          onClick={() => handleSocialLogin("x" as Provider)}
           className="h-11 border-border bg-muted/50 hover:bg-muted text-foreground transition-all flex items-center justify-center p-0"
           title="Entrar com X (Twitter)"
           aria-label="Entrar com X (Twitter)"
         >
-          {loadingProvider === "twitter" ? (
+          {loadingProvider === ("x" as Provider) ? (
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           ) : (
             <svg className="h-4 w-4 fill-foreground" viewBox="0 0 24 24">
