@@ -36,7 +36,7 @@ interface CubaHeaderProps {
 
 const routeBreadcrumbs: Record<string, { category: string; page: string }> = {
   '/dashboard': { category: 'Dashboard', page: 'Visão Geral' },
-  '/inbox': { category: 'CRM', page: 'WhatsApp Inbox' },
+  '/inbox': { category: 'CRM', page: 'Mensagens' },
   '/contacts': { category: 'CRM', page: 'Contatos & Leads' },
   '/pipelines': { category: 'Vendas', page: 'Funil & Pipelines' },
   '/broadcasts': { category: 'Marketing', page: 'Transmissões' },

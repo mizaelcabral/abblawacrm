@@ -58,7 +58,7 @@ const navGroups: NavGroup[] = [
     groupTitle: 'CRM & ATENDIMENTO',
     items: [
       {
-        title: 'WhatsApp Inbox',
+        title: 'Mensagens',
         href: '/inbox',
         icon: MessageSquare,
         badge: 'Ao Vivo',

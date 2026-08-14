@@ -48,7 +48,7 @@ const NAV_ITEMS: NavResult[] = [
     keywords: ["dashboard", "painel", "métricas", "relatório", "inicio"],
   },
   {
-    title: "Inbox WhatsApp (Conversas)",
+    title: "Mensagens (Inbox)",
     category: "CRM",
     href: "/inbox",
     icon: MessageSquare,
