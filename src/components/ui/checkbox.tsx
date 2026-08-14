@@ -1,42 +1,61 @@
 "use client"
 
 import * as React from "react"
-import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox"
 import { Check, Minus } from "lucide-react"
-
 import { cn } from "@/lib/utils"
 
-// Root: primary token when checked or indeterminate (responds to the active
-// color theme), input border when unchecked. Mirrors switch.tsx conventions.
-function Checkbox({
-  className,
-  ...props
-}: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
-  return (
-    <CheckboxPrimitive.Root
-      data-slot="checkbox"
-      className={cn(
-        "peer size-4 shrink-0 cursor-pointer rounded-[4px] border border-input bg-card shadow-sm transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-        "disabled:cursor-not-allowed disabled:opacity-50",
-        "data-[checked]:border-primary data-[checked]:bg-primary data-[checked]:text-primary-foreground",
-        "data-[indeterminate]:border-primary data-[indeterminate]:bg-primary data-[indeterminate]:text-primary-foreground",
-        className,
-      )}
-      {...props}
-    >
-      <CheckboxPrimitive.Indicator
-        data-slot="checkbox-indicator"
-        className="flex items-center justify-center text-current"
-      >
-        {props.indeterminate ? (
-          <Minus className="size-3.5" />
-        ) : (
-          <Check className="size-3.5" />
-        )}
-      </CheckboxPrimitive.Indicator>
-    </CheckboxPrimitive.Root>
-  )
+export interface CheckboxProps
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "checked" | "onChange"> {
+  checked?: boolean | "indeterminate"
+  indeterminate?: boolean
+  onCheckedChange?: (checked: boolean) => void
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
+
+const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
+  ({ className, checked, indeterminate, onCheckedChange, onChange, disabled, ...props }, ref) => {
+    const defaultRef = React.useRef<HTMLInputElement>(null)
+    const combinedRef = (ref as React.RefObject<HTMLInputElement>) || defaultRef
+
+    const isChecked = checked === true
+    const isIndeterminate = checked === "indeterminate" || !!indeterminate
+
+    React.useEffect(() => {
+      if (combinedRef.current) {
+        combinedRef.current.indeterminate = isIndeterminate
+      }
+    }, [isIndeterminate, combinedRef])
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      onChange?.(e)
+      onCheckedChange?.(e.target.checked)
+    }
+
+    return (
+      <div className="relative inline-flex items-center justify-center shrink-0">
+        <input
+          type="checkbox"
+          ref={combinedRef}
+          checked={isChecked}
+          disabled={disabled}
+          onChange={handleChange}
+          className={cn(
+            "peer size-4 shrink-0 cursor-pointer appearance-none rounded border border-border/80 bg-background transition-colors",
+            "hover:border-primary/80 hover:bg-muted/30",
+            "checked:border-primary checked:bg-primary",
+            "indeterminate:border-primary indeterminate:bg-primary",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
+            "disabled:cursor-not-allowed disabled:opacity-40",
+            className
+          )}
+          {...props}
+        />
+        <Check className="pointer-events-none absolute size-3 text-primary-foreground opacity-0 peer-checked:opacity-100 transition-opacity" />
+        <Minus className="pointer-events-none absolute size-3 text-primary-foreground opacity-0 peer-indeterminate:opacity-100 transition-opacity" />
+      </div>
+    )
+  }
+)
+Checkbox.displayName = "Checkbox"
 
 export { Checkbox }

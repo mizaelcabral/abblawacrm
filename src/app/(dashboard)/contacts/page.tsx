@@ -42,6 +42,7 @@ import {
   ChevronRight,
   SlidersHorizontal,
   Download,
+  MessageSquare,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
@@ -51,6 +52,7 @@ import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/hooks/use-auth';
+import { getInitials, getAvatarColor, cn } from '@/lib/utils';
 
 const PAGE_SIZE = 25;
 
@@ -399,21 +401,33 @@ export default function ContactsPage() {
         />
       </div>
 
-      {/* Bulk action bar */}
+      {/* Enhanced Bulk action bar */}
       {selected.size > 0 && (
-        <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/40 px-4 py-2">
-          <p className="text-sm text-foreground">
-            <span className="font-medium">{selected.size}</span>{' '}
-            {selected.size === 1 ? 'contato selecionado' : 'contatos selecionados'}
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/10 p-3.5 shadow-sm backdrop-blur-xs animate-in fade-in-50">
+          <div className="flex items-center gap-3">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+              {selected.size}
+            </span>
+            <p className="text-xs font-semibold text-foreground">
+              {selected.size === 1 ? '1 contato selecionado' : `${selected.size} contatos selecionados`}
+            </p>
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              className="text-xs font-semibold text-primary hover:underline ml-2 cursor-pointer"
+            >
+              {allOnPageSelected ? 'Desmarcar todos desta página' : `Marcar todos da página (${contacts.length})`}
+            </button>
+          </div>
+
           <div className="flex items-center gap-2">
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => setSelected(new Set())}
-              className="text-muted-foreground hover:text-foreground"
+              className="h-8 text-xs border-border/80"
             >
-              Limpar
+              Limpar Seleção
             </Button>
             <GatedButton
               variant="destructive"
@@ -421,35 +435,38 @@ export default function ContactsPage() {
               canAct={canEdit}
               gateReason="excluir contatos"
               onClick={() => setBulkDeleteOpen(true)}
+              className="h-8 text-xs gap-1.5"
             >
-              <Trash2 className="size-4" />
-              Excluir selecionados
+              <Trash2 className="size-3.5" />
+              Excluir Selecionados ({selected.size})
             </GatedButton>
           </div>
         </div>
       )}
 
       {/* Table */}
-      <div className="rounded-lg border border-border overflow-hidden">
+      <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
         <Table>
           <TableHeader>
-            <TableRow className="border-border hover:bg-transparent">
-              <TableHead className="w-10">
-                <Checkbox
-                  checked={allOnPageSelected}
-                  indeterminate={!allOnPageSelected && someOnPageSelected}
-                  onCheckedChange={toggleSelectAll}
-                  disabled={contacts.length === 0}
-                  aria-label="Selecionar todos os contatos desta página"
-                />
+            <TableRow className="border-border/60 bg-muted/30 hover:bg-transparent">
+              <TableHead className="w-12 text-center pl-4">
+                <div className="flex items-center justify-center">
+                  <Checkbox
+                    checked={allOnPageSelected}
+                    indeterminate={!allOnPageSelected && someOnPageSelected}
+                    onCheckedChange={toggleSelectAll}
+                    disabled={contacts.length === 0}
+                    aria-label="Selecionar todos os contatos desta página"
+                  />
+                </div>
               </TableHead>
-              <TableHead className="text-muted-foreground">Nome</TableHead>
-              <TableHead className="text-muted-foreground">Telefone</TableHead>
-              <TableHead className="text-muted-foreground hidden md:table-cell">E-mail</TableHead>
-              <TableHead className="text-muted-foreground hidden lg:table-cell">Empresa</TableHead>
-              <TableHead className="text-muted-foreground hidden md:table-cell">Tags</TableHead>
-              <TableHead className="text-muted-foreground hidden lg:table-cell">Criado em</TableHead>
-              <TableHead className="text-muted-foreground w-12" />
+              <TableHead className="text-muted-foreground font-semibold">Nome</TableHead>
+              <TableHead className="text-muted-foreground font-semibold">Telefone</TableHead>
+              <TableHead className="text-muted-foreground font-semibold hidden md:table-cell">E-mail</TableHead>
+              <TableHead className="text-muted-foreground font-semibold hidden lg:table-cell">Empresa</TableHead>
+              <TableHead className="text-muted-foreground font-semibold hidden md:table-cell">Tags</TableHead>
+              <TableHead className="text-muted-foreground font-semibold hidden lg:table-cell">Criado em</TableHead>
+              <TableHead className="text-muted-foreground font-semibold w-12 text-right pr-4" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -485,107 +502,147 @@ export default function ContactsPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              contacts.map((contact) => (
-                <TableRow
-                  key={contact.id}
-                  className="border-border hover:bg-muted/50 cursor-pointer"
-                  onClick={() => openDetail(contact.id)}
-                >
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={selected.has(contact.id)}
-                      onCheckedChange={() => toggleSelect(contact.id)}
-                      aria-label={`Select ${contact.name || contact.phone}`}
-                    />
-                  </TableCell>
-                  <TableCell className="text-foreground font-medium">
-                    {contact.name || <span className="text-muted-foreground italic">Sem nome</span>}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground font-mono text-xs">
-                    {contact.phone}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground hidden md:table-cell text-sm">
-                    {contact.email || <span className="text-muted-foreground">-</span>}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground hidden lg:table-cell text-sm">
-                    {contact.company || <span className="text-muted-foreground">-</span>}
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <div className="flex flex-wrap gap-1">
-                      {contact.tags && contact.tags.length > 0 ? (
-                        contact.tags.slice(0, 3).map((tag) => (
-                          <span
-                            key={tag.id}
-                            className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
-                            style={{
-                              backgroundColor: tag.color + '20',
-                              color: tag.color,
-                            }}
-                          >
-                            {tag.name}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-muted-foreground text-xs">-</span>
-                      )}
-                      {contact.tags && contact.tags.length > 3 && (
-                        <span className="text-[10px] text-muted-foreground">
-                          +{contact.tags.length - 3}
+              contacts.map((contact) => {
+                const displayName = contact.name || 'Visitante / Sem nome';
+                const isSelected = selected.has(contact.id);
+                return (
+                  <TableRow
+                    key={contact.id}
+                    className={cn(
+                      "border-border/50 transition-colors cursor-pointer group",
+                      isSelected
+                        ? "bg-primary/10 hover:bg-primary/15"
+                        : "hover:bg-muted/50"
+                    )}
+                    onClick={() => openDetail(contact.id)}
+                  >
+                    <TableCell className="w-12 text-center pl-4" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-center">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelect(contact.id)}
+                          aria-label={`Selecionar ${displayName}`}
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className={cn(
+                            "h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold border shrink-0 select-none",
+                            getAvatarColor(displayName)
+                          )}
+                        >
+                          {getInitials(displayName)}
+                        </div>
+                        <div className="truncate">
+                          <p className="font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                            {contact.name || <span className="text-muted-foreground italic font-normal">Sem nome</span>}
+                          </p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span className="text-foreground/90 font-mono text-xs font-medium">
+                          {contact.phone || '-'}
                         </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-xs hidden lg:table-cell">
-                    {new Date(contact.created_at).toLocaleDateString('pt-BR', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-muted-foreground hover:text-foreground"
+                        {contact.phone && (
+                          <a
+                            href={`/inbox?c=${contact.id}`}
                             onClick={(e) => e.stopPropagation()}
-                          />
-                        }
-                      >
-                        <MoreHorizontal className="size-4" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="end"
-                        className="bg-popover border-border"
-                      >
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditForm(contact);
-                          }}
-                          className="text-popover-foreground focus:bg-muted focus:text-foreground"
+                            className="p-1 rounded-md text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                            title="Abrir conversa"
+                          >
+                            <MessageSquare className="size-3.5" />
+                          </a>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground hidden md:table-cell text-xs">
+                      {contact.email || <span className="opacity-50">-</span>}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground hidden lg:table-cell text-xs">
+                      {contact.company || <span className="opacity-50">-</span>}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <div className="flex flex-wrap gap-1">
+                        {contact.tags && contact.tags.length > 0 ? (
+                          contact.tags.slice(0, 3).map((tag) => (
+                            <span
+                              key={tag.id}
+                              className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                              style={{
+                                backgroundColor: tag.color + '25',
+                                color: tag.color,
+                              }}
+                            >
+                              {tag.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-muted-foreground/60 text-xs">-</span>
+                        )}
+                        {contact.tags && contact.tags.length > 3 && (
+                          <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
+                            +{contact.tags.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs hidden lg:table-cell whitespace-nowrap">
+                      {new Date(contact.created_at).toLocaleDateString('pt-BR', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </TableCell>
+                    <TableCell className="pr-4 text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-muted-foreground hover:text-foreground"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          }
                         >
-                          <Pencil className="size-4" />
-                          Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator className="bg-border" />
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            confirmDelete(contact);
-                          }}
+                          <MoreHorizontal className="size-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          className="bg-popover border-border shadow-xl rounded-xl"
                         >
-                          <Trash2 className="size-4" />
-                          Excluir
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditForm(contact);
+                            }}
+                            className="text-popover-foreground focus:bg-muted focus:text-foreground text-xs gap-2"
+                          >
+                            <Pencil className="size-3.5" />
+                            Editar Contato
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator className="bg-border" />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              confirmDelete(contact);
+                            }}
+                            className="text-xs gap-2"
+                          >
+                            <Trash2 className="size-3.5" />
+                            Excluir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
