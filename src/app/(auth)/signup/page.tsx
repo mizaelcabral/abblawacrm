@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -41,6 +41,23 @@ function SignupPageInner() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const supabase = createClient();
+
+  // Listen for SIGNED_IN event (e.g. after OAuth callback completes client-side)
+  // and immediately trigger full window navigation to dashboard
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user) {
+        const targetUrl = inviteToken
+          ? `/join/${encodeURIComponent(inviteToken)}`
+          : "/dashboard";
+        window.location.href = targetUrl;
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [inviteToken, supabase]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -269,7 +286,11 @@ function SignupPageInner() {
               </Button>
             </form>
 
-            <SocialAuthButtons inviteToken={inviteToken} onError={(msg) => setError(msg)} />
+            <SocialAuthButtons
+              inviteToken={inviteToken}
+              consentChecked={consentChecked}
+              onError={(msg) => setError(msg)}
+            />
 
             <p className="text-center text-sm text-muted-foreground">
               Já tem uma conta?{" "}
@@ -290,4 +311,5 @@ function SignupPageInner() {
     </div>
   );
 }
+
 

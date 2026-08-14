@@ -8,22 +8,37 @@ import { Provider } from "@supabase/supabase-js";
 
 interface SocialAuthButtonsProps {
   inviteToken?: string | null;
+  consentChecked?: boolean;
   onError?: (errorMsg: string) => void;
 }
 
-export function SocialAuthButtons({ inviteToken, onError }: SocialAuthButtonsProps) {
+export function SocialAuthButtons({
+  inviteToken,
+  consentChecked = false,
+  onError,
+}: SocialAuthButtonsProps) {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const supabase = createClient();
 
   const handleSocialLogin = async (provider: Provider) => {
     try {
+      // Require checking terms of service checkbox before proceeding
+      if (!consentChecked) {
+        if (onError) {
+          onError(
+            "Por favor, marque a caixa 'Eu li e concordo com os Termos de Serviço e a Política de Privacidade' para continuar."
+          );
+        }
+        return;
+      }
+
       setLoadingProvider(provider);
       if (onError) onError("");
 
       const nextUrl = inviteToken
         ? `/join/${encodeURIComponent(inviteToken)}`
         : "/dashboard";
-        
+
       const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextUrl)}`;
 
       const { error } = await supabase.auth.signInWithOAuth({
@@ -42,7 +57,10 @@ export function SocialAuthButtons({ inviteToken, onError }: SocialAuthButtonsPro
         setLoadingProvider(null);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Erro ao conectar com provedor social";
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Erro ao conectar com provedor social";
       if (onError) onError(message);
       setLoadingProvider(null);
     }
