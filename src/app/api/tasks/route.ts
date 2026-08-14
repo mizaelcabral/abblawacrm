@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     query = query.eq('status', status)
   }
   
-  const { data, error } = await query.order('due_at', { ascending: true, nullsFirst: false })
+  const { data, error } = await query.order('created_at', { ascending: false })
   
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })

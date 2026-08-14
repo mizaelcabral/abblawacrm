@@ -113,7 +113,7 @@ export default function TasksPage() {
       supabase
         .from("tasks")
         .select("*, assigned_agent:profiles(full_name), contact:contacts(name, phone)")
-        .order("due_at", { ascending: true, nullsFirst: false }),
+        .order("created_at", { ascending: false }),
       supabase
         .from("profiles")
         .select("user_id, full_name")
@@ -194,7 +194,7 @@ export default function TasksPage() {
       .single();
 
     if (!error && data) {
-      setTasks((prev) => [...prev, data]);
+      setTasks((prev) => [data, ...prev]);
       resetForm();
     }
   };

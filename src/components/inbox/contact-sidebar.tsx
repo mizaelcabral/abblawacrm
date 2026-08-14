@@ -244,13 +244,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
       .single();
 
     if (!error && data) {
-      setTasks((prev) =>
-        [...prev, data].sort((a, b) => {
-          if (!a.due_at) return 1;
-          if (!b.due_at) return -1;
-          return new Date(a.due_at).getTime() - new Date(b.due_at).getTime();
-        })
-      );
+      setTasks((prev) => [data, ...prev]);
       setNewTaskTitle("");
       setNewTaskDueAt("");
       setNewTaskAgentId("");
