@@ -14,6 +14,10 @@ import {
   ImageOff,
   CornerDownLeft,
   Download,
+  ShoppingBag,
+  Calendar,
+  ExternalLink,
+  ArrowUpRight,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ReplyQuote } from "./reply-quote";
@@ -202,7 +206,146 @@ function extractFirstUrl(text: string | null | undefined): string | null {
   return rawUrl.startsWith("www.") ? `https://${rawUrl}` : rawUrl;
 }
 
+interface ActionLink {
+  url: string;
+  type: 'product' | 'booking' | 'general';
+  title: string;
+  subtitle?: string;
+}
+
+function extractActionLinks(text: string | null | undefined): ActionLink[] {
+  if (!text) return [];
+  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
+  const matches = text.match(urlRegex) || [];
+  const links: ActionLink[] = [];
+  const seen = new Set<string>();
+
+  for (const rawUrl of matches) {
+    const cleanUrl = rawUrl.replace(/[.,;)]+$/, '');
+    const href = cleanUrl.startsWith("www.") ? `https://${cleanUrl}` : cleanUrl;
+    if (seen.has(href)) continue;
+    seen.add(href);
+
+    try {
+      const parsed = new URL(href);
+      const pathname = parsed.pathname;
+
+      if (pathname.includes('/product/') || pathname.includes('/shop/')) {
+        const parts = pathname.split('/').filter(Boolean);
+        const lastPart = parts[parts.length - 1];
+        let productName = lastPart
+          ? lastPart.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+          : 'Produto';
+        
+        productName = productName.replace(/\.(html|php|aspx?)$/i, '');
+
+        links.push({
+          url: href,
+          type: 'product',
+          title: 'Ver Produto',
+          subtitle: productName,
+        });
+      } else if (
+        pathname.includes('/book/') ||
+        pathname.includes('/agendamento') ||
+        pathname.includes('/appointments')
+      ) {
+        const parts = pathname.split('/').filter(Boolean);
+        const lastPart = parts[parts.length - 1];
+        const personName = lastPart && lastPart !== 'book'
+          ? lastPart.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+          : '';
+
+        links.push({
+          url: href,
+          type: 'booking',
+          title: 'Agendar Horário',
+          subtitle: personName ? `com ${personName}` : 'Clique para agendar',
+        });
+      } else {
+        links.push({
+          url: href,
+          type: 'general',
+          title: 'Acessar Link',
+          subtitle: parsed.hostname.replace(/^www\./, ''),
+        });
+      }
+    } catch (_e) {
+      // Invalid URL
+    }
+  }
+
+  return links;
+}
+
+function ActionLinkButtons({ links, isAgent }: { links: ActionLink[]; isAgent: boolean }) {
+  if (!links || links.length === 0) return null;
+
+  return (
+    <div className="mt-2.5 flex flex-col gap-1.5 pt-1">
+      {links.map((link, idx) => {
+        const isProduct = link.type === 'product';
+        const isBooking = link.type === 'booking';
+
+        return (
+          <a
+            key={idx}
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              "group/btn flex items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-xs font-semibold shadow-xs transition-all duration-200 hover:shadow-md active:scale-98 cursor-pointer select-none",
+              isAgent
+                ? "bg-white/95 text-purple-950 hover:bg-white border border-white/40 shadow-sm"
+                : "bg-primary text-primary-foreground hover:bg-primary/95 shadow-sm"
+            )}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className={cn(
+                  "flex h-7 w-7 items-center justify-center rounded-lg shrink-0",
+                  isAgent
+                    ? (isBooking ? "bg-emerald-100 text-emerald-700" : "bg-purple-100 text-purple-700")
+                    : (isBooking ? "bg-emerald-500/20 text-emerald-300" : "bg-primary-foreground/15 text-primary-foreground")
+                )}
+              >
+                {isProduct && <ShoppingBag className="size-4 shrink-0" />}
+                {isBooking && <Calendar className="size-4 shrink-0" />}
+                {!isProduct && !isBooking && <ExternalLink className="size-4 shrink-0" />}
+              </div>
+              <div className="flex flex-col min-w-0 text-left">
+                <span className="font-bold leading-tight truncate">
+                  {link.title}
+                </span>
+                {link.subtitle && (
+                  <span
+                    className={cn(
+                      "text-[11px] font-normal truncate opacity-85",
+                      isAgent ? "text-purple-900/80" : "text-primary-foreground/80"
+                    )}
+                  >
+                    {link.subtitle}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="text-[10px] uppercase font-bold tracking-wider opacity-70 group-hover/btn:opacity-100">
+                Abrir
+              </span>
+              <ArrowUpRight className="size-3.5 shrink-0 opacity-70 group-hover/btn:opacity-100 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-all" />
+            </div>
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
 function MessageContent({ message, isAgent }: { message: Message; isAgent: boolean }) {
+  const actionLinks = extractActionLinks(message.content_text);
   const firstUrl = extractFirstUrl(message.content_text);
 
   switch (message.content_type) {
@@ -212,7 +355,11 @@ function MessageContent({ message, isAgent }: { message: Message; isAgent: boole
           <p className="whitespace-pre-wrap break-all [overflow-wrap:anywhere] text-sm leading-relaxed">
             {renderTextWithLinks(message.content_text || "", isAgent)}
           </p>
-          {firstUrl && <LinkPreview url={firstUrl} isAgent={isAgent} />}
+          {actionLinks.length > 0 ? (
+            <ActionLinkButtons links={actionLinks} isAgent={isAgent} />
+          ) : (
+            firstUrl && <LinkPreview url={firstUrl} isAgent={isAgent} />
+          )}
         </div>
       );
 
@@ -229,7 +376,11 @@ function MessageContent({ message, isAgent }: { message: Message; isAgent: boole
               {renderTextWithLinks(message.content_text, isAgent)}
             </p>
           )}
-          {firstUrl && <LinkPreview url={firstUrl} isAgent={isAgent} />}
+          {actionLinks.length > 0 ? (
+            <ActionLinkButtons links={actionLinks} isAgent={isAgent} />
+          ) : (
+            firstUrl && <LinkPreview url={firstUrl} isAgent={isAgent} />
+          )}
         </div>
       );
 
