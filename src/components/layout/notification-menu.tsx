@@ -120,7 +120,7 @@ export function NotificationMenu() {
       >
         <Bell className="h-5 w-5" />
         {totalNotifications > 0 && (
-          <span className="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground animate-pulse">
+          <span className="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-purple-600 px-1 text-[10px] font-bold text-white shadow-xs animate-pulse">
             {totalNotifications}
           </span>
         )}
@@ -131,7 +131,7 @@ export function NotificationMenu() {
           <PopoverTitle className="text-base font-semibold flex items-center justify-between">
             <span>Notificações</span>
             {totalNotifications > 0 && (
-              <Badge variant="destructive" className="h-5 text-[11px]">
+              <Badge className="h-5 text-[11px] bg-purple-600 hover:bg-purple-700 text-white border-transparent">
                 {totalNotifications} novas
               </Badge>
             )}
