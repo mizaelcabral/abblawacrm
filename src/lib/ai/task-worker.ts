@@ -317,16 +317,16 @@ function getTaskPrompt(task: AITask): string {
 TAREFA DE COBRANÇA VIA WHATSAPP (Agente de Cobrança AGI):
 - Título: "${task.title}"
 - Descrição/Instrução: "${task.description || 'Enviar cobrança para o cliente.'}"
-- Modo de Execução: ${executionMode === 'autonomous' ? 'AUTÔNOMO (Pode enviar mensagem/Pix direto ao WhatsApp do cliente se tiver as informações)' : 'RASCUNHO / APROVAÇÃO HUMANA (Gere a mensagem proposta e a estrutura do Pix, mas NÃO envie se exigir aprovação)'}
+- Modo de Execução: ${executionMode === 'autonomous' ? 'AUTÔNOMO (Você DEVE enviar a mensagem de cobrança diretamente no WhatsApp do cliente agora usando send_whatsapp_message ou create_direct_charge!)' : 'RASCUNHO / APROVAÇÃO HUMANA (Gere a mensagem proposta e a estrutura do Pix no seu relatório final, mas NÃO chame ferramentas de envio)'}
 - Contato do Cliente: Nome: "${contactName}", Telefone: "${contactPhone}"
 - Configurações de Cobrança:
   * ID do Produto: "${billingConfig.product_id || 'Não especificado'}"
   * Valor do Débito: "${billingConfig.amount ? `R$ ${billingConfig.amount}` : 'Consultar produto/negócio'}"
   * Tom de Voz: "${billingConfig.tone || 'Amigável, cortês e profissional'}"
-  * Gerar Pix Nativo: ${billingConfig.send_pix !== false ? 'Sim (se houver produto)' : 'Não'}
+  * Gerar Pix Nativo: ${billingConfig.send_pix !== false ? 'Sim' : 'Não'}
   * Observações: "${billingConfig.notes || 'Nenhuma'}"
 
-Por favor, execute as ações necessárias. Se o modo for AUTÔNOMO e o produto estiver especificado, use 'create_direct_charge' ou 'send_whatsapp_message'. Se o modo for APROVAÇÃO HUMANA ou faltarem dados, estruture o rascunho completo da mensagem de cobrança com o resumo dos valores e instruções de pagamento.
+IMPORTANTE: Se o modo for AUTÔNOMO, chame a ferramenta 'send_whatsapp_message' (ou 'create_direct_charge' se houver product_id), passando o telefone do cliente ("${contactPhone}") e a mensagem de cobrança formatada com o valor (R$ ${billingConfig.amount || 0}), saudação cortês e instruções de pagamento.
 `
   }
 

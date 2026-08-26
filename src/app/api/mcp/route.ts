@@ -1440,18 +1440,6 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         throw new Error('Invalid phone format. Please use international E.164 format (e.g. +5511999999999)');
       }
 
-      const { data: config, error: configError } = await admin
-        .from('whatsapp_config')
-        .select('*')
-        .eq('account_id', accountId)
-        .maybeSingle();
-
-      if (configError || !config) {
-        throw new Error('WhatsApp not configured for this account. Please connect your WhatsApp API settings first.');
-      }
-
-      const accessToken = decrypt(config.access_token);
-
       const { data: contact } = await admin
         .from('contacts')
         .select('id')
@@ -1498,12 +1486,78 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         conv = res.data;
       }
 
-      const metaResponse = await sendTextMessage({
-        accessToken,
-        phoneNumberId: config.phone_number_id,
-        to: sanitizedPhone,
-        text: message,
-      });
+      let messageSent = false;
+      let sentMsgId: string | null = null;
+      let sendError: string | null = null;
+
+      // 1. Try WhatsApp Web (Evolution API) first
+      const { data: webConfig } = await admin
+        .from('whatsapp_web_config')
+        .select('*')
+        .eq('account_id', accountId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (webConfig) {
+        try {
+          const token = decrypt(webConfig.api_token);
+          const res = await fetch(`${webConfig.api_url}/message/sendText/${webConfig.instance_name}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: token,
+            },
+            body: JSON.stringify({
+              number: sanitizedPhone,
+              text: message,
+            }),
+          });
+
+          if (res.ok) {
+            const resData = await res.json();
+            sentMsgId = resData.key?.id || resData.message?.key?.id || null;
+            messageSent = true;
+          } else {
+            const errText = await res.text();
+            sendError = `Evolution API error: ${errText}`;
+          }
+        } catch (err: any) {
+          console.error('[MCP send_whatsapp_message] WhatsApp Web error:', err);
+          sendError = err.message || 'Failed to send via WhatsApp Web';
+        }
+      }
+
+      // 2. Try Meta Cloud API if not sent via Web
+      if (!messageSent) {
+        const { data: config } = await admin
+          .from('whatsapp_config')
+          .select('*')
+          .eq('account_id', accountId)
+          .maybeSingle();
+
+        if (config && config.access_token && config.phone_number_id) {
+          try {
+            const accessToken = decrypt(config.access_token);
+            const metaResponse = await sendTextMessage({
+              accessToken,
+              phoneNumberId: config.phone_number_id,
+              to: sanitizedPhone,
+              text: message,
+            });
+            sentMsgId = metaResponse.messageId || null;
+            messageSent = true;
+          } catch (err: any) {
+            console.error('[MCP send_whatsapp_message] Meta API error:', err);
+            sendError = err.message || 'Failed to send via Meta API';
+          }
+        } else if (!webConfig) {
+          throw new Error('Nenhuma integração do WhatsApp (Web ou Meta) foi configurada para esta conta.');
+        }
+      }
+
+      if (!messageSent) {
+        throw new Error(sendError || 'Falha ao disparar mensagem no WhatsApp.');
+      }
 
       const { data: insertedMsg, error: insertError } = await admin
         .from('messages')
@@ -1513,7 +1567,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
           message_type: 'text',
           sender_type: 'agent',
           content_text: message,
-          message_id: metaResponse.messageId || null,
+          message_id: sentMsgId,
           status: 'sent',
         })
         .select()
