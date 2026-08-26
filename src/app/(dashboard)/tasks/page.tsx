@@ -22,6 +22,8 @@ import {
   ChevronRight,
   ClipboardList,
   Sparkles,
+  RefreshCw,
+  Repeat,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,6 +74,8 @@ interface TaskWithRelations {
   } | null;
   ai_draft?: string | null;
   executed_at?: string | null;
+  is_recurring?: boolean | null;
+  recurrence_interval?: "none" | "monthly" | "weekly" | "yearly" | string | null;
   created_at: string;
   updated_at: string;
   assigned_agent?: {
@@ -116,6 +120,10 @@ export default function TasksPage() {
   const [formBillingProductId, setFormBillingProductId] = useState<string>("");
   const [formBillingAmount, setFormBillingAmount] = useState<string>("");
   const [formBillingTone, setFormBillingTone] = useState<string>("Amigável e profissional");
+
+  // Recurrence Form Fields
+  const [formIsRecurring, setFormIsRecurring] = useState<boolean>(false);
+  const [formRecurrenceInterval, setFormRecurrenceInterval] = useState<"monthly" | "weekly" | "yearly">("monthly");
 
   // DnD Sensors
   const sensors = useSensors(
@@ -177,6 +185,8 @@ export default function TasksPage() {
     setFormBillingProductId(task.billing_config?.product_id || "");
     setFormBillingAmount(task.billing_config?.amount ? String(task.billing_config.amount) : "");
     setFormBillingTone(task.billing_config?.tone || "Amigável e profissional");
+    setFormIsRecurring(!!task.is_recurring);
+    setFormRecurrenceInterval((task.recurrence_interval as any) || "monthly");
   };
 
   // Close modals & reset forms
@@ -193,6 +203,8 @@ export default function TasksPage() {
     setFormBillingProductId("");
     setFormBillingAmount("");
     setFormBillingTone("Amigável e profissional");
+    setFormIsRecurring(false);
+    setFormRecurrenceInterval("monthly");
     setEditingTask(null);
     setIsNewTaskOpen(false);
   };
@@ -236,6 +248,8 @@ export default function TasksPage() {
           tone: formBillingTone,
           send_pix: true,
         } : {},
+        is_recurring: formIsRecurring,
+        recurrence_interval: formIsRecurring ? formRecurrenceInterval : 'none',
       })
       .select("*, assigned_agent:profiles(full_name), contact:contacts(name, phone)")
       .single();
@@ -331,6 +345,8 @@ export default function TasksPage() {
           tone: formBillingTone,
           send_pix: true,
         } : {},
+        is_recurring: formIsRecurring,
+        recurrence_interval: formIsRecurring ? formRecurrenceInterval : 'none',
       })
       .eq("id", editingTask.id)
       .select("*, assigned_agent:profiles(full_name), contact:contacts(name, phone)")
@@ -352,15 +368,38 @@ export default function TasksPage() {
   // Quick update status
   const handleUpdateStatus = async (taskId: string, newStatus: "pending" | "in_progress" | "review_required" | "completed") => {
     const supabase = createClient();
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
       .from("tasks")
-      .update({ status: newStatus })
-      .eq("id", taskId);
+      .update({
+        status: newStatus,
+        completed_at: newStatus === "completed" ? new Date().toISOString() : null,
+      })
+      .eq("id", taskId)
+      .select("*, assigned_agent:profiles(full_name), contact:contacts(name, phone)")
+      .single();
 
-    if (!error) {
-      setTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
-      );
+    if (error) {
+      toast.error(`Erro ao atualizar status: ${error.message}`);
+      return;
+    }
+
+    if (updated) {
+      setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
+
+      if (newStatus === "completed" && updated.is_recurring) {
+        try {
+          const { spawnNextRecurrentTask } = await import("@/lib/tasks/recurrence");
+          const nextTask = await spawnNextRecurrentTask(supabase, updated);
+          if (nextTask) {
+            toast.success("Próxima cobrança recorrente gerada para o próximo ciclo!", {
+              description: `Agendada para ${format(new Date(nextTask.due_at), "dd/MM/yyyy")}`,
+            });
+            loadData();
+          }
+        } catch (recErr) {
+          console.error("[Recurrence UI Error]:", recErr);
+        }
+      }
     }
   };
 
@@ -587,6 +626,42 @@ export default function TasksPage() {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+
+              {/* Recorrência / Repetir Tarefa */}
+              <div className="rounded-lg border border-border p-3 space-y-2 bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-foreground flex items-center gap-1.5 cursor-pointer">
+                    <RefreshCw className="w-3.5 h-3.5 text-violet-500" />
+                    Repetir Tarefa (Recorrência de Cobrança)
+                  </label>
+                  <input
+                    type="checkbox"
+                    checked={formIsRecurring}
+                    onChange={(e) => setFormIsRecurring(e.target.checked)}
+                    className="w-4 h-4 accent-violet-600 rounded cursor-pointer"
+                  />
+                </div>
+
+                {formIsRecurring && (
+                  <div className="pt-2 border-t border-border/40 space-y-1.5 animate-in fade-in duration-200">
+                    <label className="text-[10px] text-muted-foreground font-medium block">
+                      Frequência da Repetição:
+                    </label>
+                    <select
+                      value={formRecurrenceInterval}
+                      onChange={(e) => setFormRecurrenceInterval(e.target.value as any)}
+                      className="w-full h-8 px-2 rounded border border-input bg-background text-[11px]"
+                    >
+                      <option value="monthly">Mensalmente (Recorrência mensal de mensalidade)</option>
+                      <option value="weekly">Semanalmente (Toda semana)</option>
+                      <option value="yearly">Anualmente (Todo ano)</option>
+                    </select>
+                    <p className="text-[10px] text-violet-400 font-medium">
+                      💡 Ao concluir esta tarefa, a próxima cobrança será gerada automaticamente para a data do próximo mês.
+                    </p>
                   </div>
                 )}
               </div>
@@ -961,6 +1036,42 @@ export default function TasksPage() {
                 )}
               </div>
 
+              {/* Recorrência / Repetir Tarefa */}
+              <div className="rounded-lg border border-border p-3 space-y-2 bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-foreground flex items-center gap-1.5 cursor-pointer">
+                    <RefreshCw className="w-3.5 h-3.5 text-violet-500" />
+                    Repetir Tarefa (Recorrência de Cobrança)
+                  </label>
+                  <input
+                    type="checkbox"
+                    checked={formIsRecurring}
+                    onChange={(e) => setFormIsRecurring(e.target.checked)}
+                    className="w-4 h-4 accent-violet-600 rounded cursor-pointer"
+                  />
+                </div>
+
+                {formIsRecurring && (
+                  <div className="pt-2 border-t border-border/40 space-y-1.5 animate-in fade-in duration-200">
+                    <label className="text-[10px] text-muted-foreground font-medium block">
+                      Frequência da Repetição:
+                    </label>
+                    <select
+                      value={formRecurrenceInterval}
+                      onChange={(e) => setFormRecurrenceInterval(e.target.value as any)}
+                      className="w-full h-8 px-2 rounded border border-input bg-background text-[11px]"
+                    >
+                      <option value="monthly">Mensalmente (Recorrência mensal de mensalidade)</option>
+                      <option value="weekly">Semanalmente (Toda semana)</option>
+                      <option value="yearly">Anualmente (Todo ano)</option>
+                    </select>
+                    <p className="text-[10px] text-violet-400 font-medium">
+                      💡 Ao concluir esta tarefa, a próxima cobrança será gerada automaticamente para a data do próximo mês.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-muted-foreground">Prazo</label>
@@ -1212,6 +1323,13 @@ function TaskCard({
             Agente IA
           </span>
         ) : null}
+
+        {task.is_recurring && (
+          <span className="flex items-center gap-1.5 rounded bg-purple-500/10 border border-purple-500/20 text-[9px] font-semibold text-purple-600 px-2 py-0.5 dark:text-purple-300">
+            <RefreshCw className="h-2.5 w-2.5 text-purple-500" />
+            Recorrente ({task.recurrence_interval === 'weekly' ? 'Semanal' : task.recurrence_interval === 'yearly' ? 'Anual' : 'Mensal'})
+          </span>
+        )}
       </div>
 
       {/* Draft Preview for review_required */}

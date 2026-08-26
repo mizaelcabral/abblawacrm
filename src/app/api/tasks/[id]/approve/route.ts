@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { sendTextMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils'
+import { spawnNextRecurrentTask } from '@/lib/tasks/recurrence'
 
 // POST /api/tasks/[id]/approve
 export async function POST(
@@ -185,6 +186,13 @@ export async function POST(
 
   if (updateErr) {
     return NextResponse.json({ error: updateErr.message }, { status: 500 })
+  }
+
+  // Spawn next recurrent task if configured
+  try {
+    await spawnNextRecurrentTask(db, updatedTask)
+  } catch (recErr) {
+    console.error('[Task Approve Recurrence Error]:', recErr)
   }
 
   return NextResponse.json({

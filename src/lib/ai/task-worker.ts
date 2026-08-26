@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { sendTextMessage } from '@/lib/whatsapp/meta-api'
 import { normalizePhone, sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils'
+import { spawnNextRecurrentTask } from '@/lib/tasks/recurrence'
 
 
 interface GeminiMessagePart {
@@ -294,6 +295,14 @@ export async function executePendingAITasks(): Promise<{ processed: number; erro
         ai_draft: resultText,
         executed_at: isAutonomous ? new Date().toISOString() : null
       }).eq('id', task.id)
+
+      if (isAutonomous) {
+        try {
+          await spawnNextRecurrentTask(db, { ...task, status: 'completed' })
+        } catch (recErr) {
+          console.error('[AI Task Worker Recurrence Error]:', recErr)
+        }
+      }
 
       processedCount++
     } catch (err) {
