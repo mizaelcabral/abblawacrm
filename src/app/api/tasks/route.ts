@@ -67,7 +67,11 @@ export async function POST(request: Request) {
       description: body.description || null,
       due_at: body.due_at || null,
       assigned_agent_id: body.assigned_agent_id || null,
-      status: 'pending'
+      status: body.status || 'pending',
+      is_ai_task: body.is_ai_task ?? false,
+      ai_agent_type: body.ai_agent_type || 'general',
+      execution_mode: body.execution_mode || 'approval',
+      billing_config: body.billing_config || {},
     })
     .select('*, assigned_agent:profiles(full_name, avatar_url)')
     .single()

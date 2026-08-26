@@ -29,6 +29,16 @@ interface AITask {
   conversation_id?: string | null
   status: string
   account_id: string
+  is_ai_task?: boolean
+  ai_agent_type?: 'billing' | 'followup' | 'onboarding' | 'general' | null
+  execution_mode?: 'approval' | 'autonomous' | null
+  billing_config?: {
+    product_id?: string
+    amount?: number
+    tone?: string
+    send_pix?: boolean
+    notes?: string
+  } | null
   contact?: {
     full_name: string
     phone: string
@@ -273,10 +283,14 @@ export async function executePendingAITasks(): Promise<{ processed: number; erro
 
       const resultText = await runTaskAgent(task)
 
-      // Save the draft and request review
+      // Check execution mode: if autonomous, complete directly; if approval, set review_required
+      const isAutonomous = task.execution_mode === 'autonomous'
+      const newStatus = isAutonomous ? 'completed' : 'review_required'
+      
       await db.from('tasks').update({
-        status: 'review_required',
-        ai_draft: resultText
+        status: newStatus,
+        ai_draft: resultText,
+        executed_at: isAutonomous ? new Date().toISOString() : null
       }).eq('id', task.id)
 
       processedCount++
@@ -294,13 +308,35 @@ export async function executePendingAITasks(): Promise<{ processed: number; erro
 function getTaskPrompt(task: AITask): string {
   const contactName = task.contact?.full_name || 'Desconhecido'
   const contactPhone = task.contact?.phone || 'Não informado'
-  
+  const agentType = task.ai_agent_type || 'general'
+  const executionMode = task.execution_mode || 'approval'
+  const billingConfig = task.billing_config || {}
+
+  if (agentType === 'billing') {
+    return `
+TAREFA DE COBRANÇA VIA WHATSAPP (Agente de Cobrança AGI):
+- Título: "${task.title}"
+- Descrição/Instrução: "${task.description || 'Enviar cobrança para o cliente.'}"
+- Modo de Execução: ${executionMode === 'autonomous' ? 'AUTÔNOMO (Pode enviar mensagem/Pix direto ao WhatsApp do cliente se tiver as informações)' : 'RASCUNHO / APROVAÇÃO HUMANA (Gere a mensagem proposta e a estrutura do Pix, mas NÃO envie se exigir aprovação)'}
+- Contato do Cliente: Nome: "${contactName}", Telefone: "${contactPhone}"
+- Configurações de Cobrança:
+  * ID do Produto: "${billingConfig.product_id || 'Não especificado'}"
+  * Valor do Débito: "${billingConfig.amount ? `R$ ${billingConfig.amount}` : 'Consultar produto/negócio'}"
+  * Tom de Voz: "${billingConfig.tone || 'Amigável, cortês e profissional'}"
+  * Gerar Pix Nativo: ${billingConfig.send_pix !== false ? 'Sim (se houver produto)' : 'Não'}
+  * Observações: "${billingConfig.notes || 'Nenhuma'}"
+
+Por favor, execute as ações necessárias. Se o modo for AUTÔNOMO e o produto estiver especificado, use 'create_direct_charge' ou 'send_whatsapp_message'. Se o modo for APROVAÇÃO HUMANA ou faltarem dados, estruture o rascunho completo da mensagem de cobrança com o resumo dos valores e instruções de pagamento.
+`
+  }
+
   return `
-Nova tarefa atribuída a você:
+Nova tarefa atribuída a você (${agentType.toUpperCase()} AGENT):
 - Título da tarefa: "${task.title}"
 - Descrição da tarefa: "${task.description || 'Sem descrição.'}"
+- Modo de Execução: ${executionMode}
 - ID da Conversação: ${task.conversation_id || 'Nenhuma conversação vinculada.'}
-- Contato Associado: Name: "${contactName}", Phone: "${contactPhone}"
+- Contato Associado: Nome: "${contactName}", Telefone: "${contactPhone}"
 
 Por favor, execute as ações necessárias para completar ou preparar esta tarefa. Se precisar de mais informações, faça buscas de contatos ou pipelines. Se precisar interagir com o cliente, utilize send_whatsapp_message.
 `
@@ -323,7 +359,20 @@ async function runTaskAgent(task: AITask): Promise<string> {
   let turn = 0
   let finalResponseText = ''
 
-  const systemInstruction = `
+  const isBilling = task.ai_agent_type === 'billing'
+
+  const systemInstruction = isBilling
+    ? `
+Você é o Agente Especializado em Cobranças Inteligentes da plataforma ABBLAWA (CRM Gravity).
+Seu objetivo é gerenciar e realizar cobranças via WhatsApp de forma cortês, altamente profissional e alinhada com as melhores práticas de recuperação e atendimento ao cliente.
+
+Instruções específicas para Cobrança:
+- Mantenha sempre um tom de respeito, clareza e empatia.
+- Se o modo for "autonomous" e houver produto configurado (product_id), você pode chamar "create_direct_charge" para gerar o Pix no chat do cliente, ou "send_whatsapp_message" para enviar o lembrete de pagamento.
+- Se o modo for "approval" ou faltar algum dado essencial (como telefone do cliente), NÃO envie a mensagem diretamente; estruture o texto completo da cobrança com saudações, valor, forma de pagamento e chave Pix no seu relatório para aprovação do atendente humano.
+- Sempre relate detalhadamente o resultado: mensagem gerada, status do envio, produto cobrado e próximos passos sugeridos.
+`
+    : `
 Você é o Agente Executor de Tarefas da plataforma Gravity (CRM).
 Seu objetivo é analisar e realizar a tarefa descrita pelo usuário/atendente, utilizando as ferramentas disponíveis.
 

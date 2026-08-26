@@ -60,7 +60,17 @@ interface TaskWithRelations {
   due_at: string | null;
   assigned_agent_id: string | null;
   is_ai_task?: boolean;
+  ai_agent_type?: "billing" | "followup" | "onboarding" | "general" | null;
+  execution_mode?: "approval" | "autonomous" | null;
+  billing_config?: {
+    product_id?: string;
+    amount?: number;
+    tone?: string;
+    send_pix?: boolean;
+    notes?: string;
+  } | null;
   ai_draft?: string | null;
+  executed_at?: string | null;
   created_at: string;
   updated_at: string;
   assigned_agent?: {
@@ -77,6 +87,7 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
   const [members, setMembers] = useState<{ user_id: string; full_name: string }[]>([]);
   const [contacts, setContacts] = useState<{ id: string; name: string | null; phone: string }[]>([]);
+  const [products, setProducts] = useState<{ id: string; name: string; price: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
@@ -97,6 +108,14 @@ export default function TasksPage() {
   const [formDueAt, setFormDueAt] = useState("");
   const [formStatus, setFormStatus] = useState<"pending" | "in_progress" | "review_required" | "completed">("pending");
 
+  // AI & Billing Agent Form Fields
+  const [formIsAiTask, setFormIsAiTask] = useState(false);
+  const [formAiAgentType, setFormAiAgentType] = useState<"billing" | "followup" | "onboarding" | "general">("billing");
+  const [formExecutionMode, setFormExecutionMode] = useState<"approval" | "autonomous">("approval");
+  const [formBillingProductId, setFormBillingProductId] = useState("");
+  const [formBillingAmount, setFormBillingAmount] = useState("");
+  const [formBillingTone, setFormBillingTone] = useState("Amigável e profissional");
+
   // DnD Sensors
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -108,8 +127,8 @@ export default function TasksPage() {
     setLoading(true);
     const supabase = createClient();
 
-    // Query tasks, profiles, and contacts in parallel
-    const [tasksRes, membersRes, contactsRes] = await Promise.all([
+    // Query tasks, profiles, contacts, and store products in parallel
+    const [tasksRes, membersRes, contactsRes, productsRes] = await Promise.all([
       supabase
         .from("tasks")
         .select("*, assigned_agent:profiles(full_name), contact:contacts(name, phone)")
@@ -124,11 +143,17 @@ export default function TasksPage() {
         .select("id, name, phone")
         .eq("account_id", accountId)
         .order("name"),
+      supabase
+        .from("products")
+        .select("id, name, price")
+        .eq("account_id", accountId)
+        .order("name"),
     ]);
 
     if (tasksRes.data) setTasks(tasksRes.data);
     if (membersRes.data) setMembers(membersRes.data);
     if (contactsRes.data) setContacts(contactsRes.data);
+    if (productsRes.data) setProducts(productsRes.data);
     setLoading(false);
   }, [accountId]);
 
@@ -145,6 +170,12 @@ export default function TasksPage() {
     setFormAgentId(task.assigned_agent_id || "");
     setFormDueAt(task.due_at ? format(new Date(task.due_at), "yyyy-MM-dd") : "");
     setFormStatus(task.status);
+    setFormIsAiTask(!!task.is_ai_task);
+    setFormAiAgentType(task.ai_agent_type || "general");
+    setFormExecutionMode(task.execution_mode || "approval");
+    setFormBillingProductId(task.billing_config?.product_id || "");
+    setFormBillingAmount(task.billing_config?.amount ? String(task.billing_config.amount) : "");
+    setFormBillingTone(task.billing_config?.tone || "Amigável e profissional");
   };
 
   // Close modals & reset forms
@@ -155,6 +186,12 @@ export default function TasksPage() {
     setFormAgentId("");
     setFormDueAt("");
     setFormStatus("pending");
+    setFormIsAiTask(false);
+    setFormAiAgentType("billing");
+    setFormExecutionMode("approval");
+    setFormBillingProductId("");
+    setFormBillingAmount("");
+    setFormBillingTone("Amigável e profissional");
     setEditingTask(null);
     setIsNewTaskOpen(false);
   };
@@ -189,6 +226,15 @@ export default function TasksPage() {
         status: formStatus,
         due_at: formDueAt ? new Date(formDueAt).toISOString() : null,
         assigned_agent_id: formAgentId || null,
+        is_ai_task: formIsAiTask,
+        ai_agent_type: formIsAiTask ? formAiAgentType : 'general',
+        execution_mode: formExecutionMode,
+        billing_config: formIsAiTask && formAiAgentType === 'billing' ? {
+          product_id: formBillingProductId || null,
+          amount: formBillingAmount ? parseFloat(formBillingAmount) : null,
+          tone: formBillingTone,
+          send_pix: true,
+        } : {},
       })
       .select("*, assigned_agent:profiles(full_name), contact:contacts(name, phone)")
       .single();
@@ -196,6 +242,26 @@ export default function TasksPage() {
     if (!error && data) {
       setTasks((prev) => [data, ...prev]);
       resetForm();
+    }
+  };
+
+  // Approve AI task draft with 1-click
+  const handleApproveTask = async (taskId: string) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTasks((prev) =>
+          prev.map((t) => (t.id === taskId ? data.task || { ...t, status: "completed" } : t))
+        );
+      } else {
+        alert(`Erro ao aprovar tarefa: ${data.error || 'Falha ao processar'}`);
+      }
+    } catch (err) {
+      console.error("Failed to approve task:", err);
     }
   };
 
@@ -353,15 +419,15 @@ export default function TasksPage() {
           >
             <Plus className="h-4 w-4" /> Nova Tarefa
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
               <DialogTitle>Criar Nova Tarefa</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleCreateTask} className="space-y-4 py-4">
+            <form onSubmit={handleCreateTask} className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-1">
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-muted-foreground">Título</label>
                 <Input
-                  placeholder="Ex: Ligar para tirar dúvidas do contrato"
+                  placeholder="Ex: Enviar cobrança da mensalidade via WhatsApp"
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
                   required
@@ -373,12 +439,107 @@ export default function TasksPage() {
                   placeholder="Adicione detalhes sobre a tarefa..."
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
-                  rows={3}
+                  rows={2}
                 />
               </div>
+
+              {/* AI Agent Configuration Block */}
+              <div className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="is_ai_task" className="text-xs font-semibold text-violet-600 dark:text-violet-400 flex items-center gap-1.5 cursor-pointer">
+                    <Sparkles className="h-4 w-4 text-violet-500" />
+                    Atribuir a Agente de IA AGI
+                  </label>
+                  <input
+                    id="is_ai_task"
+                    type="checkbox"
+                    checked={formIsAiTask}
+                    onChange={(e) => setFormIsAiTask(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
+                  />
+                </div>
+
+                {formIsAiTask && (
+                  <div className="space-y-3 pt-2 border-t border-violet-500/20 text-xs">
+                    <div className="space-y-1.5">
+                      <label className="font-semibold text-muted-foreground">Tipo de Agente IA</label>
+                      <select
+                        value={formAiAgentType}
+                        onChange={(e) => setFormAiAgentType(e.target.value as any)}
+                        className="w-full h-9 px-2.5 rounded-md border border-input bg-background text-xs focus-visible:outline-none"
+                      >
+                        <option value="billing">💳 Agente de Cobrança WhatsApp (Pix / Lembrete)</option>
+                        <option value="followup">🔄 Agente de Recompra / Follow-up</option>
+                        <option value="onboarding">📋 Agente de Boas-Vindas / Documentos</option>
+                        <option value="general">🤖 Agente Executor Geral</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="font-semibold text-muted-foreground">Modo de Execução</label>
+                      <select
+                        value={formExecutionMode}
+                        onChange={(e) => setFormExecutionMode(e.target.value as any)}
+                        className="w-full h-9 px-2.5 rounded-md border border-input bg-background text-xs focus-visible:outline-none"
+                      >
+                        <option value="approval">👤 Rascunho / Aprovação Humana (1-Click Approve)</option>
+                        <option value="autonomous">⚡ Modo Autônomo (Enviar Direto no WhatsApp)</option>
+                      </select>
+                    </div>
+
+                    {formAiAgentType === "billing" && (
+                      <div className="space-y-2 pt-2 border-t border-violet-500/20">
+                        <span className="font-semibold text-violet-700 dark:text-violet-300 block text-[11px]">Configurações da Cobrança:</span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] text-muted-foreground font-medium block mb-1">Produto da Loja</label>
+                            <select
+                              value={formBillingProductId}
+                              onChange={(e) => setFormBillingProductId(e.target.value)}
+                              className="w-full h-8 px-2 rounded border border-input bg-background text-[11px]"
+                            >
+                              <option value="">Nenhum produto (Valor livre)...</option>
+                              {products.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name} (R$ {p.price})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-muted-foreground font-medium block mb-1">Valor do Débito (R$)</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              placeholder="Ex: 150.00"
+                              value={formBillingAmount}
+                              onChange={(e) => setFormBillingAmount(e.target.value)}
+                              className="h-8 text-[11px]"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-medium block mb-1">Tom de Voz</label>
+                          <select
+                            value={formBillingTone}
+                            onChange={(e) => setFormBillingTone(e.target.value)}
+                            className="w-full h-8 px-2 rounded border border-input bg-background text-[11px]"
+                          >
+                            <option value="Amigável e profissional">Amigável e profissional</option>
+                            <option value="Formal e direto">Formal e direto</option>
+                            <option value="Urgente / Lembrete de vencimento">Urgente / Lembrete de vencimento</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-muted-foreground">Prazo</label>
+                  <label className="text-xs font-semibold text-muted-foreground">Prazo de Execução</label>
                   <Input
                     type="date"
                     value={formDueAt}
@@ -416,7 +577,7 @@ export default function TasksPage() {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-muted-foreground">Atendente</label>
+                  <label className="text-xs font-semibold text-muted-foreground">Atendente Responsável</label>
                   <select
                     value={formAgentId}
                     onChange={(e) => setFormAgentId(e.target.value)}
@@ -435,7 +596,7 @@ export default function TasksPage() {
                 <Button type="button" variant="outline" onClick={resetForm}>
                   Cancelar
                 </Button>
-                <Button type="submit">Criar</Button>
+                <Button type="submit">Criar Tarefa</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -521,6 +682,7 @@ export default function TasksPage() {
               onOpenEdit={handleOpenEdit}
               onUpdateStatus={handleUpdateStatus}
               onDelete={handleDeleteTask}
+              onApproveTask={handleApproveTask}
             />
 
             <TaskColumn
@@ -532,6 +694,7 @@ export default function TasksPage() {
               onOpenEdit={handleOpenEdit}
               onUpdateStatus={handleUpdateStatus}
               onDelete={handleDeleteTask}
+              onApproveTask={handleApproveTask}
             />
 
             <TaskColumn
@@ -543,6 +706,7 @@ export default function TasksPage() {
               onOpenEdit={handleOpenEdit}
               onUpdateStatus={handleUpdateStatus}
               onDelete={handleDeleteTask}
+              onApproveTask={handleApproveTask}
             />
 
             <TaskColumn
@@ -554,6 +718,7 @@ export default function TasksPage() {
               onOpenEdit={handleOpenEdit}
               onUpdateStatus={handleUpdateStatus}
               onDelete={handleDeleteTask}
+              onApproveTask={handleApproveTask}
             />
           </div>
 
@@ -570,6 +735,7 @@ export default function TasksPage() {
                   onOpenEdit={() => {}}
                   onUpdateStatus={() => {}}
                   onDelete={() => {}}
+                  onApproveTask={() => {}}
                   isOverlay
                 />
               </div>
@@ -615,11 +781,11 @@ export default function TasksPage() {
       {/* Edit Task Dialog */}
       {editingTask && (
         <Dialog open={!!editingTask} onOpenChange={(open) => !open && resetForm()}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
               <DialogTitle>Editar Tarefa</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleUpdateTask} className="space-y-4 py-4">
+            <form onSubmit={handleUpdateTask} className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-1">
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-muted-foreground">Título</label>
                 <Input
@@ -633,9 +799,104 @@ export default function TasksPage() {
                 <Textarea
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
-                  rows={3}
+                  rows={2}
                 />
               </div>
+
+              {/* AI Agent Configuration Block */}
+              <div className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="edit_is_ai_task" className="text-xs font-semibold text-violet-600 dark:text-violet-400 flex items-center gap-1.5 cursor-pointer">
+                    <Sparkles className="h-4 w-4 text-violet-500" />
+                    Atribuir a Agente de IA AGI
+                  </label>
+                  <input
+                    id="edit_is_ai_task"
+                    type="checkbox"
+                    checked={formIsAiTask}
+                    onChange={(e) => setFormIsAiTask(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
+                  />
+                </div>
+
+                {formIsAiTask && (
+                  <div className="space-y-3 pt-2 border-t border-violet-500/20 text-xs">
+                    <div className="space-y-1.5">
+                      <label className="font-semibold text-muted-foreground">Tipo de Agente IA</label>
+                      <select
+                        value={formAiAgentType}
+                        onChange={(e) => setFormAiAgentType(e.target.value as any)}
+                        className="w-full h-9 px-2.5 rounded-md border border-input bg-background text-xs focus-visible:outline-none"
+                      >
+                        <option value="billing">💳 Agente de Cobrança WhatsApp (Pix / Lembrete)</option>
+                        <option value="followup">🔄 Agente de Recompra / Follow-up</option>
+                        <option value="onboarding">📋 Agente de Boas-Vindas / Documentos</option>
+                        <option value="general">🤖 Agente Executor Geral</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="font-semibold text-muted-foreground">Modo de Execução</label>
+                      <select
+                        value={formExecutionMode}
+                        onChange={(e) => setFormExecutionMode(e.target.value as any)}
+                        className="w-full h-9 px-2.5 rounded-md border border-input bg-background text-xs focus-visible:outline-none"
+                      >
+                        <option value="approval">👤 Rascunho / Aprovação Humana (1-Click Approve)</option>
+                        <option value="autonomous">⚡ Modo Autônomo (Enviar Direto no WhatsApp)</option>
+                      </select>
+                    </div>
+
+                    {formAiAgentType === "billing" && (
+                      <div className="space-y-2 pt-2 border-t border-violet-500/20">
+                        <span className="font-semibold text-violet-700 dark:text-violet-300 block text-[11px]">Configurações da Cobrança:</span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] text-muted-foreground font-medium block mb-1">Produto da Loja</label>
+                            <select
+                              value={formBillingProductId}
+                              onChange={(e) => setFormBillingProductId(e.target.value)}
+                              className="w-full h-8 px-2 rounded border border-input bg-background text-[11px]"
+                            >
+                              <option value="">Nenhum produto (Valor livre)...</option>
+                              {products.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name} (R$ {p.price})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-muted-foreground font-medium block mb-1">Valor do Débito (R$)</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              placeholder="Ex: 150.00"
+                              value={formBillingAmount}
+                              onChange={(e) => setFormBillingAmount(e.target.value)}
+                              className="h-8 text-[11px]"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] text-muted-foreground font-medium block mb-1">Tom de Voz</label>
+                          <select
+                            value={formBillingTone}
+                            onChange={(e) => setFormBillingTone(e.target.value)}
+                            className="w-full h-8 px-2 rounded border border-input bg-background text-[11px]"
+                          >
+                            <option value="Amigável e profissional">Amigável e profissional</option>
+                            <option value="Formal e direto">Formal e direto</option>
+                            <option value="Urgente / Lembrete de vencimento">Urgente / Lembrete de vencimento</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-muted-foreground">Prazo</label>
@@ -717,6 +978,7 @@ function TaskColumn({
   onOpenEdit,
   onUpdateStatus,
   onDelete,
+  onApproveTask,
 }: {
   status: "pending" | "in_progress" | "review_required" | "completed";
   title: string;
@@ -726,6 +988,7 @@ function TaskColumn({
   onOpenEdit: (task: TaskWithRelations) => void;
   onUpdateStatus: (taskId: string, newStatus: any) => void;
   onDelete: (taskId: string) => void;
+  onApproveTask: (taskId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
@@ -760,6 +1023,7 @@ function TaskColumn({
               onOpenEdit={onOpenEdit}
               onUpdateStatus={onUpdateStatus}
               onDelete={onDelete}
+              onApproveTask={onApproveTask}
             />
           ))
         )}
@@ -776,11 +1040,13 @@ function DraggableTaskCard({
   onOpenEdit,
   onUpdateStatus,
   onDelete,
+  onApproveTask,
 }: {
   task: TaskWithRelations;
   onOpenEdit: (task: TaskWithRelations) => void;
   onUpdateStatus: (taskId: string, newStatus: any) => void;
   onDelete: (taskId: string) => void;
+  onApproveTask: (taskId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: task.id,
@@ -798,6 +1064,7 @@ function DraggableTaskCard({
         onOpenEdit={onOpenEdit}
         onUpdateStatus={onUpdateStatus}
         onDelete={onDelete}
+        onApproveTask={onApproveTask}
       />
     </div>
   );
@@ -811,12 +1078,14 @@ function TaskCard({
   onOpenEdit,
   onUpdateStatus,
   onDelete,
+  onApproveTask,
   isOverlay = false,
 }: {
   task: TaskWithRelations;
   onOpenEdit: (task: TaskWithRelations) => void;
   onUpdateStatus: (taskId: string, newStatus: any) => void;
   onDelete: (taskId: string) => void;
+  onApproveTask: (taskId: string) => void;
   isOverlay?: boolean;
 }) {
   const isOverdue =
@@ -868,13 +1137,28 @@ function TaskCard({
           </Link>
         )}
 
-        {task.is_ai_task && (
+        {task.ai_agent_type === "billing" ? (
+          <span className="flex items-center gap-1.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-semibold text-emerald-600 px-2 py-0.5 dark:text-emerald-400">
+            <Sparkles className="h-2.5 w-2.5 text-emerald-500" />
+            Cobrança IA
+          </span>
+        ) : task.is_ai_task ? (
           <span className="flex items-center gap-1.5 rounded bg-violet-500/10 border border-violet-500/20 text-[9px] font-medium text-violet-600 px-2 py-0.5 dark:text-violet-400">
             <Sparkles className="h-2.5 w-2.5 text-violet-500" />
             Agente IA
           </span>
-        )}
+        ) : null}
       </div>
+
+      {/* Draft Preview for review_required */}
+      {task.status === "review_required" && task.ai_draft && (
+        <div className="rounded-md bg-violet-50/70 dark:bg-violet-950/30 p-2 border border-violet-200/60 dark:border-violet-800/40 text-[11px] text-foreground space-y-1">
+          <span className="font-semibold text-violet-700 dark:text-violet-300 text-[10px] flex items-center gap-1">
+            <Sparkles className="h-3 w-3 text-violet-500" /> Proposta de Cobrança / Rascunho:
+          </span>
+          <p className="line-clamp-3 text-muted-foreground whitespace-pre-wrap leading-tight text-[10px] italic">{task.ai_draft}</p>
+        </div>
+      )}
 
       <div className="flex items-center justify-between border-t border-border/50 pt-3 text-[10px] text-muted-foreground">
         <span
@@ -904,10 +1188,14 @@ function TaskCard({
           {task.status === "review_required" && (
             <Button
               size="xs"
-              onClick={() => onUpdateStatus(task.id, "completed")}
-              className="text-[10px] h-6 px-2 text-violet-700 hover:text-violet-800 bg-violet-50 hover:bg-violet-100 border border-violet-200"
+              onClick={(e) => {
+                e.stopPropagation();
+                onApproveTask(task.id);
+              }}
+              className="text-[10px] h-6 px-2.5 text-white bg-emerald-600 hover:bg-emerald-700 border border-emerald-600 font-medium shadow-sm"
             >
-              Aprovar e Concluir
+              <CheckCircle className="h-3 w-3 mr-1" />
+              Aprovar & Enviar WhatsApp
             </Button>
           )}
           {task.status !== "pending" && task.status !== "review_required" && (
