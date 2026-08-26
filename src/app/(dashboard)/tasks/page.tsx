@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useMemo } from "react";
+import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { format } from "date-fns";
@@ -241,13 +242,14 @@ export default function TasksPage() {
 
     if (error) {
       console.error("[Create Task Error]:", error);
-      alert(`Erro ao criar tarefa: ${error.message || 'Verifique as permissões ou conexões.'}`);
+      toast.error(`Erro ao criar tarefa: ${error.message || 'Verifique as permissões ou conexões.'}`);
       return;
     }
 
     if (data) {
       setTasks((prev) => [data, ...prev]);
       resetForm();
+      toast.success(data.is_ai_task ? 'Tarefa do Agente IA criada!' : 'Tarefa criada com sucesso!');
 
       // Trigger AI task worker execution immediately if this is an AI task
       if (data.is_ai_task) {
@@ -274,15 +276,20 @@ export default function TasksPage() {
           prev.map((t) => (t.id === taskId ? data.task || { ...t, status: "completed" } : t))
         );
         if (data.messageSent) {
-          alert("✓ Tarefa aprovada! Mensagem enviada com sucesso no WhatsApp do cliente. A tarefa foi movida para a coluna 'Concluído'.");
+          toast.success("Tarefa Aprovada com Sucesso!", {
+            description: "Mensagem enviada no WhatsApp do cliente e tarefa movida para Concluído.",
+          });
         } else {
-          alert(`✓ Tarefa movida para 'Concluído'.\n⚠️ Aviso WhatsApp: ${data.sendError || 'Não foi possível disparar a mensagem. Verifique a conexão do WhatsApp em Configurações.'}`);
+          toast.warning("Tarefa movida para Concluído", {
+            description: data.sendError || "Não foi possível disparar no WhatsApp. Verifique as configurações.",
+          });
         }
       } else {
-        alert(`Erro ao aprovar tarefa: ${data.error || 'Falha ao processar'}`);
+        toast.error(`Erro ao aprovar tarefa: ${data.error || 'Falha ao processar'}`);
       }
     } catch (err) {
       console.error("Failed to approve task:", err);
+      toast.error("Falha ao comunicar com o servidor.");
     }
   };
 
@@ -331,13 +338,14 @@ export default function TasksPage() {
 
     if (error) {
       console.error("[Update Task Error]:", error);
-      alert(`Erro ao atualizar tarefa: ${error.message}`);
+      toast.error(`Erro ao atualizar tarefa: ${error.message}`);
       return;
     }
 
     if (data) {
       setTasks((prev) => prev.map((t) => (t.id === editingTask.id ? data : t)));
       resetForm();
+      toast.success("Tarefa atualizada com sucesso!");
     }
   };
 
