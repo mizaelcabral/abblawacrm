@@ -263,6 +263,11 @@ export default function TasksPage() {
         setTasks((prev) =>
           prev.map((t) => (t.id === taskId ? data.task || { ...t, status: "completed" } : t))
         );
+        if (data.messageSent) {
+          alert("✓ Tarefa aprovada! Mensagem enviada com sucesso no WhatsApp do cliente. A tarefa foi movida para a coluna 'Concluído'.");
+        } else {
+          alert(`✓ Tarefa movida para 'Concluído'.\n⚠️ Aviso WhatsApp: ${data.sendError || 'Não foi possível disparar a mensagem. Verifique a conexão do WhatsApp em Configurações.'}`);
+        }
       } else {
         alert(`Erro ao aprovar tarefa: ${data.error || 'Falha ao processar'}`);
       }

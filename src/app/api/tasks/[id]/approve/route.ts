@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { sendTextMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
-import { normalizePhone } from '@/lib/whatsapp/phone-utils'
+import { sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils'
 
 // POST /api/tasks/[id]/approve
 export async function POST(
@@ -24,7 +24,7 @@ export async function POST(
   // Fetch task with account verification
   const { data: task, error: fetchErr } = await db
     .from('tasks')
-    .select('*, contact:contacts(name, phone)')
+    .select('*, contact:contacts(id, name, phone)')
     .eq('id', taskId)
     .single()
 
@@ -44,12 +44,51 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  // If task is a billing task or has an ai_draft with contact phone, attempt to dispatch WhatsApp message if draft contains text
   let messageSent = false
-  const customerPhone = normalizePhone(task.contact?.phone || '')
+  let sendError: string | null = null
+  const rawPhone = task.contact?.phone || ''
+  const sanitizedPhone = sanitizePhoneForMeta(rawPhone)
 
-  if (task.ai_draft && customerPhone) {
-    try {
+  const cleanMessage = task.ai_draft ? task.ai_draft.replace(/^\[.*?\]\s*/, '').trim() : ''
+
+  if (cleanMessage && sanitizedPhone) {
+    // 1. Try WhatsApp Web Config (Evolution API) first
+    const { data: webConfig } = await db
+      .from('whatsapp_web_config')
+      .select('*')
+      .eq('account_id', task.account_id)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (webConfig) {
+      try {
+        const token = decrypt(webConfig.api_token)
+        const res = await fetch(`${webConfig.api_url}/message/sendText/${webConfig.instance_name}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: token,
+          },
+          body: JSON.stringify({
+            number: sanitizedPhone,
+            text: cleanMessage,
+          }),
+        })
+
+        if (res.ok) {
+          messageSent = true
+        } else {
+          const errText = await res.text()
+          sendError = `Evolution API error: ${errText}`
+        }
+      } catch (err: any) {
+        console.error('[Task Approve] WhatsApp Web send error:', err)
+        sendError = err.message || 'Error connecting to WhatsApp Web'
+      }
+    }
+
+    // 2. Fallback to Official Meta API if not sent via Web
+    if (!messageSent) {
       const { data: waConfig } = await db
         .from('whatsapp_config')
         .select('*')
@@ -57,23 +96,79 @@ export async function POST(
         .maybeSingle()
 
       if (waConfig && waConfig.access_token && waConfig.phone_number_id) {
-        const accessToken = decrypt(waConfig.access_token)
-        // Clean draft message if it contains Markdown/agent markers for clean customer delivery
-        const cleanMessage = task.ai_draft.replace(/^\[.*?\]\s*/, '').trim()
-
-        if (cleanMessage) {
+        try {
+          const accessToken = decrypt(waConfig.access_token)
           await sendTextMessage({
             phoneNumberId: waConfig.phone_number_id,
             accessToken,
-            to: customerPhone,
+            to: sanitizedPhone,
             text: cleanMessage,
           })
           messageSent = true
+        } catch (metaErr: any) {
+          console.error('[Task Approve] Meta WhatsApp send error:', metaErr)
+          sendError = metaErr.message || 'Error sending via Meta API'
         }
+      } else if (!webConfig) {
+        sendError = 'Nenhuma conexão do WhatsApp (Web ou Meta) foi configurada nesta conta.'
       }
-    } catch (waErr) {
-      console.error(`[Task Approve] Error sending WhatsApp message for task ${task.id}:`, waErr)
     }
+
+    // 3. If message was sent and contact exists, log message to chat history
+    if (messageSent && task.contact?.id) {
+      try {
+        let conversationId = task.conversation_id
+        if (!conversationId) {
+          const { data: existingConv } = await db
+            .from('conversations')
+            .select('id')
+            .eq('account_id', task.account_id)
+            .eq('contact_id', task.contact.id)
+            .limit(1)
+            .maybeSingle()
+
+          if (existingConv) {
+            conversationId = existingConv.id
+          } else {
+            const { data: newConv } = await db
+              .from('conversations')
+              .insert({
+                account_id: task.account_id,
+                contact_id: task.contact.id,
+                channel: 'whatsapp',
+                status: 'open',
+                last_message_text: cleanMessage,
+                last_message_at: new Date().toISOString(),
+              })
+              .select('id')
+              .single()
+            if (newConv) conversationId = newConv.id
+          }
+        }
+
+        if (conversationId) {
+          await db.from('messages').insert({
+            conversation_id: conversationId,
+            sender_type: 'agent',
+            content_type: 'text',
+            content_text: cleanMessage,
+            status: 'sent',
+            channel: 'whatsapp',
+          })
+          await db.from('conversations').update({
+            last_message_text: cleanMessage,
+            last_message_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq('id', conversationId)
+        }
+      } catch (logErr) {
+        console.error('[Task Approve] Failed to log sent message in conversation history:', logErr)
+      }
+    }
+  } else if (!cleanMessage) {
+    sendError = 'A tarefa não possui rascunho de mensagem para envio.'
+  } else if (!sanitizedPhone) {
+    sendError = 'O contato associado não possui número de telefone válido.'
   }
 
   // Update task status to completed
@@ -95,6 +190,7 @@ export async function POST(
   return NextResponse.json({
     success: true,
     messageSent,
+    sendError,
     task: updatedTask,
   })
 }
