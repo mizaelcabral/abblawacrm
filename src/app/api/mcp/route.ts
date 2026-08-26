@@ -2024,7 +2024,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
     }
 
     case 'create_direct_charge': {
-      const { phone, product_id, variation_id } = args;
+      const { phone, product_id, variation_id, amount } = args;
       const sanitizedPhone = sanitizePhoneForMeta(phone);
       if (!isValidE164(sanitizedPhone)) {
         throw new Error('Invalid phone format. Please use international E.164 format (e.g. +5511999999999)');
@@ -2048,33 +2048,45 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         .eq('id', accountId)
         .maybeSingle();
 
-      // 2. Fetch Product and Variation
-      const { data: product, error: prodError } = await admin
-        .from('products')
-        .select('*')
-        .eq('id', product_id)
-        .eq('active', true)
-        .maybeSingle();
+      // 2. Determine Charge Amount & Product
+      let totalAmount = 0;
+      let selectedVarId: string | null = null;
 
-      if (prodError || !product) {
-        throw new Error('Produto não encontrado ou inativo.');
-      }
+      if (product_id) {
+        const { data: product, error: prodError } = await admin
+          .from('products')
+          .select('*')
+          .eq('id', product_id)
+          .eq('active', true)
+          .maybeSingle();
 
-      const { data: variations, error: varError } = await admin
-        .from('product_variations')
-        .select('*')
-        .eq('product_id', product_id);
+        if (prodError || !product) {
+          throw new Error('Produto não encontrado ou inativo.');
+        }
 
-      if (varError || !variations || variations.length === 0) {
-        throw new Error('Nenhuma variação de preço disponível para este produto.');
-      }
+        const { data: variations, error: varError } = await admin
+          .from('product_variations')
+          .select('*')
+          .eq('product_id', product_id);
 
-      const selectedVar = variation_id
-        ? variations.find((v: any) => v.id === variation_id)
-        : variations[0];
+        if (varError || !variations || variations.length === 0) {
+          throw new Error('Nenhuma variação de preço disponível para este produto.');
+        }
 
-      if (!selectedVar) {
-        throw new Error('Variação de produto especificada não encontrada.');
+        const selectedVar = variation_id
+          ? variations.find((v: any) => v.id === variation_id)
+          : variations[0];
+
+        if (!selectedVar) {
+          throw new Error('Variação de produto especificada não encontrada.');
+        }
+
+        totalAmount = Number(selectedVar.price);
+        selectedVarId = selectedVar.id;
+      } else if (amount && Number(amount) > 0) {
+        totalAmount = Number(amount);
+      } else {
+        throw new Error('Informe um produto ou valor do débito válido para gerar a cobrança.');
       }
 
       // 3. Find or Create Contact in CRM
@@ -2119,7 +2131,6 @@ export async function handleToolCall(name: string, args: any, accountId: string,
       }
 
       // 4. Create Order
-      const totalAmount = Number(selectedVar.price);
       const { data: order, error: orderError } = await admin
         .from('orders')
         .insert({
@@ -2142,19 +2153,13 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         throw new Error(`Falha ao criar o pedido: ${orderError?.message}`);
       }
 
-      // Create Order Item
-      const { error: itemError } = await admin
-        .from('order_items')
-        .insert({
+      if (selectedVarId) {
+        await admin.from('order_items').insert({
           order_id: order.id,
-          product_variation_id: selectedVar.id,
+          product_variation_id: selectedVarId,
           quantity: 1,
           unit_price: totalAmount,
         });
-
-      if (itemError) {
-        await admin.from('orders').delete().eq('id', order.id);
-        throw new Error(`Falha ao criar item de pedido: ${itemError.message}`);
       }
 
       // 5. Call Woovi API
@@ -2180,7 +2185,6 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         const percentCents = Math.round(valueCents * (markupPercent / 100));
         const splitValue = fixedCents + percentCents;
 
-        // ponytail: Only split if the calculated markup is valid and strictly less than total value
         if (splitValue > 0 && splitValue < valueCents) {
           splits.push({
             pixKey: markupPixKey,
@@ -2215,11 +2219,122 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
       if (updateError) throw updateError;
 
+      // 6. Dispatch Pix WhatsApp Message & Log in Conversation
+      const brCode = chargeResponse.charge.brCode;
+      const pixMessage = `Olá, *${contactName}*! Conforme solicitado, segue o código Pix Copia e Cola para pagamento do seu débito no valor de *R$ ${totalAmount.toFixed(2)}*:\n\n\`${brCode}\`\n\n_Copie o código acima e cole na opção Pix Copia e Cola do aplicativo do seu banco._`;
+
+      // Find or create conversation
+      let { data: conv } = await admin
+        .from('conversations')
+        .select('id')
+        .eq('account_id', accountId)
+        .eq('contact_id', contactId)
+        .maybeSingle();
+
+      if (!conv) {
+        const res = await admin
+          .from('conversations')
+          .insert({
+            account_id: accountId,
+            contact_id: contactId,
+            channel: 'whatsapp',
+            status: 'open',
+          })
+          .select('id')
+          .single();
+        if (res.data) conv = res.data;
+      }
+
+      let pixSent = false;
+      let pixMsgId: string | null = null;
+
+      // 6.1 Try Evolution API (WhatsApp Web)
+      const { data: webConfig } = await admin
+        .from('whatsapp_web_config')
+        .select('*')
+        .eq('account_id', accountId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (webConfig) {
+        try {
+          const token = decrypt(webConfig.api_token);
+          const res = await fetch(`${webConfig.api_url}/message/sendText/${webConfig.instance_name}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: token,
+            },
+            body: JSON.stringify({
+              number: sanitizedPhone,
+              text: pixMessage,
+            }),
+          });
+          if (res.ok) {
+            const resData = await res.json();
+            pixMsgId = resData.key?.id || resData.message?.key?.id || null;
+            pixSent = true;
+          }
+        } catch (err) {
+          console.error('[create_direct_charge] WhatsApp Web send error:', err);
+        }
+      }
+
+      // 6.2 Try Meta API if not sent via Web
+      if (!pixSent) {
+        const { data: waConfig } = await admin
+          .from('whatsapp_config')
+          .select('*')
+          .eq('account_id', accountId)
+          .maybeSingle();
+
+        if (waConfig && waConfig.access_token && waConfig.phone_number_id) {
+          try {
+            const accessToken = decrypt(waConfig.access_token);
+            const metaRes = await sendTextMessage({
+              accessToken,
+              phoneNumberId: waConfig.phone_number_id,
+              to: sanitizedPhone,
+              text: pixMessage,
+            });
+            pixMsgId = metaRes.messageId || null;
+            pixSent = true;
+          } catch (err) {
+            console.error('[create_direct_charge] Meta API send error:', err);
+          }
+        }
+      }
+
+      // 6.3 Insert into messages table for CRM Inbox display
+      if (conv?.id) {
+        await admin.from('messages').insert({
+          conversation_id: conv.id,
+          sender_type: 'agent',
+          content_type: 'text',
+          content_text: pixMessage,
+          message_id: pixMsgId,
+          status: 'sent',
+          channel: 'whatsapp',
+        });
+
+        await admin
+          .from('conversations')
+          .update({
+            last_message_text: pixMessage,
+            last_message_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', conv.id);
+      }
+
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(updatedOrder, null, 2),
+            text: JSON.stringify({
+              ...updatedOrder,
+              pix_message_sent: pixSent,
+            }, null, 2),
           },
         ],
       };
