@@ -2239,7 +2239,7 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
       // 6. Dispatch Pix WhatsApp Message & Log in Conversation
       const brCode = chargeResponse.charge.brCode;
-      const pixMessage = `Olá, *${contactName}*! Conforme solicitado, segue o código Pix Copia e Cola para pagamento do seu débito no valor de *R$ ${totalAmount.toFixed(2)}*:\n\n\`${brCode}\`\n\n_Copie o código acima e cole na opção Pix Copia e Cola do aplicativo do seu banco._`;
+      const pixMessage = `Olá, *${contactName}*! Conforme solicitado, segue a cobrança via Pix no valor de *R$ ${totalAmount.toFixed(2)}*.\n\n👇 *Código Pix Copia e Cola enviado na mensagem abaixo (toque nela para copiar com 1 clique):*`;
 
       // Find or create conversation
       let { data: conv } = await admin
@@ -2277,7 +2277,8 @@ export async function handleToolCall(name: string, args: any, accountId: string,
       if (webConfig) {
         try {
           const token = decrypt(webConfig.api_token);
-          const res = await fetch(`${webConfig.api_url}/message/sendText/${webConfig.instance_name}`, {
+          // Send Message 1: Summary Text
+          const res1 = await fetch(`${webConfig.api_url}/message/sendText/${webConfig.instance_name}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -2288,11 +2289,24 @@ export async function handleToolCall(name: string, args: any, accountId: string,
               text: pixMessage,
             }),
           });
-          if (res.ok) {
-            const resData = await res.json();
-            pixMsgId = resData.key?.id || resData.message?.key?.id || null;
+          if (res1.ok) {
+            const resData1 = await res1.json();
+            pixMsgId = resData1.key?.id || resData1.message?.key?.id || null;
             pixSent = true;
           }
+
+          // Send Message 2: Raw Pix Copia e Cola Code for 1-Tap Copying on Mobile
+          await fetch(`${webConfig.api_url}/message/sendText/${webConfig.instance_name}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: token,
+            },
+            body: JSON.stringify({
+              number: sanitizedPhone,
+              text: brCode,
+            }),
+          });
         } catch (err) {
           console.error('[create_direct_charge] WhatsApp Web send error:', err);
         }
@@ -2317,6 +2331,14 @@ export async function handleToolCall(name: string, args: any, accountId: string,
             });
             pixMsgId = metaRes.messageId || null;
             pixSent = true;
+
+            // Send Message 2: Raw Pix Code for 1-tap copying
+            await sendTextMessage({
+              accessToken,
+              phoneNumberId: waConfig.phone_number_id,
+              to: sanitizedPhone,
+              text: brCode,
+            });
           } catch (err) {
             console.error('[create_direct_charge] Meta API send error:', err);
           }
@@ -2325,20 +2347,31 @@ export async function handleToolCall(name: string, args: any, accountId: string,
 
       // 6.3 Insert into messages table for CRM Inbox display
       if (conv?.id) {
-        await admin.from('messages').insert({
-          conversation_id: conv.id,
-          sender_type: 'agent',
-          content_type: 'text',
-          content_text: pixMessage,
-          message_id: pixMsgId,
-          status: 'sent',
-          channel: 'whatsapp',
-        });
+        await admin.from('messages').insert([
+          {
+            conversation_id: conv.id,
+            sender_type: 'agent',
+            content_type: 'text',
+            content_text: pixMessage,
+            message_id: pixMsgId,
+            status: 'sent',
+            channel: 'whatsapp',
+          },
+          {
+            conversation_id: conv.id,
+            sender_type: 'agent',
+            content_type: 'text',
+            content_text: brCode,
+            message_id: null,
+            status: 'sent',
+            channel: 'whatsapp',
+          }
+        ]);
 
         await admin
           .from('conversations')
           .update({
-            last_message_text: pixMessage,
+            last_message_text: brCode,
             last_message_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })
