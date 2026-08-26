@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 import { executePendingAITasks } from '@/lib/ai/task-worker'
 
 /**
  * Endpoint to trigger background execution of pending AI tasks.
- * Requires a shared secret via the `x-cron-secret` header to match
- * `AUTOMATION_CRON_SECRET`.
+ * Authorized via `x-cron-secret` header or an active user session.
  */
 export async function POST(request: Request) {
   return handleRequest(request)
@@ -16,11 +16,20 @@ export async function GET(request: Request) {
 
 async function handleRequest(request: Request) {
   const expected = process.env.AUTOMATION_CRON_SECRET
-  if (!expected) {
-    return NextResponse.json({ error: 'cron not configured' }, { status: 503 })
-  }
   const supplied = request.headers.get('x-cron-secret')
-  if (supplied !== expected) {
+  let authorized = Boolean(expected && supplied === expected)
+
+  if (!authorized) {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (user) {
+      authorized = true
+    }
+  }
+
+  if (!authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

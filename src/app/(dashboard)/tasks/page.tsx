@@ -248,6 +248,16 @@ export default function TasksPage() {
     if (data) {
       setTasks((prev) => [data, ...prev]);
       resetForm();
+
+      // Trigger AI task worker execution immediately if this is an AI task
+      if (data.is_ai_task) {
+        fetch("/api/tasks/worker", { method: "POST" })
+          .then((res) => res.json())
+          .then((workerRes) => {
+            console.log("[AI Task Worker Instant Execution]:", workerRes);
+          })
+          .catch((err) => console.error("[AI Task Worker Instant Error]:", err));
+      }
     }
   };
 
