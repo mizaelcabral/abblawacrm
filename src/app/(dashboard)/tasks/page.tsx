@@ -88,7 +88,7 @@ export default function TasksPage() {
   const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
   const [members, setMembers] = useState<{ user_id: string; full_name: string }[]>([]);
   const [contacts, setContacts] = useState<{ id: string; name: string | null; phone: string }[]>([]);
-  const [products, setProducts] = useState<{ id: string; name: string; price: number }[]>([]);
+  const [products, setProducts] = useState<{ id: string; name: string; variations?: { price: number }[] }[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
@@ -104,18 +104,18 @@ export default function TasksPage() {
   // Form Fields
   const [formTitle, setFormTitle] = useState("");
   const [formDescription, setFormDescription] = useState("");
-  const [formContactId, setFormContactId] = useState("");
-  const [formAgentId, setFormAgentId] = useState("");
-  const [formDueAt, setFormDueAt] = useState("");
+  const [formContactId, setFormContactId] = useState<string>("");
+  const [formAgentId, setFormAgentId] = useState<string>("");
+  const [formDueAt, setFormDueAt] = useState<string>("");
   const [formStatus, setFormStatus] = useState<"pending" | "in_progress" | "review_required" | "completed">("pending");
 
   // AI & Billing Agent Form Fields
   const [formIsAiTask, setFormIsAiTask] = useState(false);
   const [formAiAgentType, setFormAiAgentType] = useState<"billing" | "followup" | "onboarding" | "general">("billing");
-  const [formExecutionMode, setFormExecutionMode] = useState<"approval" | "autonomous">("approval");
-  const [formBillingProductId, setFormBillingProductId] = useState("");
-  const [formBillingAmount, setFormBillingAmount] = useState("");
-  const [formBillingTone, setFormBillingTone] = useState("Amigável e profissional");
+  const [formExecutionMode, setFormExecutionMode] = useState<"approval" | "autonomous">("autonomous");
+  const [formBillingProductId, setFormBillingProductId] = useState<string>("");
+  const [formBillingAmount, setFormBillingAmount] = useState<string>("");
+  const [formBillingTone, setFormBillingTone] = useState<string>("Amigável e profissional");
 
   // DnD Sensors
   const sensors = useSensors(
@@ -146,7 +146,7 @@ export default function TasksPage() {
         .order("name"),
       supabase
         .from("products")
-        .select("id, name, price")
+        .select("id, name, variations:product_variations(price)")
         .eq("account_id", accountId)
         .order("name"),
     ]);
@@ -539,15 +539,25 @@ export default function TasksPage() {
                             <label className="text-[10px] text-muted-foreground font-medium block mb-1">Produto da Loja</label>
                             <select
                               value={formBillingProductId}
-                              onChange={(e) => setFormBillingProductId(e.target.value)}
+                              onChange={(e) => {
+                                const selectedId = e.target.value;
+                                setFormBillingProductId(selectedId);
+                                const found = products.find((p) => p.id === selectedId);
+                                if (found?.variations?.[0]?.price) {
+                                  setFormBillingAmount(String(found.variations[0].price));
+                                }
+                              }}
                               className="w-full h-8 px-2 rounded border border-input bg-background text-[11px]"
                             >
                               <option value="">Nenhum produto (Valor livre)...</option>
-                              {products.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.name} (R$ {p.price})
-                                </option>
-                              ))}
+                              {products.map((p) => {
+                                const priceVal = p.variations?.[0]?.price ? ` (R$ ${Number(p.variations[0].price).toFixed(2)})` : '';
+                                return (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name}{priceVal}
+                                  </option>
+                                );
+                              })}
                             </select>
                           </div>
                           <div>
@@ -899,15 +909,25 @@ export default function TasksPage() {
                             <label className="text-[10px] text-muted-foreground font-medium block mb-1">Produto da Loja</label>
                             <select
                               value={formBillingProductId}
-                              onChange={(e) => setFormBillingProductId(e.target.value)}
+                              onChange={(e) => {
+                                const selectedId = e.target.value;
+                                setFormBillingProductId(selectedId);
+                                const found = products.find((p) => p.id === selectedId);
+                                if (found?.variations?.[0]?.price) {
+                                  setFormBillingAmount(String(found.variations[0].price));
+                                }
+                              }}
                               className="w-full h-8 px-2 rounded border border-input bg-background text-[11px]"
                             >
                               <option value="">Nenhum produto (Valor livre)...</option>
-                              {products.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.name} (R$ {p.price})
-                                </option>
-                              ))}
+                              {products.map((p) => {
+                                const priceVal = p.variations?.[0]?.price ? ` (R$ ${Number(p.variations[0].price).toFixed(2)})` : '';
+                                return (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name}{priceVal}
+                                  </option>
+                                );
+                              })}
                             </select>
                           </div>
                           <div>
