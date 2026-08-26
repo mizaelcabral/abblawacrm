@@ -2193,16 +2193,34 @@ export async function handleToolCall(name: string, args: any, accountId: string,
         }
       }
 
-      const chargeResponse = await wooviClient.createCharge({
-        correlationID: order.id,
-        value: valueCents,
-        customer: {
-          name: contactName,
-          email: contactEmail,
-          phone: sanitizedPhone,
-        },
-        ...(splits.length > 0 ? { splits } : {}),
-      });
+      let chargeResponse;
+      try {
+        chargeResponse = await wooviClient.createCharge({
+          correlationID: order.id,
+          value: valueCents,
+          customer: {
+            name: contactName,
+            email: contactEmail,
+            phone: sanitizedPhone,
+          },
+          ...(splits.length > 0 ? { splits } : {}),
+        });
+      } catch (err: any) {
+        if (splits.length > 0 && (err?.message?.includes('split') || err?.message?.includes('400'))) {
+          console.warn('[create_direct_charge] Split failed, retrying without splits:', err.message);
+          chargeResponse = await wooviClient.createCharge({
+            correlationID: order.id,
+            value: valueCents,
+            customer: {
+              name: contactName,
+              email: contactEmail,
+              phone: sanitizedPhone,
+            },
+          });
+        } else {
+          throw err;
+        }
+      }
 
       // Update Order with Woovi response
       const { data: updatedOrder, error: updateError } = await admin
