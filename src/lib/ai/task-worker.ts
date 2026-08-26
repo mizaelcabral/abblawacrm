@@ -2,7 +2,7 @@ import { handleToolCall } from '@/app/api/mcp/route'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { sendTextMessage } from '@/lib/whatsapp/meta-api'
-import { normalizePhone } from '@/lib/whatsapp/phone-utils'
+import { normalizePhone, sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils'
 
 
 interface GeminiMessagePart {
@@ -40,6 +40,7 @@ interface AITask {
     notes?: string
   } | null
   contact?: {
+    id?: string
     name: string
     phone: string
   } | null
@@ -231,15 +232,16 @@ const GEMINI_TOOLS = [
       },
       {
         name: 'create_direct_charge',
-        description: 'Generate a Pix payment charge for a specific product and send it directly to the customer in the WhatsApp chat.',
+        description: 'Generate a Pix payment charge for a specific product or custom debt amount and send it directly to the customer in the WhatsApp chat.',
         parameters: {
           type: 'OBJECT',
           properties: {
             phone: { type: 'STRING', description: 'Recipient phone number (international format, e.g. +5511999999999)' },
-            product_id: { type: 'STRING', description: 'UUID of the product to sell' },
+            amount: { type: 'NUMBER', description: 'Monetary debit amount in BRL (e.g. 150.00)' },
+            product_id: { type: 'STRING', description: 'Optional UUID of the product to sell' },
             variation_id: { type: 'STRING', description: 'Optional UUID of the specific product variation.' }
           },
-          required: ['phone', 'product_id']
+          required: ['phone']
         }
       }
     ]
@@ -259,7 +261,7 @@ export async function executePendingAITasks(): Promise<{ processed: number; erro
   // 1. Fetch pending tasks flagged as AI tasks
   const { data: tasks, error } = await db
     .from('tasks')
-    .select('*, contact:contacts(name, phone)')
+    .select('*, contact:contacts(id, name, phone)')
     .eq('is_ai_task', true)
     .eq('status', 'pending')
     .limit(10) // process in batches of 10
@@ -286,6 +288,104 @@ export async function executePendingAITasks(): Promise<{ processed: number; erro
       // Check execution mode: if autonomous, complete directly; if approval, set review_required
       const isAutonomous = task.execution_mode === 'autonomous'
       const newStatus = isAutonomous ? 'completed' : 'review_required'
+
+      // Autonomous mode: Ensure the text result is also dispatched via WhatsApp & logged in Inbox if tools were skipped
+      if (isAutonomous && task.contact?.phone && resultText) {
+        try {
+          const rawPhone = task.contact.phone
+          const sanitizedPhone = sanitizePhoneForMeta(rawPhone)
+          const cleanMessage = resultText.replace(/^\[.*?\]\s*/, '').trim()
+
+          if (cleanMessage && sanitizedPhone) {
+            let sentMsgId: string | null = null
+            let msgSent = false
+
+            // 1. Try WhatsApp Web (Evolution API)
+            const { data: webConfig } = await db
+              .from('whatsapp_web_config')
+              .select('*')
+              .eq('account_id', task.account_id)
+              .eq('is_active', true)
+              .maybeSingle()
+
+            if (webConfig) {
+              try {
+                const token = decrypt(webConfig.api_token)
+                const res = await fetch(`${webConfig.api_url}/message/sendText/${webConfig.instance_name}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', apikey: token },
+                  body: JSON.stringify({ number: sanitizedPhone, text: cleanMessage }),
+                })
+                if (res.ok) {
+                  const resData = await res.json()
+                  sentMsgId = resData.key?.id || resData.message?.key?.id || null
+                  msgSent = true
+                }
+              } catch (err) {
+                console.error('[AI Task Worker] WhatsApp Web send error:', err)
+              }
+            }
+
+            // 2. Try Meta API if not sent via Web
+            if (!msgSent) {
+              const { data: waConfig } = await db
+                .from('whatsapp_config')
+                .select('*')
+                .eq('account_id', task.account_id)
+                .maybeSingle()
+
+              if (waConfig && waConfig.access_token && waConfig.phone_number_id) {
+                try {
+                  const accessToken = decrypt(waConfig.access_token)
+                  const metaRes = await sendTextMessage({
+                    accessToken,
+                    phoneNumberId: waConfig.phone_number_id,
+                    to: sanitizedPhone,
+                    text: cleanMessage,
+                  })
+                  sentMsgId = metaRes.messageId || null
+                  msgSent = true
+                } catch (err) {
+                  console.error('[AI Task Worker] Meta API send error:', err)
+                }
+              }
+            }
+
+            // 3. Save to messages table for CRM Inbox display
+            if (msgSent && task.contact?.id) {
+              let conversationId = task.conversation_id
+              if (!conversationId) {
+                const { data: conv } = await db
+                  .from('conversations')
+                  .select('id')
+                  .eq('account_id', task.account_id)
+                  .eq('contact_id', task.contact.id)
+                  .maybeSingle()
+                if (conv) conversationId = conv.id
+              }
+
+              if (conversationId) {
+                await db.from('messages').insert({
+                  conversation_id: conversationId,
+                  sender_type: 'agent',
+                  content_type: 'text',
+                  content_text: cleanMessage,
+                  message_id: sentMsgId,
+                  status: 'sent',
+                  channel: 'whatsapp',
+                })
+                await db.from('conversations').update({
+                  last_message_text: cleanMessage,
+                  last_message_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }).eq('id', conversationId)
+              }
+            }
+          }
+        } catch (dispatchErr) {
+          console.error('[AI Task Worker] Fallback dispatch error:', dispatchErr)
+        }
+      }
       
       await db.from('tasks').update({
         status: newStatus,
@@ -317,7 +417,7 @@ function getTaskPrompt(task: AITask): string {
 TAREFA DE COBRANÇA VIA WHATSAPP (Agente de Cobrança AGI):
 - Título: "${task.title}"
 - Descrição/Instrução: "${task.description || 'Enviar cobrança para o cliente.'}"
-- Modo de Execução: ${executionMode === 'autonomous' ? 'AUTÔNOMO (Você DEVE enviar a mensagem de cobrança diretamente no WhatsApp do cliente agora usando send_whatsapp_message ou create_direct_charge!)' : 'RASCUNHO / APROVAÇÃO HUMANA (Gere a mensagem proposta e a estrutura do Pix no seu relatório final, mas NÃO chame ferramentas de envio)'}
+- Modo de Execução: ${executionMode === 'autonomous' ? 'AUTÔNOMO (Você DEVE enviar a mensagem de cobrança diretamente no WhatsApp do cliente agora chamando create_direct_charge ou send_whatsapp_message!)' : 'RASCUNHO / APROVAÇÃO HUMANA (Gere a mensagem proposta no seu texto final, mas NÃO chame ferramentas de envio)'}
 - Contato do Cliente: Nome: "${contactName}", Telefone: "${contactPhone}"
 - Configurações de Cobrança:
   * ID do Produto: "${billingConfig.product_id || 'Não especificado'}"
@@ -326,7 +426,7 @@ TAREFA DE COBRANÇA VIA WHATSAPP (Agente de Cobrança AGI):
   * Gerar Pix Nativo: ${billingConfig.send_pix !== false ? 'Sim' : 'Não'}
   * Observações: "${billingConfig.notes || 'Nenhuma'}"
 
-IMPORTANTE: Se o modo for AUTÔNOMO, chame a ferramenta 'send_whatsapp_message' (ou 'create_direct_charge' se houver product_id), passando o telefone do cliente ("${contactPhone}") e a mensagem de cobrança formatada com o valor (R$ ${billingConfig.amount || 0}), saudação cortês e instruções de pagamento.
+IMPORTANTE: Se o modo for AUTÔNOMO, chame IMEDIATAMENTE a ferramenta 'create_direct_charge' informando 'phone: "${contactPhone}"' e 'amount: ${billingConfig.amount || 0}' para gerar a cobrança Pix nativa e enviar a chave Pix copia e cola diretamente no WhatsApp do cliente e registrar no Inbox do CRM!
 `
   }
 
@@ -368,8 +468,8 @@ Seu objetivo é gerenciar e realizar cobranças via WhatsApp de forma cortês, a
 
 Instruções específicas para Cobrança:
 - Mantenha sempre um tom de respeito, clareza e empatia.
-- Se o modo for "autonomous" e houver produto configurado (product_id), você pode chamar "create_direct_charge" para gerar o Pix no chat do cliente, ou "send_whatsapp_message" para enviar o lembrete de pagamento.
-- Se o modo for "approval" ou faltar algum dado essencial (como telefone do cliente), NÃO envie a mensagem diretamente; estruture o texto completo da cobrança com saudações, valor, forma de pagamento e chave Pix no seu relatório para aprovação do atendente humano.
+- Se o modo for "autonomous", você DEVE obrigatoriamente chamar a ferramenta "create_direct_charge" informando "phone" e o valor do débito ("amount") para emitir a cobrança Pix nativa Woovi e enviar no WhatsApp do cliente.
+- Se o modo for "approval" ou faltar telefone do cliente, NÃO envie diretamente; estruture o texto completo da cobrança com saudações, valor, forma de pagamento e chave Pix no seu relatório final para aprovação do atendente humano.
 - Sempre relate detalhadamente o resultado: mensagem gerada, status do envio, produto cobrado e próximos passos sugeridos.
 `
     : `
