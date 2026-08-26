@@ -40,7 +40,7 @@ interface AITask {
     notes?: string
   } | null
   contact?: {
-    full_name: string
+    name: string
     phone: string
   } | null
 }
@@ -259,7 +259,7 @@ export async function executePendingAITasks(): Promise<{ processed: number; erro
   // 1. Fetch pending tasks flagged as AI tasks
   const { data: tasks, error } = await db
     .from('tasks')
-    .select('*, contact:contacts(full_name, phone)')
+    .select('*, contact:contacts(name, phone)')
     .eq('is_ai_task', true)
     .eq('status', 'pending')
     .limit(10) // process in batches of 10
@@ -306,7 +306,7 @@ export async function executePendingAITasks(): Promise<{ processed: number; erro
 }
 
 function getTaskPrompt(task: AITask): string {
-  const contactName = task.contact?.full_name || 'Desconhecido'
+  const contactName = task.contact?.name || 'Desconhecido'
   const contactPhone = task.contact?.phone || 'Não informado'
   const agentType = task.ai_agent_type || 'general'
   const executionMode = task.execution_mode || 'approval'

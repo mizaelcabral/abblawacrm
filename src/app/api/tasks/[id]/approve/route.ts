@@ -24,12 +24,13 @@ export async function POST(
   // Fetch task with account verification
   const { data: task, error: fetchErr } = await db
     .from('tasks')
-    .select('*, contact:contacts(full_name, name, phone)')
+    .select('*, contact:contacts(name, phone)')
     .eq('id', taskId)
     .single()
 
   if (fetchErr || !task) {
-    return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+    console.error(`[Task Approve Error] Failed to fetch task ${taskId}:`, fetchErr)
+    return NextResponse.json({ error: fetchErr?.message || 'Task not found' }, { status: 404 })
   }
 
   // Verify that user profile belongs to task's account
