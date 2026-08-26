@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/tasks/worker",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 12 * * *"
     }
   ]
 }
