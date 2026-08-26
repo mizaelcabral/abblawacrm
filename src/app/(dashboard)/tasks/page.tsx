@@ -224,7 +224,7 @@ export default function TasksPage() {
         title: formTitle.trim(),
         description: formDescription.trim() || null,
         status: formStatus,
-        due_at: formDueAt ? new Date(formDueAt).toISOString() : null,
+        due_at: formDueAt ? new Date(`${formDueAt}T12:00:00`).toISOString() : null,
         assigned_agent_id: formAgentId || null,
         is_ai_task: formIsAiTask,
         ai_agent_type: formIsAiTask ? formAiAgentType : 'general',
@@ -239,7 +239,13 @@ export default function TasksPage() {
       .select("*, assigned_agent:profiles(full_name), contact:contacts(name, phone)")
       .single();
 
-    if (!error && data) {
+    if (error) {
+      console.error("[Create Task Error]:", error);
+      alert(`Erro ao criar tarefa: ${error.message || 'Verifique as permissões ou conexões.'}`);
+      return;
+    }
+
+    if (data) {
       setTasks((prev) => [data, ...prev]);
       resetForm();
     }
@@ -292,14 +298,29 @@ export default function TasksPage() {
         contact_id: formContactId || null,
         conversation_id: convId,
         assigned_agent_id: formAgentId || null,
-        due_at: formDueAt ? new Date(formDueAt).toISOString() : null,
+        due_at: formDueAt ? new Date(`${formDueAt}T12:00:00`).toISOString() : null,
         status: formStatus,
+        is_ai_task: formIsAiTask,
+        ai_agent_type: formIsAiTask ? formAiAgentType : 'general',
+        execution_mode: formExecutionMode,
+        billing_config: formIsAiTask && formAiAgentType === 'billing' ? {
+          product_id: formBillingProductId || null,
+          amount: formBillingAmount ? parseFloat(formBillingAmount) : null,
+          tone: formBillingTone,
+          send_pix: true,
+        } : {},
       })
       .eq("id", editingTask.id)
       .select("*, assigned_agent:profiles(full_name), contact:contacts(name, phone)")
       .single();
 
-    if (!error && data) {
+    if (error) {
+      console.error("[Update Task Error]:", error);
+      alert(`Erro ao atualizar tarefa: ${error.message}`);
+      return;
+    }
+
+    if (data) {
       setTasks((prev) => prev.map((t) => (t.id === editingTask.id ? data : t)));
       resetForm();
     }
